@@ -355,7 +355,7 @@ Usage:
 
 Copyright (C) 2000-2021  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.90 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.91 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -528,8 +528,8 @@ my $port = defined $opt_p ? $opt_p : 8778;
 my %symbolTable = ();	# $symbolTable{$symbol} [0, 1]   = ($ftype, $index)
 my @symbolNames = ();	# $symbolNames[$index] = symbol-id (does not include ALIASes or variations)
 my %stepNames   = ();	# iC variables occurring in source
-my %watchPoints = ();	# active Watch and Ignore Points [ 0 state 1 value ]
-my @watchList   = ();	# parallel [ $index, $symbol, $state, $value, $watchCond ] with Listbox $dbLb
+my %watchPoints = ();	# active Watch and Ignore points {$instName} {$index} [ $state, $value ]
+my %watchList   = ();	# Listbox $dbLb data {$instName} [$i] [ $index, $symbol, $state, $value, $watchCond ]
 my $lastIndex   = 0;
 my $lastValue   = 0;
 my $breakIndex  = 0;
@@ -550,7 +550,8 @@ my $extnName = '';	# extension of current iC or iCa program or derivative
 my $procName = '';	# name of runnable iC control program without path
 my $instName = '';	# name of runnable iC control program with instance extension
 my $regName  = '';
-my $runName  = '';	# name of running iC control program
+my $runName  = '';	# name with extension of running iC control program showing window text
+my %runNames = ();	# names with extensions of all iC control prograns currently running
 my $C_channel = 0;	# receiver channel from control program
 my $D_channel = 0;	# sender channel to control program
 my $B_channel = 0;	# sender channel for optional Debug Stop signal
@@ -978,7 +979,7 @@ $debugMenu->checkbutton(-label       => 'Continue',			# 4
 			-variable    => \$continueV,
 			-command     => [ \&sendDebug, 0, 'c' ]);
 $debugMenu->separator;				# ---------------------   5
-$debugMenu->command    (-label       => 'Watch points',			# 6
+$debugMenu->command    (-label       => 'Watch Points',			# 6
 			-accelerator => 'w',
 			-command     => [ \&ListWatchPoints ]);
 $debugMenu->separator;				# ---------------------   7
@@ -1329,18 +1330,6 @@ if (@runArgs) {
 print "$named: initialise program\n" if $opt_T;
 ini_program();
 conn_send_now("$B_channel:$B_cont") if $B_channel and $B_cont;	# program running
-
-########################################################################
-#	For mysterious reasons the first Show() of a DialogBox is not
-#	raised in front of mainWindow. After that they show normally.
-#	This Kludge shows each DialogBox behind mainWindow and exits.
-########################################################################
-$mainWindow->after(0, sub { $dbW->Exit(); });
-$dbW->Show();
-$mainWindow->after(0, sub { $dbB->Exit(); });
-$dbB->Show();
-$mainWindow->after(0, sub { $dbL->Exit(); });
-$dbL->Show();
 tagDeleteRestore_searchTag(1);		# configure initial 'searchTag'
 
 ########################################################################
@@ -2106,11 +2095,11 @@ sub sendWatchRestore {
     if ($index) {
 	push @points, $index;
     } else {
-	push @points, keys %watchPoints;
+	push @points, keys %{ $watchPoints{$instName} };
     }
     foreach $ix (@points) {
-	if (exists $watchPoints{$ix}) {
-	    $stateRef = \${$watchPoints{$ix}}[0];
+	if (exists $watchPoints{$instName}{$ix}) {
+	    $stateRef = \${ $watchPoints{$instName}{$ix} }[0];
 	    if ($set and not $$stateRef & 0x40) {	# set Watch/Ignore if not disabled
 		if ($$stateRef & 0x20) {
 		    $msg .= ";$ix 0";			# Ignore point
@@ -2141,7 +2130,7 @@ sub sendWatchRestore {
 ########################################################################
 #
 #	Called by Button-1 Press or Key Press or Double-1 via pick_word.
-#	In Live mode work on Wath- or Ignore-Points
+#	In Live mode work on Watch or Ignore Points
 #	In Edit mode highlight matching braces, parantheses and square brackets
 #
 #	If report_cursor is called via pick_word(2) by pressing Double-1 on
@@ -2247,8 +2236,8 @@ use warnings;
 	if ($index and
 	    $symbolNames[$index] ne 'iClock') {	# cannot apply Watch point to iClock
 	    $watchIndex = $index;
-	    if (exists $watchPoints{$watchIndex}) {
-		($watchState, $watchValue) = @{$watchPoints{$watchIndex}};
+	    if (exists $watchPoints{$instName}{$watchIndex}) {
+		($watchState, $watchValue) = @{ $watchPoints{$instName}{$watchIndex} };
 	    } else {
 		($watchState, $watchValue) = (0, 0);
 	    }
@@ -2296,7 +2285,7 @@ sub EnterWatch {
 	my ($dummy, $button) = @_;
 	my $symbol = $symbolNames[$watchIndex];
 	my ($ix, $i) = (0, 0);
-	foreach (sort { $a <=> $b } keys %watchPoints) {
+	foreach (sort { $a <=> $b } keys %{ $watchPoints{$instName} }) {
 	    if ($watchIndex <= $_) {		# insert Watch points in ascending index order
 		$ix = $_;
 		last;
@@ -2355,25 +2344,58 @@ sub EnterWatch {
 #	DialogBox containing a Listbox of current Watch points
 #
 #	Show the DialogBox containing a Listbox containing all current
-#	Watch points and Ignore points, where they can be manipulated
-#	by the following buttons:
+#	Watch and Ignore points for the currently running proc and instance,
+#	where they can be manipulated by the following buttons:
 #	('Lookup','Watch','Condition','Ignore','Enable','Disable','Delete','Close');
 #
 ########################################################################
 
 sub ListWatchPoints {
-    while ($dbLb->index('end') != 0) {
-	my ($answer, @selected, $symbol);	# List Box not empty
+    my ($i, $index, $symbol, $state, $value, $watchCond);
+    my ($answer, @selected);
+    my ($watchListText, $d, $e, $f, $ftype);
+    my $watchListRef = \@{ $watchList{$instName} };
+    while ($#$watchListRef >= 0) {
+	########################################################################
+	#  Delete all items from the Listbox
+	#  Build new list from current proc and instance
+	########################################################################
+	$dbLb->delete(0, 'end');
+	for ($i = 0; $i <= $#$watchListRef; $i++) {
+	    ($index, $symbol, $state, $value, $watchCond) = @{ $watchList{$instName}[$i] };
+	    $d = $state & 0x40 ? 'D' : ' ';				# 'D' Disabled
+	    $e = $state & 0x20 ? 'I' : $state & 0x10 ? 'W' : '?';	# 'I' Ignore or 'W' Watch
+	    $ftype = $symbolTable{$symbol}[0];
+	    $f = ($ftype == 1  or	# ARITH
+		  $ftype == 7  or	# D_SH
+		  $ftype == 12 or	# CH_AR
+		  $ftype == 13 or	# F_SW
+		  $ftype == 18 or	# TRAB
+		  $ftype == 19		# OUTW
+		 )		? 'i' :
+		 ($ftype == 21) ? 'c' :	# CLCKL
+		 ($ftype == 22) ? 't' :	# TIMRL
+		 ($ftype == 23) ? '?' :	# F_ERR
+		 ($ftype == 0)  ? 'u' :	# UDFA
+				  'b';	# GATE etc
+	    $watchListText = sprintf("%-20s %s %s %s%s", $symbol, $d, $e, $f, $watchCond);
+	    $dbLb->insert($i, $watchListText);	# insert into Watch point Listbox
+	}
+	########################################################################
+	#  Show the newly built Listbox
+	########################################################################
 	$answer = $dbL->Show(			# Watch point list DialogBox
 	    -popover    => $zoomOut,
 	    -overanchor => 'sw',
 	    -popanchor  => 'ne',
 	    -takefocus  => 1);
+	########################################################################
+	#  Analyze answer in conjunction with Listbox selection
+	########################################################################
 	if (not $answer or			# (x)
 	    $answer eq 'Close') {		# Close DialogBox
 	    return;
 	}
-
 	@selected = $dbLb->curselection;	# selected Watch points
 	push @selected, $dbLb->index('active') unless @selected;	# use underlined entry
 	die "must have a selection or 'active' underline ???\n" unless @selected;
@@ -2384,49 +2406,52 @@ sub ListWatchPoints {
 	    }
 	}
 	elsif ($answer eq 'Lookup') {
-	    $symbol = $watchList[$selected[0]][1];	# first selection only
+	    $symbol = $watchList{$instName}[$selected[0]][1];	# first selection only
 	    sendDebug(1, 'D') if $debugFlag;		# debug mode off
 	    search_now(1, $symbol, 0);
 	    return;				# Close DialogBox to allow search to continue, scroll, main exit
 	} else {
 	    foreach (@selected) {
-		my ($index, $symbol) = @{$watchList[$_]};
-		if (exists $watchPoints{$index}) {
-		    ($watchState, $watchValue) = @{$watchPoints{$index}};
-		} else {
-		    ($watchState, $watchValue) = (0, 0); # should not happen for List entries
+		if (defined \@{ $watchList{$instName}[$_] }) {
+		    my ($index, $symbol) = @{ $watchList{$instName}[$_] };
+		    if (exists $watchPoints{$instName}{$index}) {
+			($watchState, $watchValue) = @{ $watchPoints{$instName}{$index} };
+		    } else {
+			($watchState, $watchValue) = (0, 0); # should not happen for List entries
+		    }
+		    my $state = $watchState;	# keep previous $watchState
+		    my $value = $watchValue;	# keep previous $watchValue
+		    if ($answer eq 'Watch') {
+			$state |= 0x10;		# add Watch
+			$state &= ~0x20;		# take away Ignore
+		    }
+		    elsif ($answer eq 'Condition') {
+			my $s;
+			($s, $value) = ConditionEdit($_, $index, $index, $symbol, $dbLb, 'nw', 'nw');
+			printf "answer '%s' X = %d state = 0x%02x\n", $answer, $value, $state if $opt_T;
+			next if $s < 0;
+			$state &= ~0x0f;		# clear previous condition
+			$state |= 0x10 | $s;	# turn on 'Watch' | selected condition
+			$state &= ~0x20;		# turn off possible 'Ignore'
+		    }
+		    elsif ($answer eq 'Ignore') {
+			$state |= 0x20;		# add Ignore
+			$state &= ~0x10 unless $state & 0x0f; # take away Watch unless condition
+		    }
+		    elsif ($answer eq 'Enable') {
+			$state &= ~0x40;
+		    }
+		    elsif ($answer eq 'Disable') {
+			$state |= 0x40;
+		    } else {
+			die "strange button '$answer' ???\n";
+		    }
+		    ########################################################################
+		    #  Apply or remove Watch or Ignore points from running app
+		    #  This may increase or decrease # of Listbox entries $#$watchListRef 
+		    ########################################################################
+		    ApplyWatchPoint($_, $index, $index, $symbol, $state, $value);
 		}
-		my $state = $watchState;	# keep previous $watchState
-		my $value = $watchValue;	# keep previous $watchValue
-		if ($answer eq 'Watch') {
-		    $state |= 0x10;		# add Watch
-		    $state &= ~0x20;		# take away Ignore
-		}
-		elsif ($answer eq 'Condition') {
-		    my $s;
-		    ($s, $value) = ConditionEdit($_, $index, $index, $symbol, $dbLb, 'nw', 'nw');
-		    printf "answer '%s' X = %d state = 0x%02x\n", $answer, $value, $state if $opt_T;
-		    next if $s < 0;
-		    $state &= ~0x0f;		# clear previous condition
-		    $state |= 0x10 | $s;	# turn on 'Watch' | selected condition
-		    $state &= ~0x20;		# turn off possible 'Ignore'
-		}
-		elsif ($answer eq 'Ignore') {
-		    $state |= 0x20;		# add Ignore
-		    $state &= ~0x10 unless $state & 0x0f; # take away Watch unless condition
-		}
-		elsif ($answer eq 'Enable') {
-		    $state &= ~0x40;
-		}
-		elsif ($answer eq 'Disable') {
-		    $state |= 0x40;
-		} else {
-		    die "strange button '$answer' ???\n";
-		}
-		########################################################################
-		#  Apply or remove Watch or Ignore points from running app
-		########################################################################
-		ApplyWatchPoint($_, $index, $index, $symbol, $state, $value);
 	    }
 	}
     }
@@ -2446,7 +2471,7 @@ sub ConditionEdit {
     my ($answer, $s, $ftype, $value);
     $ftype = $symbolTable{$symbol}[0];
     $watchListTxt= "$symbol:" . (($ix != $wix) ? '' :
-		    $watchList[$i][4]);	# stored $watchCond
+		    $watchList{$instName}[$i][4]);	# stored $watchCond
     print "watchListTxt '$watchListTxt'\n" if $opt_T;
     $s = 0;
     if ($ftype == 0  or			# UDFA
@@ -2514,8 +2539,8 @@ sub lowerMain {
 ########################################################################
 #
 #	Apply or remove Watch or Ignore points from running app
-#	%watchPoints [ 0 state 1 value ]
-#	@watchList [ $index, $symbol, $state, $value, $watchCond ]
+#	%watchPoints {$instName} {$index} [ 0 state 1 value ]
+#	%watchList {$instName} [$i] [ $index, $symbol, $state, $value, $watchCond ]
 #	holds information in parallel with Listbox $dbLb using the same index.
 #  @dbWbuttons = ('change','== X','!= X','< X','<= X','>  X','>=X','% X','!% X','& X','!& X','Cancel');
 #
@@ -2525,9 +2550,9 @@ sub ApplyWatchPoint {
     my ($i, $ix, $wix, $symbol, $state, $value) = @_;
     if ($state != $watchState or $value != $watchValue) {
 	if ($state & 0x30) {		# 'Watch' or 'Ignore'
-	    my ($watchListText, $c, $d, $e, $f, $v, $watchCond, $ftype);
+	    my ($c, $d, $e, $v, $watchCond);
 	    printf("enter %s	X = %d state = 0x%02x wix = %d\n", $symbol, $value, $state, $wix) if $opt_T;
-	    $watchPoints{$wix} = [ $state, $value ];		# add or change Watch point
+	    $watchPoints{$instName}{$wix} = [ $state, $value ];	# add or change Watch point
 	    if (($c = $state & 0x0f) != 0) {			# Watch condition code
 		$v = ($c >= 9) ? sprintf("0x%04x", $value)	# '&' '!&'
 			       : $value;
@@ -2545,35 +2570,17 @@ sub ApplyWatchPoint {
 		    $c, $e);
 		if ($value == 0 and $c =~ m/^%/) {			# '%' '!%'
 		    info_display(0, 'red', "cannot allow modulo division by 0 for '$watchCond'");
-		    $watchPoints{$wix} = [ $watchState, $watchValue ];	# do not change Watch point
+		    $watchPoints{$instName}{$wix} = [ $watchState, $watchValue ];	# do not change Watch point
 		    return;
 		}
 	    } else {
 		$watchCond = '';
 	    }
-	    $d = $state & 0x40 ? 'D' : ' ';				# 'D' Disabled
-	    $e = $state & 0x20 ? 'I' : $state & 0x10 ? 'W' : '?';	# 'I' Ignore or 'W' Watch
-	    $ftype = $symbolTable{$symbol}[0];
-	    $f = ($ftype == 1  or	# ARITH
-		  $ftype == 7  or	# D_SH
-		  $ftype == 12 or	# CH_AR
-		  $ftype == 13 or	# F_SW
-		  $ftype == 18 or	# TRAB
-		  $ftype == 19		# OUTW
-		 )		? 'i' :
-		 ($ftype == 21) ? 'c' :	# CLCKL
-		 ($ftype == 22) ? 't' :	# TIMRL
-		 ($ftype == 23) ? '?' :	# F_ERR
-		 ($ftype == 0)  ? 'u' :	# UDFA
-		 		  'b';	# GATE etc
-	    $watchListText = sprintf("%-20s %s %s %s%s", $symbol, $d, $e, $f, $watchCond);
 	    if ($ix == $wix) {
-		$dbLb->delete($i);					# remove if Watch point change
-		splice @watchList, $i, 1, [ $wix, $symbol, $state, $value, $watchCond ];
+		splice @{ $watchList{$instName} }, $i, 1, [ $wix, $symbol, $state, $value, $watchCond ];
 	    } else {
-		splice @watchList, $i, 0, [ $wix, $symbol, $state, $value, $watchCond ];
+		splice @{ $watchList{$instName} }, $i, 0, [ $wix, $symbol, $state, $value, $watchCond ];
 	    }
-	    $dbLb->insert($i, $watchListText);			# insert into Watch point Listbox
 	    if ($state & 0x40) {
 		sendWatchRestore($wix, 0);			# Disable was set
 	    } elsif (($state & 0xf0) != ($watchState &0xf0)) {	# ignore 'Condition' changes
@@ -2596,12 +2603,11 @@ sub ApplyWatchPoint {
 
 sub DeleteWatchPoint {
     my $i = $_[0];
-    my ($index, $symbol, $state, $value) = @{$watchList[$i]};
+    my ($index, $symbol, $state, $value) = @{ $watchList{$instName}[$i] };
     print "Delete Watch point $i $symbol $index $value\n" if $opt_T;
-    $dbLb->delete($i);
-    splice @watchList, $i, 1;
+    splice @{ $watchList{$instName} }, $i, 1;
     sendWatchRestore($index, 0) unless $state & 0x40;	# unless disabled
-    delete $watchPoints{$index};
+    delete $watchPoints{$instName}{$index};
     markWatch(0, $index);
 } # DeleteWatchPoint
 
@@ -2871,10 +2877,6 @@ use warnings;
 		$B_channel = $4 if $3;	# sender channel for optional Debug Stop signal
 		print "$named: registered: C_channel = $C_channel D_channel = $D_channel B_channel = $B_channel\n" if $opt_T;
 		conn_send_now("$D_channel:2");			# poll application to see if it is live
-		$traceDebV = $microSecV = 0;			# stop Trace and MicroSec output
-		conn_send_now("$D_channel:83,$D_channel:77");	# 'S' 'M' to stop Trace and MicroSec in app
-		$debugMenu->entryconfigure(8, -state => 'normal');	# Trace
-		$debugMenu->entryconfigure(9, -state => 'normal');	# MicroSec
 	    }
 	} else {
 	    FAILED_TO_REGISTER: info_display(2000, 'red',
@@ -3002,11 +3004,16 @@ sub rcvd_msg_from_server {
 			    ## change text on run button to 'Stop'
 			    ####################################################
 			    $runName = shift @symbols;
+			    $runNames{$runName} = 1;				# record as running iC program
 			    $mainWindow->title("$named$u: $fileName$readOnly $runName");
 			    info_display(2000, 'blue', "'$runName' is running");
 			    $menuRun->configure(-text => 'Stop');
 			    $menuBuild->entryconfigure(7, -state => 'normal');	# iCserver Client Tables
 			    print "$named: rcvd_msg_from_server received :2 'Stop' scanFlag = '$scanFlag'\n" if $opt_T;
+			    $traceDebV = $microSecV = 0;			# stop Trace and MicroSec output
+			    $debugMenu->entryconfigure(8, -state => 'normal');	# Trace
+			    $debugMenu->entryconfigure(9, -state => 'normal');	# MicroSec
+			    conn_send_now("$D_channel:83,$D_channel:77");	# 'S' 'M' to stop Trace and MicroSec in app
 			    if ($scanFlag) {
 				%symbolTable = ();
 				print "$named: Request Symbol Table '$D_channel:1'.\n" if $opt_T;
@@ -3120,11 +3127,12 @@ use warnings;
 			## Application has stopped altogether - received $C_channel:5
 			####################################################
 			print "received '$C_channel:5'\n" if $opt_T;
-			info_display(2000, 'blue', $regName ne '' ?
-			    "'$regName' was stopped" :
+			info_display(2000, 'blue', $runName ne '' ?
+			    "'$runName' was stopped" :
 			    "application was stopped - not registered !?");
 			clear_all();
 			$runName = '';
+			$runNames{$runName} = undef;				# remove as running iC program
 			$mainWindow->title("$named$u: $fileName$readOnly");
 			$makeName = '';
 			if ($restartFlag) {
@@ -3163,9 +3171,9 @@ use warnings;
 			## Conditional watch point - received $C_channel:9
 			####################################################
 			my ($state, $value, $condition);
-			print "$named: watch lastIndex = $lastIndex lastValue = $lastValue '$watchPoints{$lastIndex}'\n" if $opt_T;
-			if (exists $watchPoints{$lastIndex}) {
-			    ($state, $value) = @{$watchPoints{$lastIndex}};
+			print "$named: watch lastIndex = $lastIndex lastValue = $lastValue '$watchPoints{$instName}{$lastIndex}'\n" if $opt_T;
+			if (exists $watchPoints{$instName}{$lastIndex}) {
+			    ($state, $value) = @{ $watchPoints{$instName}{$lastIndex} };
 			    if ($state & 0x10) {	# conditions must line up with @dbWbuttons
 				if (($condition = $state & 0x0f) == 0 or	# unconditional break
 				    ($condition ==  1 and   $lastValue == $value)  or
@@ -4169,8 +4177,8 @@ use warnings;
 	####################################################################
 
 	if ($debugFlag) {
-	    foreach $index (keys %watchPoints) {
-		my $state = ${$watchPoints{$index}}[0];
+	    foreach $index (keys %{ $watchPoints{$instName} }) {
+		my $state = ${$watchPoints{$instName}{$index}}[0];
 		printf("%s	index %3d state = 0x%02x\n", $symbolNames[$index], $index, $state) if $opt_T;
 		markWatch($state, $index);
 	    }
@@ -4448,13 +4456,13 @@ sub open_list {
 #	Opens a file if possible; then loads the contents
 #		parameter 1:	0 or undef: load unconditionally (discard changes)
 #				1:          save first if text is altered
-#		parameter 2:	file_name
+#		parameter 2:	$fName
 #				'' use getOpenFile from Tk::FBox (default)
-#	$fileName is assigned new file_name if successfully opened
+#	$fileName is assigned new $fName if successfully opened
 #	this is done, rather than returning new name because open_file is often
 #	called from a call-back, where the return value cannot be used
 #
-#	file_name must be 2nd parameter to line up with search_text(), which
+#	$fName must be 2nd parameter to line up with search_text(), which
 #	has a dummy 1st parameter and whose 2nd parameter searchText is also
 #	supplied from a menu via a closure set up in check_menu()
 #	both are called via check_menu()
@@ -4471,6 +4479,11 @@ sub open_file {
     print "open_file: \$conditional = '$conditional' \$fName = '$fName'\n" if $opt_T;
     my $ci = 0;
     my $no = 0;
+    if ($scanFlag) {
+	deleteAllTags();		# required here to clear = values in text
+	reset_scan(1);			# $text -state now 'normal' for reading file
+	$scanFlag = 1;			# restore $scanFlag
+    }
     if (not $conditional or check_save()) {
 	unless (defined $fName and $fName ne '') {
 	    $fName = $mainWindow->getOpenFile(-filetypes => $fileTypes);
@@ -4486,26 +4499,23 @@ sub open_file {
 	    print "open_file: $conditional $fName\n" if $opt_T;
 	    my $rName = $runName;
 	    $rName =~ s/-\d+//;		# check without instance number
-	    if ($rName and $fName !~ /^$rName/) {
-		# old file is running and is not derived from new file
+	    if (not $runNames{$runName} and $rName and $fName !~ /^$rName/) {
+		# new file not running and old file is running and not derived from new file
 		info_display(2000, 'red', "'$runName' is still running - should be stopped unless compatible with '$fName'");
 		my $answer = askYesNo('Still running', 'Stop executable?', \$runName);
 		if ($answer eq 'Yes') {
 		    print "open_file: open '$fName' stop '$runName'\n" if $opt_T;
 		    conn_send_now('X') if $conn;
 		    stop_file();			# $runName = ''
-		} elsif ($answer eq 'No') {
-		    print "open_file: open '$fName' leave '$runName'\n" if $opt_T;
-		    $no = 1;
-		} else {				# 'Cancel'
-		    info_display(2000, 'blue', "'$fName' was not loaded - '$runName' is still running");
-		    return 0;			# cancel operation
+		} else {
+		    if ($answer eq 'No') {
+			print "open_file: open '$fName' leave '$runName' running in background\n" if $opt_T;
+			info_display(2000, 'blue', "'$runName' is still running in background");
+		    } else {				# 'Cancel'
+			info_display(2000, 'blue', "'$fName' was not loaded - '$runName' is still running");
+			return 0;			# cancel operation
+		    }
 		}
-	    }
-	    if ($scanFlag) {
-		deleteAllTags();			# required here to clear = values in text
-		reset_scan(1);			# $text -state now 'normal' for reading file
-		$scanFlag = 1;			# restore $scanFlag
 	    }
 	    stat($fName);
 	    if (-f _ and -r _ and open(FH, "<$encoding", $fName)) {	# :encoding($opt_E) calls stat()
@@ -4548,7 +4558,7 @@ sub open_file {
 		    }
 		    check_menu($fileName, 'files');		# save files with known extensions in file menu
 		    unless ($no) {
-			$instName = "$procName$instanceText";	# previous executable was stopped
+			$instName = "$procName$instanceText";	# previous executable was stopped or is compatible
 			$ci = change_instance();
 			adjust_live(-1, -1);
 		    }
@@ -4647,10 +4657,10 @@ sub save_file {
 
 ########################################################################
 #
-#	Save file to suggested $fileName or to another selected file_name
+#	Save file to suggested $fileName or to another selected Name
 #		return:		1  file successfully saved, instance is reset
 #				0  failure - $fileName not changed
-#	$fileName is assigned new file_name if successfully saved
+#	$fileName is assigned new Name if successfully saved
 #
 ########################################################################
 
@@ -5232,7 +5242,7 @@ sub quit_program {
 	    foreach $menuKey (sort keys %iniMenuData) {
 		print INI "[$menuKey]\n";
 		print "INI: [$menuKey]\n" if $opt_T;
-		$entriesArray = @{$iniMenuData{$menuKey}}[1];	# entriesArray
+		$entriesArray = @{ $iniMenuData{$menuKey} }[1];	# entriesArray
 		foreach $entry (@$entriesArray) {
 		    if (defined $entry and $entry ne '') {
 			print INI "\t$entry\n";

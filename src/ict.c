@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.81 $";
+"@(#)$Id: ict.c 1.82 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -3343,7 +3343,9 @@ iC_liveData(Gate * gp, int value)
 	     *  BP or break for unconditional or conditional breakpoint sending "C_channel:9"
 	     *      debugMask	0x6000	for every BREAKPOINT only                        continue
 	     *******************************************************************/
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 0100) fflush(iC_outFP);	/* in case dangling text debug messages without CR */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    while ((len =				/* repeat code for speed */
 #if	INT_MAX == 32767 && defined (LONG16)
 		    snprintf(&msgBuf[msgOffset], rest = REQUEST - msgOffset,
@@ -3476,11 +3478,18 @@ receiveWatchOrRestore(char * cp1)
 
     while ((cp1 = strchr(cp1, ';')) != NULL) {
 	index = atoi(++cp1);
-	assert(index <= sTend - sTable);	/* check index is in range */
 	cp1 = strchr(cp1, ' ');
-	assert(cp1 != NULL);
+	if (cp1 == NULL) {
+	    value = -1;
+	    goto RWRerror;
+	}
 	value = atoi(++cp1);
-	assert(value <= 3);
+	if (index > sTend - sTable || value > 3) {	/* check index is in range, value is correct */
+	  RWRerror:
+	    fprintf(iC_errFP, "Oops: %s: receiveWatchOrRestore: index %d > sTend - sTable %d, value %d > 3\n",
+		iC_iccNM, index, sTend - sTable, value);
+	    continue;			/* ignore this watch/ignore point - check why it failed */
+	}
 	gp = sTable[index-1];			/* index in iClive starts at 1 */
 	gp->gt_live &= ~0x6000;			/* clear step/next or watch/ignore bits */
 	gp->gt_live |= value << 13;		/* set watch/ignore or restore step/next */
