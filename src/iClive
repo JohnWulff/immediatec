@@ -355,7 +355,7 @@ Usage:
 
 Copyright (C) 2000-2021  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.91 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.92 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -397,7 +397,6 @@ foreach (@ARGV) {
 if (defined $app) {
     shift(@runArgs) if $blank;
     unshift(@runArgs, $app) if $app ne "";
-    splice(@runArgs, 1, 0, "-d1000");	# do not trace non-active timers TX0.n
 }				# append a -z$opt_q later (-z not used in iClive)
 # print "2 \@ARGV = '@ARGV'	\@runArgs = '@runArgs'\n"; exit;
 
@@ -2861,14 +2860,14 @@ no warnings;
 		$i = 1;
 		REPEAT:
 		if ($tmsg !~ /^(\d+),(\d+)(,(\d+))?$/) {	# analyse registration reply from iCserver now
-		    rcvd_msg_from_server($conn, $tmsg, $terr);
+		    rcvd_msg_from_server($conn, $tmsg, $terr);	# not a registration reply - delayed data
 		    unless ($conn) {
 			print "$named: failed to register on attempt $i\n" if $opt_T;
 			goto FAILED_TO_REGISTER;	# stop trying if registered twice
 		    }
 		    ($tmsg, $terr) = $conn->rcv_now();
 		    print "$named: Reply: '$tmsg' err = '$terr' ($i)\n" if $opt_T;
-		    die "registration failed\n" if $i++ >= 3;
+		    die "registration failed\n" if $i++ >= 100;	# ridiculous number of delayed data messages
 		    goto REPEAT;	# cannot use while, because $1 $2 not in scope - if OK
 		}
 use warnings;
@@ -3038,8 +3037,10 @@ no warnings;
 				if ($opt_T) {
 				    my ($symbol, $ft, $ix);
 				    $symbol = $symbolNames[$index];
-				    ($ft, $ix) = @{ $symbolTable{$symbol} };
-				    print "$symbol	($ix) ftype: $ft value: $value cs: '$cs' ### uninitialised time\n";
+				    if ($symbolTable{$symbol}) {
+					($ft, $ix) = @{ $symbolTable{$symbol} };
+					print "$symbol	($ix) ftype: $ft value: $value cs: '$cs' ### uninitialised time\n";
+				    }
 				}
 			    }
 			    $activeSymbols[$index][3] = $tNew = [gettimeofday()];

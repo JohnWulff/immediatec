@@ -119,7 +119,7 @@ Usage:
 				$named
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.63 $
+$Id: iCserver 1.64 $
 .
 
 ########################################################################
@@ -1166,9 +1166,9 @@ use warnings;
 		    ############################################################
 		    if (exists $AltReceivers{$channel}) {
 			foreach $aref (@{$AltReceivers{$channel}}) {
-			    $channel = $aref->[0];			# alternate channel
+			    $ch = $aref->[0];			# alternate channel
 			    foreach $rconn (@{$aref}[1 .. $#{$aref}]) {
-				pushReceiverData($rconn, "$channel:$2"); # message to alternate channel
+				pushReceiverData($rconn, "$ch:$2"); # message to alternate channel
 				$sendFlag++;
 			    }
 			}
