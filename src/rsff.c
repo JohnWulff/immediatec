@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c 1.68 $";
+"@(#)$Id: rsff.c 1.69 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -34,13 +34,13 @@ static const char rsff_c[] =
  *
  *	Can be set and reset by the S_FF and R_FF actions to produce
  *	an SR Flip Flop.
- *		f1 = SR(I1, I2, clock);	// clock has been defined
- *		f2 = SR(I3, I4);	// iClock is default
+ *		b0 = SR(IX0.0, IX0.1, clk);	// clock clk has been used
+ *		b1 = SR(IX0.2, IX0.3);		// iClock is default clock
  *
  *	Can also be acted on by one D_FF action to produce a D Flip
  *	Flop.
- *		f3 = D(I5, clock);	// clock has been defined
- *		f4 = D(I6);		// iClock is default
+ *		b2 = D(IX0.4, clk);		// clock clk has been used
+ *		b3 = D(IX0.5);			// iClock is default clock
  *
  *	All three actions can act on one Flip Flop, although at least
  *	the D_FF action or alternatively both S_FF and R_FF must be
@@ -577,8 +577,8 @@ iC_Functp	iC_ff_i[] = {iC_pass1, iC_pass2, i_ff3, iC_pass4};
 /********************************************************************
  *
  *	Master function to detect RISE in logical input.
- *		O0 = RISE(IX0.1);		// iClock is default
- *		O1 = RISE(IX0.0,clock);		// clock has been defined
+ *		b4 = RISE(IX0.0, clk);		// clock clk has been used
+ *		b5 = RISE(IX0.1);		// iClock is default clock
  *	This function goes HI when its input goes from LO to HI (rising edge).
  *	The function goes LO with the next clock in the slave action.
  *
@@ -657,8 +657,8 @@ iC_riSbit(					/* RI_BIT slave action */
 /********************************************************************
  *
  *	Master function for CHANGE in logical input.
- *		O2 = CHANGE(IX0.2);		// iClock is default
- *		O3 = CHANGE(IX0.3,clock);	// clock has been defined
+ *		b6 = CHANGE(IX0.2, clk);	// clock clk has been used
+ *		b7 = CHANGE(IX0.3);		// iClock is default clock
  *	This function goes HI when its logical input changes from LO to HI
  *	or from HI to LO.
  *	The function goes LO with the next clock in the slave action.
@@ -733,8 +733,8 @@ iC_chSbit(					/* CH_BIT slave action */
 /********************************************************************
  *
  *	Master function for CHANGE in arithmetic input.
- *		O4 = CHANGE(IB4);	// iClock is default
- *		O5 = CHANGE(IB5,clock);	// clock has been defined
+ *		b8 = CHANGE(IB4, clk);		// clock clk has been used
+ *		b9 = CHANGE(IB5);		// iClock is default clock
  *	This function goes HI when its arithmetic input changes.
  *	The function goes LO with the next clock in the slave action.
  *
@@ -824,7 +824,8 @@ iC_chSar(					/* CH_AR slave action */
 
 /********************************************************************
  *
- *	Master function for SWITCH().
+ *	Master function for switch (aexpr) { ; }
+ *						// triggers slave on every change of aexpr
  *
  *******************************************************************/
 
@@ -848,11 +849,16 @@ iC_fMsw(					/* F_SW master action */
 
 /********************************************************************
  *
- *	Slave function for SWITCH().
+ *	Slave function for switch(expr)
  *
- *	Execute a C statement or C statement block when triggered
- *	by a clocked logical or arithmetic change.
- *		switch (expr) { case 1: i = 1; break; ... }
+ *	Execute a C switch statement block when triggered
+ *	by a clocked arithmetic change in axpr.
+ *		switch (aexpr, clk) { case 1: i = 1; break; ... }
+ *						// clock clk has been used
+ *		switch (aexpr) { case 1: i = 1; break; ... }
+ *						// iClock is default clock
+ *
+ *	Note: braces { } around C statements are mandatory
  *
  *******************************************************************/
 
@@ -898,9 +904,7 @@ iC_fSsw(					/* F_SW slave action on SW */
 
 /********************************************************************
  *
- *	Master function for IF()
- *
- *	if (expr) { ; }			triggers slave on rising edge only
+ *	Master function for if (expr) { ; }	// triggers slave on rising edge of expr only
  *
  *******************************************************************/
 
@@ -923,9 +927,8 @@ iC_fMcf(					/* F_CF master action */
 
 /********************************************************************
  *
- *	Master function for IF() ELSE
- *
- *	if (expr) { ; } else { ; }	triggers slave on both edges
+ *	Master function for if (expr) { ; } else { ; }
+ *						// triggers slave on rising and falling edge of expr
  *
  *	The same C code fragment is executed on bothe edges. The code
  *	fragment has an if else test to decide which code to execute.
@@ -942,13 +945,15 @@ iC_fMce(					/* F_CE master action */
 
 /********************************************************************
  *
- *	Slave function for IF() IF() ELSE.
+ *	Slave function for if (expr) { ; }
+ *			or if (expr) { ; } else { ; }
  *
- *	Execute a C statement or C statement block when triggered
- *	by a clocked logical or arithmetic change.
- *		if (expr) { x = y * cfn(z); }	// iClock is default
- *		if (expr,clock) { for (i = 0; i < 10; i++) cfn(i); }
- *		if (expr) { i++; cfn(i) } else { i--; cfn(i) }
+ *	Execute a C statement block when triggered
+ *	by a clocked rising edge of expr and a clcoed falling edge if else
+ *		if (expr) { i++; } else { i--; }
+ *		if (expr) { x = y * cfn(z); }	// iClock is default clock
+ *		if (expr, clk) { for (i = 0; i < 10; i++) cfn(i); }
+ *						// clock clk has been used
  *	Note: braces { } around C statements are mandatory
  *
  *******************************************************************/
@@ -987,9 +992,10 @@ iC_fScf(					/* F_CF and F_CE slave action on CF */
 
 /********************************************************************
  *
- * NEW
  *	Distribute received logical input byte to correct
  *	logical input bit Gate
+ *
+ * NEW	used in ict and iC apps linked with libict.a or libict.so
  *
  *******************************************************************/
 
@@ -1044,7 +1050,6 @@ iC_traMb(					/* TRAB master action */
 
 /********************************************************************
  *
- * NEW
  *	Output to a word or byte whose Channel index is in gt_channel,
  *	which is in union with gt_list.
  *		gt_mark == B_WIDTH means 1 byte is output
@@ -1072,6 +1077,8 @@ iC_traMb(					/* TRAB master action */
  *	      really changes. Glitches do not appear in the output.
  *
  *		out_list 2nd argument	used to defer action to iC_sList
+ *
+ * NEW	used in ict and iC apps linked with libict.a or libict.so
  *
  *******************************************************************/
 
@@ -1144,9 +1151,10 @@ iC_outMw(					/* NEW OUTW master action */
 
 /********************************************************************
  *
- * NEW
  *	Transfer this output bit to the associated byte output Gate
  *		gt_mark contains the bit position as an 8 bit mask.
+ *
+ * NEW	used in ict and iC apps linked with libict.a or libict.so
  *
  *******************************************************************/
 
@@ -1186,7 +1194,6 @@ iC_outMx(					/* NEW OUTX master action */
 
 /********************************************************************
  *
- * OLD - from 1.37
  *	Output to a word or byte whose slot index is in gt_slot.
  *		gt_mark == B_WIDTH means 1 byte is output
  *		gt_mark == W_WIDTH means 2 bytes or 1 word is output
@@ -1209,6 +1216,8 @@ iC_outMx(					/* NEW OUTX master action */
  *
  *	NOTE: This action does not act on a clocked slave object.
  *	      and the node is not linked to any action or clock list
+ *
+ * OLD	from version <= 1.37, still used for icr only
  *
  *******************************************************************/
 
@@ -1284,7 +1293,6 @@ iC_outMw(					/* OLD OUTW master action */
 
 /********************************************************************
  *
- * OLD
  *	Output a bit to a bit field whose slot index is in gt_slot.
  *		gt_mark contains the bit position as an 8 bit mask.
  *
@@ -1297,6 +1305,8 @@ iC_outMw(					/* OLD OUTW master action */
  *
  *	NOTE: This action does not act on a clocked slave object.
  *	      and the node is not linked to any action or clock list
+ *
+ * OLD	from version <= 1.37, still used for icr only
  *
  *******************************************************************/
 
@@ -1311,7 +1321,7 @@ iC_outMx(					/* OLD OUTX master action */
 
     slot = gm->gt_slot;
     mask = (unsigned char)gm->gt_mark;
-    assert(slot < min(IXD, 64) && mask);/* IXD must be <= 64 for this scheme */
+    assert(slot < min(IXD, 64) && mask);	/* IXD must be <= 64 for this scheme */
     cage = slot >> 3;				/* test here because of cage algorithm */
 #ifdef MIXED
     if (out_list == iC_aList) {
@@ -1378,8 +1388,8 @@ iC_fMfn(					/* CLCK TIMR master action */
  *	during one clock event, as far as the next arithmetic and logic
  *	scan is concerned.
  *
- *		clk1 = CLOCK(I6);		// iClock is default
- *		clk2 = CLOCK(I7,clk1);
+ *		clk1 = CLOCK(IX0.6);		// iClock is default clock
+ *		clk2 = CLOCK(IX0.7, clk1);	// clock clk1 has been used
  *
  *******************************************************************/
 
@@ -1426,12 +1436,12 @@ iC_clockSfn(					/* Clock function */
 	iC_cList->gt_ptr->gt_next = iC_cList;	/* to iC_cList */
 #else	/* DEQ */
 	/* link chain of Gates on clock list gs to end of iC_cList */
-	tp = iC_cList->gt_prev;		/* save iC_cList.previous */
+	tp = iC_cList->gt_prev;			/* save iC_cList.previous */
 	tp->gt_next = np = gs->gt_next;		/* iC_cList.last ==> new */
 	np->gt_prev = tp;			/* iC_cList.last <== new */
 	tp = gs->gt_prev;			/* save gs.previous */
-	tp->gt_next = iC_cList;		/* gs.last ==> iC_cList */
-	iC_cList->gt_prev = tp;		/* gs.last <== iC_cList */
+	tp->gt_next = iC_cList;			/* gs.last ==> iC_cList */
+	iC_cList->gt_prev = tp;			/* gs.last <== iC_cList */
 #endif	/* DEQ */
 #if defined(TCP) || defined(LOAD)
     iC_linked++;
@@ -1450,8 +1460,8 @@ iC_Functp	iC_clock_i[] = {iC_pass1, iC_null1, i_ff3, iC_null1};	/* no output lis
  *	The output of this function can be used wherever a clock
  *	may be used. For details see manual.
  *
- *		tim1 = TIMER(I8);		// iClock is default
- *		tim2 = TIMER(I9,tim1,3);
+ *		tim1 = TIMER(IX0.6);		// iClock is default clock
+ *		tim2 = TIMER(IX0.7, tim1,3);	// timer tim1
  *
  *******************************************************************/
 
@@ -1746,7 +1756,7 @@ iC_assignL(Gate * glv, int inv, int ppi, int rv) {
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #endif
     signed char val;
-    if (glv->gt_fni == UDFA) return 0;	/* index out of range */
+    if (glv->gt_fni == UDFA) return 0;		/* index out of range */
     assert(glv->gt_ini == -LOGC);
     nv = glv->gt_val < 0 ? 1 : 0;
     switch (ppi) {
@@ -1795,7 +1805,7 @@ iC_assignL(Gate * glv, int inv, int ppi, int rv) {
     case 0:
     case 1:
     default:
-	if (rv == ~1) rv = 0;		/* bit 0 for straight assignment of ~1 */
+	if (rv == ~1) rv = 0;			/* bit 0 for straight assignment of ~1 */
 	nv = rv;
     }
     val = nv ? -1 : 1;
@@ -1816,7 +1826,7 @@ iC_assignL(Gate * glv, int inv, int ppi, int rv) {
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     if (glv->gt_val != val) {
 	glv->gt_val = val;
-	iC_link_ol(glv, iC_oList);	/* logic change or glitch */
+	iC_link_ol(glv, iC_oList);		/* logic change or glitch */
     }
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 0100) {

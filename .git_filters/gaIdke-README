@@ -1,4 +1,4 @@
-$Id: gaIdke-README 1.10 $
+$Id: gaIdke-README 1.11 $
 $IdBlockFurtherExpansion$
 
   Copyright (C) 2016 John E Wulff <immediatec@gmail.com>
@@ -95,10 +95,10 @@ gaIdke.clean:
 
 gaIdke-pre-commit:
 
-	Obtain the list of files currently being committed (staged) and
-	not modified since they were added to the index (not dirty).
-	Exclude files being deleted.  Back up each file in this list
-	and rewrite the file - scanning for $Id lines.
+        Obtain the list of files currently being committed (staged) and
+        not modified since they were added to the index (not dirty).
+        Exclude files being deleted.  Back up each file in this list
+        and rewrite the file - scanning for $Id lines.
 
         If a $Id string is found, increment the last number in <ver>
         of any $Id: <path> <ver> line in the file and replace any text
@@ -109,8 +109,8 @@ gaIdke-pre-commit:
         written in the $Id: string.  The file will be committed with
         the updated clean $Id line.
 
-	For a a new file yy.c containing "$Id$" only, gaIdke.pre-commit
-	expands this to "$Id: yy.c 1.1 $" to start the process.
+        For a a new file yy.c containing "$Id$" only, gaIdke.pre-commit
+        expands this to "$Id: yy.c 1.1 $" to start the process.
 
         The above applies if the commit is executed in the master branch.
         Special handling applies if the commit is executed in any other
@@ -298,14 +298,14 @@ gaIdke-activate:
         script is run for a newly cloned project.
 
         # do gaIdke-activate if cloned GIT with gaIdke
-        git_base=$(git rev-parse  -show-toplevel 2> /dev/null)
+        git_base=$(git rev-parse  --show-toplevel 2> /dev/null)
         if [ -n "$git_base" \
-            -a -f "$git_base/.git_filters/gaIdke-activate" \
-            -a ! -e "$git_base/.git/hooks/post-checkout" \
-            -a ! -e "$git_base/.git/hooks/post-commit" \
-            -a ! -e "$git_base/.git/hooks/post-merge" \
-            -a ! -e "$git_base/.git/hooks/pre-commit" \
-            -a ! -e "$git_base/.git/hooks/prepare-commit-msg" ]; then
+             -a -f "$git_base/.git_filters/gaIdke-activate" \
+             -a ! -e "$git_base/.git/hooks/post-checkout" \
+             -a ! -e "$git_base/.git/hooks/post-commit" \
+             -a ! -e "$git_base/.git/hooks/post-merge" \
+             -a ! -e "$git_base/.git/hooks/pre-commit" \
+             -a ! -e "$git_base/.git/hooks/prepare-commit-msg" ]; then
             . $git_base/.git_filters/gaIdke-activate
         fi
 

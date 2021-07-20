@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2017  John E. Wulff
+#	Copyright (C) 2000-2021  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -70,56 +70,63 @@ my @argv = ();
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-    @<<<<<<< [-adgrktIOmTqzh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
+     @<<<<<<<[ -qadgrkztIOmTh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
 	$named
-	     [ -G <dbg>][ [-e]<list of equivalences>][ <list of client calls>]
-	     [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
-	-s host	address of server - clients must specify the same address
-		unless (default '0.0.0.0' which accepts any client host)
-	-p port	service port of server for all clients  (default '8778')
-	-e <equivalences> eg: IX0=IX0-1     (can be used more than once)
-		or a comma separated list eg: IX0=IX0-1,QX0=QX0-1,IB1=IB1-1
-	-f file	read options, equivalences and client calls from this file
-	-q      quiet - do not report clients connecting and disconnecting
-	-a      autovivify I/O clients 'iCbox' for missing I/O's (any number
-		of iCbox's can be autovivified with -a as apps register)
-	-d      autovivify I/O client 'iCbox -d' for missing I/O's, which is
-		useful to monitor real I/O (only one 'iCbox -d' can be auto-
-		vivified to avoid recursive calls for missing senders to the
-		display only 'iCbox -d')
-	-A cmd  use <cmd> to autovivify I/O clients (eg -A 'iCbox -Q2 -C19')
-	-g      autovivify debugger 'iClive' when an iC app registers
-	-G dbg  autovivify debugger <dbg>
-	-r      reset registered receivers when sender disconnects - ie reset
-		outputs of an app when it shuts down (default no change)
-	-k      kill previous client when a new client with the same name
-		registers (default: do not accept the new client)
-	-z      block keyboard input
-	    DEBUG options
-	-t	trace messages for debugging
-	-I      trace rcv messages in iCmsg.pm
-	-O      trace send messages in iCmsg.pm
-	-m	display elapsed time in seconds and microseconds
-	-T      extra static debug messages
-	-h	help, ouput this Usage text only
-	    OLD STYLE CALLS
-	<equivalences> - deprecated - use -e <equivalences> instead
-		eg deprecated old style: IX8=IX8-0=IX8-1,IX9=IX9-0=IX9-1
-	<client calls> - deprecated - use -R <app ...> instead
-		eg deprecated: 'iCbox -n sorter-IO X0-X3 X10' sorter
-		if a client call has arguments, the call must be quoted
-	    AUXILIARY app   - start a Bernstein chain
-	-R <app ...> run one app followed by -z and its arguments as a
-		     separate process; -R ... must be last arguments,
-		     which do not need to be quoted.
-		eg: -R iCbox -n sorter-IO X0-X3 X10 -R sorter
-	    KEYBOARD inputs
-	    T   output table of all registered client I/Os and channels
-	    q   from keyboard: stops @<<<<<<< and all apps
-				$named
-Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
+             [ -G <dbg>][ [-e]<list of equivalences>][ <list of client calls>]
+             [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
+        -s host address of server - clients must specify the same address
+                unless (default '0.0.0.0' which accepts any client host)
+        -p port service port of server for all clients  (default '8778')
+                make sure the Firewall is open for the TCP port used.
+        -e <equivalences> eg: IX0=IX0-1     (can be used more than once)
+                or a comma separated list eg: IX0=IX0-1,QX0=QX0-1,IB1=IB1-1
+        -f file read options, equivalences and client calls from this file
+        -q      quiet - do not report clients connecting and disconnecting
+        -a      autovivify I/O clients 'iCbox' for missing I/O's (any number
+                of iCbox's can be autovivified with -a as apps register)
+        -d      autovivify I/O client 'iCbox -d' for missing I/O's, which is
+                useful to monitor real I/O (only one 'iCbox -d' can be auto-
+                vivified to avoid recursive calls for missing senders to the
+                display only 'iCbox -d')
+        -A cmd  use <cmd> to autovivify I/O clients (eg -A 'iCbox -Q2 -C19')
+        -g      autovivify debugger 'iClive' when an iC app registers
+        -G dbg  autovivify debugger <dbg> (allows specifying 'iClive' options)
+        -r      reset registered receivers when sender disconnects - ie reset
+                outputs of an app when it shuts down (default no change)
+        -k      kill previous client when a new client with the same name
+                registers (default: do not accept the new client)
+        -z      block keyboard input
+            DEBUG options
+        -t      trace messages for debugging
+        -I      trace rcv messages in iCmsg.pm
+        -O      trace send messages in iCmsg.pm
+        -m      display elapsed time in seconds and microseconds
+        -T      extra static debug messages
+        -h      help, ouput this Usage text only
+            OLD STYLE CALLS
+        <equivalences> - deprecated - use -e <equivalences> instead
+                eg deprecated old style: IX8=IX8-0=IX8-1,IX9=IX9-0=IX9-1
+        <client calls> - deprecated - use -R <app ...> instead
+                eg deprecated: 'iCbox -n sorter-IO X0-X3 X10' sorter
+                if a client call has arguments, the call must be quoted
+            AUXILIARY app   - start a Bernstein chain
+        -R <app ...> run one app followed by -z and its arguments as a
+                     separate process; -R ... must be last arguments,
+                     which do not need to be quoted.
+                eg: -R iCbox -n sorter-IO X0-X3 X10 -R sorter
+            KEYBOARD inputs
+            T   output @<<<<<<< Client Tables
+			$named
+            q   stop @<<<<<<< and all registered iC apps
+			$named
+                These two actions can also be triggered from the iClive
+                Build Menu
+            The easiest way to stop @<<<<<<< and all registered iC apps
+				    $named
+            is to stop an iCbox by clicking its (X) button
+Copyright (C) 2000-2017  John E. Wulff    <immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.64 $
+$Id: iCserver 1.65 $
 .
 
 ########################################################################
@@ -311,7 +318,7 @@ if (@opt_e) {
 }
 
 my ($t0, $t1);
-if ($opt_a or $opt_m) {
+if ($opt_a or $opt_g or $opt_m) {
     use Time::HiRes qw(ualarm gettimeofday);
     $t0 = [gettimeofday] if $opt_m;	# start time of program
 }
@@ -1555,12 +1562,13 @@ iCserver - the central server for iC clients
 
 =head1 SYNOPSIS
 
- iCserver [-adgrktIOmTqzh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
+  iCserver[ -qadgrkztIOmTh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
           [ -G <dbg>][ [-e]<list of equivalences>][ <list of client calls>]
           [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     -s host address of server - clients must specify the same address
             unless (default '0.0.0.0' which accepts any client host)
     -p port service port of server for all clients  (default '8778')
+            make sure the Firewall is open for the TCP port used.
     -e <equivalences> eg: -e IX0=IX0-1     (can be used more than once)
             or a comma separated list eg: -e IX0=IX0-1,QX0=QX0-1,IB1=IB1-1
     -f file read options, equivalences and client calls from this file
@@ -1573,7 +1581,7 @@ iCserver - the central server for iC clients
             display only 'iCbox -d')
     -A cmd  use <cmd> to autovivify I/O clients (eg -A 'iCbox -Q2 -C19')
     -g      autovivify debugger 'iClive' when an iC app registers
-    -G dbg  autovivify debugger <dbg>
+    -G dbg  autovivify debugger <dbg> (allows specifying 'iClive' options)
     -r      reset registered receivers when sender disconnects - ie reset
             outputs of an app when it shuts down (default no change)
     -k      kill previous client when a new client with the same name
@@ -1598,8 +1606,12 @@ iCserver - the central server for iC clients
                  which do not need to be quoted.
              eg: -R iCbox X0-X3 X10 -R sorter
         KEYBOARD inputs
-        T   output table of all registered client I/Os and channels
-        q   from keyboard: stops iCserver and all apps
+        T   output iCserver Client Tables
+        q   stop iCserver and all registered iC apps
+            These two actions can also be triggered from the iClive
+            Build Menu
+        The easiest way to stop iCserver and all registered iC apps
+        is to stop an iCbox by clicking its (X) button
 
 =head1 DESCRIPTION
 
@@ -1611,12 +1623,19 @@ iCservers on different ports, but clients registered with one of the
 iCservers cannot communicate with clients registered with the others.
 Clients can connect either via 'localhost' when they run on the same
 processor as iCserver (default for iC clients) or via the host address
-of the processor iCserver is running on.  On connection each client
-registers itself and all its inputs and outputs with iCserver.
+of the processor iCserver is running on.  If iCserver is running on
+a different host than some iC applications, care must be taken that
+the local Firewall of the processor iCserver is running on allows TCP
+port 8778 (or the port chosen with the -p option) to make connections.
+The Zone is either the External Zone or the Public Zone if it exists.
+On connection each client registers itself and all its inputs and
+outputs with iCserver. This registration is an iC specific operation
+and has nothing to do with the TCP/IP connection process described
+above.
 
-Clients for B<iCserver> are I<iC control applications>, I/O clients such
-as B<iCbox> or similar real I/O clients and debugging programs such as
-B<iClive>. These clients either send or receive data values from and
+Clients for B<iCserver> are I<iC programs>, I<real I/O programs> or
+I<virtual I/O programs> such as B<iCbox> and I<debugging programs> such
+as B<iClive>. These clients either send or receive data values from and
 to named I/O locations or debugging information.  As far as iCserver
 is concerned I/O locations could have any name, but the iC language
 calls for I/O names or addresses according to the IEC-1131 standard.
@@ -1636,14 +1655,14 @@ the data. A detailed description follows in the SPECIFICATION below.
 Additional functionality in B<iCserver>.
 
  a) Equivalences
-    -e option - or interconnection of different I/O addresses in
+    -e option - interconnection of different I/O addresses in
     iCserver. This option puts two or more entries in the Hash and
     assigns them a common channel number. Send or receive entries
-    associated with the channel are undefined at this stage. Then
-    when registration of one of the equivalence names occurs,
-    the common channel number is used. With this option different
-    IEC-1131 addresses can be assigned to the same channel, thereby
-    making them equivalent or interconnecting them.
+    associated with the channel are undefined at this stage. Then when
+    registration of one of the equivalence names occurs, the common
+    channel number is used. With this option different IEC-1131
+    addresses can be assigned to the same channel, thereby making
+    them equivalent - in effect interconnecting them.
 
     This functionality is required when the output of one iC control
     application is to be the input for another iC control application
@@ -1698,10 +1717,10 @@ Additional functionality in B<iCserver>.
     It is not allowed to equivalence IEC identifiers of different types
     X B W L or H, since the consequences are not what is expected.
 
-*   I<Equivalances can also be defined later by iC control applications>
-    for input IEC variables in that application before the variables are
-    registered using the -e option. The same calling sequence described
-    for iCserver above applies.
+*   I<Equivalances can also be defined later by iC programs> for
+    input IEC variables in that application before the variables
+    are registered using the -e option. The same calling sequence
+    described for iCserver above applies.
 
     For control applications for which several instances are
     instantiated, there is an extra -e option:
@@ -1735,7 +1754,7 @@ Additional functionality in B<iCserver>.
         or because of equivalances (optional).
 
     iii)iC control application(s), which causes iCserver to autovivify
-        any missing I/O's as iCboxes with appropriate ranges for each app.
+        any missing I/O's as an iCbox with appropriate ranges for each app.
 
     Alternatively autovififying for monitoring real I/O's
     -d option - automatic startup of one iCbox -d
@@ -1842,11 +1861,12 @@ Additional functionality in B<iCserver>.
 
     Comments in the INI file are started with #
 
-B<iCserver -a> is started as a forked process by the first I<iC control
-application> or B<iClive> unless it is already running, which means
-that for most cases B<iCserver> does not need to be started separately,
-unless special options are needed.  Equivalences can also be specified
-by I<iC control applications> with the -e option as described in a)* above.
+B<iCserver -a> is started as a forked process by the first I<iC
+program> started or by B<iClive> unless it is already running, which
+means that for most cases B<iCserver> does not need to be started
+separately, unless special options are needed.  Equivalences can
+also be specified by I<iC programs> with the -e option as described
+in a)* above.
 
 =head1 SPECIFICATION
 
@@ -1980,15 +2000,15 @@ by I<iC control applications> with the -e option as described in a)* above.
         RQL15   single long QL15 received by an external sink
 
  2) As indicated under <address> above, each data type QX, QB, QW, QL
-    and QH as well as IX, IB, IW, IL and IH define their own
-    address space in iC control applications. This differs from the
-    implementations 1.1 to 1.105, which defined a joint address space
-    for inputs and a separate but joint address space for outputs where
-    16 bit words had to have an even byte address and 32 bit long
-    addresses had to be divisble by four. Also the control software
-    had to check that different types of data did not overlap and that
-    a maxinum address was not exceeded.  This will not be necessary
-    with this new specification. Using the overlap for obscure control
+    and QH as well as IX, IB, IW, IL and IH define their own address
+    space in iC programs. This differs from the implementations 1.1
+    to 1.105, which defined a joint address space for inputs and a
+    separate but joint address space for outputs where 16 bit words
+    had to have an even byte address and 32 bit long addresses had
+    to be divisble by four. Also the control software had to check
+    that different types of data did not overlap and that a maxinum
+    address was not exceeded.  This will not be necessary with
+    this new specification. Using the overlap for obscure control
     purposes was never implemented fully (sending worked, receiving
     did not). Its use is deemed to be too obscure to be maintained,
     and the new specification should be much easier to handle.
@@ -2033,8 +2053,8 @@ by I<iC control applications> with the -e option as described in a)* above.
     fast interpretation - S and R are separated first. It is also
     readable for debugging.
 
- 4) To allow monitoring and to allow several iC control applications to
-    react to input from a single source, iCserver supports the receive
+ 4) To allow monitoring and to allow several iC programs to react
+    to input from a single source, iCserver supports the receive
     registration of the same address from several clients. iCserver
     will then send the same data to each of those clients, when it
     is received from its source by iCserver for distribution.
@@ -2070,7 +2090,7 @@ by I<iC control applications> with the -e option as described in a)* above.
     not have to be duplicated for a monitor, yet other alternatives
     may be required. One is to integrate the 'plot' function into
     iClive. For specification purposes, all the alternatives are
-    covered.
+    covered (iCplot or any other monitor has not yet been implemented).
 
  7) Allow every application to be started by specifying an optional
     <instance> parameter (see 1), which is appended to all registration
@@ -2143,9 +2163,11 @@ by I<iC control applications> with the -e option as described in a)* above.
  9) Registration from the view of clients
 
     a)  When a client starts it tries to connect to iCserver. If it
-        fails it will start 'iCserver -a' and try to connect again a
-        number of times, which should succeed. Once connected it sends
-        its registration string.
+        fails it will start 'iCserver -a' and try to connect again
+        a number of times, which should succeed. Once connected
+        it sends a string of all the registration codes it uses,
+        which are all I/O names as well as debug names if it is an
+        iC program or iClive.
 
     b)  iCserver responds by sending the acknowledge string of channel
         numbers. When the client receives this positive acknowledgement,
@@ -2198,11 +2220,11 @@ by I<iC control applications> with the -e option as described in a)* above.
 
  12)Unregistering a client.
 
-    A client is able to unregister itself, without disrupting a
-    running process, particularly if it is only a secondary receiver.
+    A client is able to unregister itself, without disrupting other
+    running processes, particularly if it is only a secondary receiver.
     This will happen when a client closes a TCP/IP connection. When a
-    client is disconnected, keep the Hash entries for the channel
-    numbers in case it connects again.
+    client is disconnected, the Hash entries for the channel numbers
+    are kept in case it connects again.
 
 For measuring reaction times the Module Time::HiRes is used.
 This activates the -m option and flash display of short events.
@@ -2231,7 +2253,7 @@ L<immcc(1)>, L<iCbox(1)>, L<iClive(1)>
 
 =head1 COPYRIGHT
 
-Copyright (C) 2000-2020  John E. Wulff
+Copyright (C) 2000-2021  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

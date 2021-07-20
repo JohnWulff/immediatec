@@ -125,7 +125,7 @@ my %pGroup = (	'{' => [ '}', '-forwards',  '[{}\'"]',     'end', ],
 
 # Tk::Text->search() does not accept a pre-compiled regex qr/.../
 # ^# ^% ^%% ^%{ ^%} /* // */ ' " [ ] %{ %} { } {{ }} word \n$
-my $regx = '(^\d*\s*[#%][%{}]?\s*|/[/*]|\*/|[\[\'"\]]|%?\{\{?|%?\}\}?|[A-Z_a-z][\w\$]*(\.[0-7](_\d+)?)?)';
+my $regx = '(^\d*\s*[#%][%{}]?\s*|^\d+\t|/[/*]|\*/|[\[\'"\]]|%?\{\{?|%?\}\}?|---|[A-Z_a-z][\w\$]*(\.[0-7](_\d+)?)?)';
 
 my %keyWords = (		# $kw & 0x0001 iC only, 0x0002 C only, 0x0003 iC and C
 	imm	=> 0x0001,	# iC type modifiers
@@ -355,7 +355,7 @@ Usage:
 
 Copyright (C) 2000-2021  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.92 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.93 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1434,6 +1434,7 @@ sub tagComments {
     my $ppI = '';
     my $sqbStart = '';
     my $endFlag = 0;
+    my $listLine = 0;
     my ($l);
     if ($extn & 030) {
 	$state = "C";		# .c or .h file
@@ -1460,7 +1461,7 @@ sub tagComments {
 	}
 	my $space = $text->get($prevEnd, $current);	# text since end of previous search
 	$atom = $text->get($current, $currEnd);		# text returned by current search
-	print "tagComments: \t$prevEnd\t$current\t$currEnd\t'$prevAtom'\t'$space'\t'$atom'\n" if $opt_T;
+	print "t\t$prevEnd\t$current\t$currEnd\t'$prevAtom'\t'$space'\t'$atom'\n" if $opt_T;
 	last if $prevAtom eq "NET" and $space eq " " and $atom eq "STATISTICS";
 	my $current1 = $text->index("$current + 1 chars");	# visible char position in line for warn
 	if ($atom eq '"' or $atom eq "'") {
@@ -1481,7 +1482,19 @@ sub tagComments {
 	    $length = length $atom;	# move tagging region back to start of new $atom
 	    $currEnd = $current;	# repeat search without previous space
 	    $current = $text->index("$currEnd - $length chars");
-	    print "backtrack %{:\t$prevEnd\t$current\t$currEnd\t'$prevAtom'\t'$space'\t'$atom'\n" if $opt_T;
+	    print "backtrack\n%{\t$prevEnd\t$current\t$currEnd\t'$prevAtom'\t'$space'\t'$atom'\n" if $opt_T;
+	}
+	########################################################################
+	#  In an iC .lst file the iC keyword 'D' should only be bold if it occurs
+	#  in a listing line, which starts with a line number.
+	#  Other occurences of 'D' in a .lst file are the ftype indicator, which
+	#  should not be bold. (Do this before C++ end analysis)
+	########################################################################
+	if ($space =~ m/\n/s) {
+	    $listLine = 0;		# new line (one ore more)
+	}
+	if ($space =~ m/\n$/s and $atom =~ m/^\d+\t$/) {
+	    $listLine = 1;		# 063	list line
 	}
 	########################################################################
 	#  A C++ comment with embedded atoms requires '\n' to be found as $atom
@@ -1493,7 +1506,7 @@ sub tagComments {
 	    $length = length $2;	# move tagging region back to start of new $atom
 	    $currEnd = $text->index("$current - $length chars");
 	    $current = $text->index("$currEnd - 1 chars");
-	    print "backtrack \\n:\t$prevEnd\t$current\t$currEnd\t'$prevAtom'\t'$space'\t'$atom'\n" if $opt_T;
+	    print "backtrack\n//\t$prevEnd\t$current\t$currEnd\t'$prevAtom'\t'$space'\t'$atom'\n" if $opt_T;
 	}
 	if ($state eq "S") {		# string constant in iC code
 	    if ($atom eq '"') {
@@ -1552,7 +1565,7 @@ sub tagComments {
 		    $l = 0;
 		    goto EndC;
 		} elsif ($CbraceCount <= 0) {
-		    warn "$fileName$readOnly:$current1: } not in scope - too many closing single braces in C code\n";
+		    warn "$fileName$readOnly:$current1: } not in scope - too many closing single braces in C code ($CbraceCount)\n";
 		    $text->tagAdd('er', $current, $currEnd);
 		    $CbraceCount--;
 		    $err++;
@@ -1563,8 +1576,8 @@ sub tagComments {
 	  EndC:	$text->tagAdd('CTag', $CStart, $currEnd);
 		$state = "P";		# end of C code found
 		if ($CbraceCount != 0 or $braceCount != 0) {
-		    $CbraceCount = $braceCount = 0;
-		    warn "$fileName$readOnly:$current1: } single braces do not match in C code\n";
+		    warn "$fileName$readOnly:$current1: } single braces do not match in C code ($CbraceCount)\n";
+		    $CbraceCount = 0;
 		    $text->tagAdd('er', "$current + $l chars", $currEnd);
 		    $err++;
 		} else {
@@ -1663,12 +1676,25 @@ sub tagComments {
 		    $text->tagAdd('er', $current, $currEnd);
 		    $err++;
 		}
-		if ($CStart and $space eq " " and (
+		if ($space eq " " and (
 		    ($prevAtom eq "NET" and $atom eq "TOPOLOGY") or
 		    ($prevAtom eq "Large" and $atom eq "AND"))) {
-		    $text->tagAdd('CTag', $CStart, "$currEnd linestart");
-		    $state = "P";		# ******* NET TOPOLOGY    ******* Large AND or OR
-		    $CStart = '';
+		    if ($CStart) {	# ******* NET TOPOLOGY    ******* Large AND or OR gates detected
+			$text->tagAdd('CTag', $CStart, "$currEnd linestart");
+			if ($CbraceCount != 1) {
+			    warn "$fileName$readOnly:$current1: { single braces do not match in C code ($CbraceCount)\n";
+			    $CbraceCount = 0;
+			    $text->tagAdd('er', $current, $currEnd);
+			    $err++;
+			}
+			$state = "P";
+			$CStart = '';
+		    } elsif ($braceCount != 0) {
+			warn "$fileName$readOnly:$current1: { single braces do not match in iC code ($braceCount)\n";
+			$braceCount = 0;
+			$text->tagAdd('er', $current, $currEnd);
+			$err++;
+		    }
 		}
 	    } elsif ($atom eq '"') {
 		$state = "CS";		# start of string in C code found
@@ -1780,7 +1806,9 @@ sub tagComments {
 			$err++;
 		    }
 		} elsif ($kw & 0x0001) {
-		    $text->tagAdd('bd', $current, $currEnd);	# iC keyword in iC code bold
+		    if (($extn & 003) or $listLine) {		# must be preceded by line number in .lst file ($extn 004)
+			$text->tagAdd('bd', $current, $currEnd);	# iC keyword in iC code bold
+		    }
 		    if ($kw & 0x0004) {	# "if", "else" or "switch"
 			$condFlag = 1;	# enter $state = "C" at next open brace "{"
 		    } elsif ($kw & 0x0008) {
@@ -1834,9 +1862,14 @@ sub tagComments {
 		  markStepNames($atom);				# except iC alias and constant keywords marked above
 		}
 		if ($prevAtom eq "C" and $space eq " " and $atom eq "CODE") {
+		    if ($braceCount != 0) {
+			warn "$fileName$readOnly:$current1: { single braces do not match in iC code ($braceCount)\n";
+			$braceCount = 0;
+			$text->tagAdd('er', $current, $currEnd);
+			$err++;
+		    }
 		    $state = "C";		# ******* C CODE          ************************
 		    $CbraceCount = 1;
-		    $CStart = $current;
 		    $CStart = "$current linestart";
 		}
 	    }
@@ -1890,7 +1923,13 @@ sub tagComments {
 	    }
 	} elsif ($atom =~ m/^(\d*\s*)%\{\s*$/) {
 	    $l = length $1; $l = 0 unless $l;
-    StartC: $state = "C";		# "%{" start of C literal block found
+    StartC: $state = "C";		# "%{" start of C literal block found (may be in function block definition)
+	    if ($braceCount != 0) {
+		warn "$fileName$readOnly:$current1: { single braces do not match in iC code ($braceCount)\n";
+		$braceCount = 0;
+		$text->tagAdd('er', $current, $currEnd);
+		$err++;
+	    }
 	    $CbraceCount = 1;
 	    $text->tagAdd('bd', "$current + $l chars", $currEnd);	# bold brace at start of C code (optional)
 	    $CStart = $current;
@@ -1903,19 +1942,19 @@ sub tagComments {
 	    if ($condFlag) {
 		$condFlag = $l = 0;	# start of C code after if else or switch
 		goto StartC;
-	    } else {
+	    } elsif ($prevAtom ne "---" or $space ne "") {
 		$braceCount++;		# single brace "{" in iC code
 	    }
 	} elsif ($atom eq "}") {
 	    if (--$braceCount < 0) {
-		warn "$fileName$readOnly:$current1: } not in scope - too many closing single braces in iC code\n";
+		warn "$fileName$readOnly:$current1: } not in scope - too many closing single braces in iC code($braceCount)\n";
 		$text->tagAdd('er', $current, $currEnd);
 		$err++;
 	    }
 	} elsif ($atom =~ m/^(\d*\s*)#\s*$/) {
 	    $l = length $1; $l = 0 unless $l;
 	    $pp = $atom;		# lead-in for C pre-processor commands #define etc
-	    $ppC = $current;
+	    $ppC = "$current + $l chars";
 	    print "ppC '$atom' found in iC code\n" if $opt_T;
 	    goto NextAtom;		# do not clear $pp $ppC
 	} elsif ($atom =~ m/^(\d*\s*)%%?\s*$/) {
@@ -1974,8 +2013,8 @@ sub tagComments {
 	    }
 	} elsif ($atom eq "]" and $sqbStart) {
 	    if ($state eq "S") {
-		my $er = $text->get($sqbStart, $currEnd);	# error text
-		warn "$fileName$readOnly:$current1: in iC '$er' is not allowed in a string in an index expression\n";
+		my $ex = $text->get($sqbStart, $currEnd);	# error text
+		warn "$fileName$readOnly:$current1: in iC '$ex' is not allowed in a string in an index expression\n";
 		$text->tagAdd('er', $sqbStart, $currEnd);
 		$err++;
 	    } else {
@@ -1986,7 +2025,12 @@ sub tagComments {
       NextAtom:
 	$current = $currEnd;		# continue search after this atom
     }
-    if (($extn & 03) and ($braceCount or $CbraceCount or $BraceCount)) {	# only in .ic and .ica files
+    if ($CStart) {
+	$text->tagAdd('CTag', $CStart, "$currEnd linestart");
+    }
+    if ((($extn & 03) and					# only in .ic, .ih and .ica files but not .lst
+	($braceCount or $CbraceCount or $BraceCount)) or
+	(($extn & 030) and ($CbraceCount != 1))) {		# only in .c and .h files
 	warn "$fileName$readOnly: single { ... } or double braces {{ ... }} do not match at end of file\n";
 	$text->tagAdd('er', "end - 2 lines linestart", "end - 1 chars lineend");
 	$err++;
