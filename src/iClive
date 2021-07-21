@@ -200,16 +200,16 @@ my %keyWords = (		# $kw & 0x0001 iC only, 0x0002 C only, 0x0003 iC and C
 	no	=> 0x0001,
 	alias	=> 0x0001,
 	strict	=> 0x0001,
-	EOI	=> 0x0009,	# $kw & 0x0008 imm bit aliases
+	EOI	=> 0x0009,	# $kw & 0x0008 imm bit aliases - may be ALIAS in C code
 	STDIN	=> 0x0009,
-	LO	=> 0x0001,	# imm bit constants - ignore break
-	HI	=> 0x0001,	#                   - never break anyway
-	T1ms	=> 0x0001,	# imm bit timer aliases - ignore break
-	T10ms	=> 0x0001,
-	T100ms	=> 0x0001,
-	T1sec	=> 0x0001,
-	T10sec	=> 0x0001,
-	T1min	=> 0x0001,
+	LO	=> 0x0009,	# imm bit constants - ignore break - may be variable in C code
+	HI	=> 0x0009,	#                   - never break anyway - may be ALIAS in C code
+	T1ms	=> 0x0009,	# imm bit timer aliases - ignore break - may be ALIAS in C code
+	T10ms	=> 0x0009,
+	T100ms	=> 0x0009,
+	T1sec	=> 0x0009,
+	T10sec	=> 0x0009,
+	T1min	=> 0x0009,
 	FOR	=> 0x0010,	# $kw & 0x0010 "FOR" iCa keywords
 	IF	=> 0x0020,	# $kw & 0x0020 "IF"
 	ELSIF	=> 0x0040,	# $kw & 0x0040 "ELSIF"
@@ -355,7 +355,7 @@ Usage:
 
 Copyright (C) 2000-2021  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.93 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.94 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1564,7 +1564,8 @@ sub tagComments {
 		if ($CbraceCount > 0 and --$CbraceCount == 0) {
 		    $l = 0;
 		    goto EndC;
-		} elsif ($CbraceCount <= 0) {
+		}
+		if ($CbraceCount <= 0) {
 		    warn "$fileName$readOnly:$current1: } not in scope - too many closing single braces in C code ($CbraceCount)\n";
 		    $text->tagAdd('er', $current, $currEnd);
 		    $CbraceCount--;
@@ -1575,6 +1576,7 @@ sub tagComments {
 		$CbraceCount--;		# "%}" end of C literal block found
 	  EndC:	$text->tagAdd('CTag', $CStart, $currEnd);
 		$state = "P";		# end of C code found
+		$CStart = '';		# back to iC background without CTag
 		if ($CbraceCount != 0 or $braceCount != 0) {
 		    warn "$fileName$readOnly:$current1: } single braces do not match in C code ($CbraceCount)\n";
 		    $CbraceCount = 0;
@@ -1635,7 +1637,7 @@ sub tagComments {
 			}
 		    } elsif ($kw & 0x0002) {		# C variables outside of comments or strings
 			$text->tagAdd('bd', $current, $currEnd);	# C keyword in C code bold
-		    } elsif (!($kw & 0x0708)) {		# ignore preprocessor keywords not after $pp
+		    } elsif (!($kw & 0x0708)) {		# ignore ALIASES & preprocessor keywords not after $pp
 			warn "$fileName$readOnly:$current1: iC keyword '$atom' found in C code\n";
 			$text->tagAdd('er', $current, $currEnd);	# iC keyword in C code error
 			$err++;
@@ -1688,7 +1690,7 @@ sub tagComments {
 			    $err++;
 			}
 			$state = "P";
-			$CStart = '';
+			$CStart = '';	# back to iC background without CTag
 		    } elsif ($braceCount != 0) {
 			warn "$fileName$readOnly:$current1: { single braces do not match in iC code ($braceCount)\n";
 			$braceCount = 0;
@@ -1750,7 +1752,8 @@ sub tagComments {
 		$ppC = "$current + $l chars";
 		print "ppC '$atom' found in C code\n" if $opt_T;
 		goto NextAtom;		# do not clear $pp $ppC
-	    } elsif ($atom =~ m/^(\d*\s*)%%?\s*$/) {
+	    }
+	    if ($atom =~ m/^(\d*\s*)%%?\s*$/) {
 		$l = length $1; $l = 0 unless $l;
 		$pp = $atom;		# lead-in for iC or iCa pre-processor commands %define %%define etc
 		$ppI = "$current + $l chars";
@@ -1942,7 +1945,8 @@ sub tagComments {
 	    if ($condFlag) {
 		$condFlag = $l = 0;	# start of C code after if else or switch
 		goto StartC;
-	    } elsif ($prevAtom ne "---" or $space ne "") {
+	    }
+	    if ($prevAtom ne "---" or $space ne "") {
 		$braceCount++;		# single brace "{" in iC code
 	    }
 	} elsif ($atom eq "}") {
@@ -1957,7 +1961,8 @@ sub tagComments {
 	    $ppC = "$current + $l chars";
 	    print "ppC '$atom' found in iC code\n" if $opt_T;
 	    goto NextAtom;		# do not clear $pp $ppC
-	} elsif ($atom =~ m/^(\d*\s*)%%?\s*$/) {
+	}
+	if ($atom =~ m/^(\d*\s*)%%?\s*$/) {
 	    $l = length $1; $l = 0 unless $l;
 	    $pp = $atom;		# lead-in for iC or iCa pre-processor commands %define %%define etc
 	    $ppI = "$current + $l chars";
@@ -2026,7 +2031,7 @@ sub tagComments {
 	$current = $currEnd;		# continue search after this atom
     }
     if ($CStart) {
-	$text->tagAdd('CTag', $CStart, "$currEnd linestart");
+	$text->tagAdd('CTag', $CStart, "$currEnd lineend");	# only happens if C code ends with an error
     }
     if ((($extn & 03) and					# only in .ic, .ih and .ica files but not .lst
 	($braceCount or $CbraceCount or $BraceCount)) or
