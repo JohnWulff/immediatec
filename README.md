@@ -9,6 +9,6 @@ Writing programs in the language _iC_ has the added quality, that many simple id
 
 _immediate C_ is built with the usual _configure_ – _make_ – _make test_ – _make install_ commands. The src/README explains the details and how to make, run and debug iC apps.
 
-_immediate C_ can execute direct Input/Output on a Raspberry Pi computer. Drivers are included for digital I/O on GPIO’s and PiFace cards as well as a driver for PWM analog output on GPIO’s and analog input from an MCP3008 A/D converter. See src/README.RPi for details.
+The _immediate C_ Reference Manual doc/iC.pdf describes the _iC_ language and its built-in Functions in detail. The _iC_ Programming Manual doc/iC_prog.pdf describes programming and using the _iC_ language.
 
-The _immediate C_ Reference Manual doc/iC.pdf describes the _iC_ language and its built-in Functions in detail. The _iC_ Programming Manual is currently being written.
+_immediate C_ can execute direct Input/Output on a Raspberry Pi computer. Drivers are included for digital I/O on GPIO’s and PiFace cards as well as a driver for PWM analog output on GPIO’s and analog input from an MCP3008 A/D converter. See src/README.RPi for details.
