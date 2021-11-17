@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c 1.20 $";
+"@(#)$Id: misc.c 1.21 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -509,6 +509,11 @@ iC_quit(int sig)
     /********************************************************************
      *  Normal quit
      *******************************************************************/
+#if YYDEBUG && !defined(_WINDOWS)
+    if (iC_debug & 03) {
+	fprintf(iC_outFP, "\n== %s stopped by sig %d\n", iC_iccNM, sig);
+    }
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     fflush(iC_outFP);				/* in case dangling debug messages without CR */
     if (iC_outFP != stdout) {
 	fclose(iC_outFP);

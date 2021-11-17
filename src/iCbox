@@ -48,6 +48,37 @@ my $greenButton = "'green4'";
 my $redButton   = "'red'";
 my @argv = ();
 
+my @args;
+my @runArgs = ();
+my $argsP = \@args;			# intially fill @args
+my $Rflag = 0;
+my $opt_Z = 0;		# 1 for debugging sub convertFlags()
+my %commandLineFlags = (
+    'b'   => 0,				# Bool flag
+    'd'   => 0,
+    'r'   => 0,
+    'H'   => 0,
+    'm'   => 0,
+    'x'   => 0,
+    't'   => 0,
+    'J'   => 0,
+    'O'   => 0,
+    'q'   => 0,
+    'z'   => 0,
+    'T'   => 0,
+    's'   => 1,				# value flag
+    'p'   => 1,
+    'n'   => 1,
+    'i'   => 1,
+    'c'   => 1,
+    'C'   => 1,
+    'S'   => 1,
+    'l'   => 1,
+    'h'   => 0,
+    'f'   => 1,				# include file
+    'R'   => 1,				# Run an app
+);
+
 my @masks =	(1, 2, 4, 8, 16, 32, 64, 128);
 my @bitIndex =	(
     0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,	# 0x01 0x02 0x04 0x08
@@ -75,12 +106,11 @@ my @bitIndex =	(
 ########################################################################
 
 my $named = untaint($0); $named =~ s#.*[/\\]##;
-my $nameo = $named;		# for generating bit map
 format STDERR =
 Usage:
-    @<<<< [-qHbdrtIOmTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+    @<<<< [-qHbdrtJOmTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
 	$named
-	  [ -c <col>][ -C <col>][ -Q <rows>][ -l <len>][ -f <file>]
+	  [ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
 	  [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
 	ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
 		Any ID can be preceded by 'I' or 'Q' in which case
@@ -104,7 +134,7 @@ Usage:
 	ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
 	B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
 	B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
-	-s host name of server host    (default 'localhost')
+	-s host name of server host    (default '127.0.0.1')
 	-p port service port of server (default '8778')
 	-n name registration name (default first full ID)
 	-i inst instance ID for this @<<<<<< (1 to 3 numeric digits)
@@ -112,16 +142,16 @@ Usage:
 	-q      quiet - do not report clients connecting and disconnecting
 	-c col  maximum number of columns in a row (default 12)
 	-C col  absolute maximum number of columns in a row (default 18)
-	-Q rows absolute maximum number of rows (default 3)
+	-S rows absolute maximum number of rows (default 3)
 	-l len  length of scales (default 170 pixels)
-	-f file read additional ID parameters from this file
+	-f file read flags and additional ID parameters from this file
 	-H      a Hold button is generated which holds input changes
 	-b      use buttons instead of checkboxes for digital I/O
 	-d      display inputs IMn (no change and no ini values allowed)
 	-r      reverse - display inputs IMn, send outputs QMn like inputs
 	    DEBUG options
 	-t      trace debug messages
-	-I      trace rcv messages in iCmsg.pm
+	-J      trace rcv messages in iCmsg.pm
 	-O      trace send messages in iCmsg.pm
 	-m      display elapsed time in seconds and microseconds
 	-T      extra static debug messages
@@ -135,148 +165,33 @@ Usage:
 	    Q   from keyboard: exit without stopping iCserver
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.65 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.66 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
 ########################################################################
-#	Handle -f option - count leading options up to -f
-#	splice out -f and shift its file_name_argument into @runArgs
-#	including a final -R ... option, which will be extracted later
+#	convert POSIX flags to individual flags - process -f -R
 ########################################################################
 
-my ($argIndex, $blank, $file, @runArgs);
-$argIndex = $blank = 0;
-@runArgs = ();
-# print "0 \@ARGV = '@ARGV'\n";
-foreach (@ARGV) {
-    if (s/^-f(.*)$/$1/) {
-	$blank = 1 if $_ eq "";		# -f <file>
-	$file = "";			# or -f<file>
-	last;
-    } elsif (s/^(-[^spnicCQlRf]+)f(.*)$/$1/) {
-	$file = $2;			# -abcf <file>
-	$blank = -1 if $file ne "";	# or -abcf<file>
-	$argIndex++;
-	last;
-    }
-    $argIndex++;
-}
-# no warnings;
-# print "1 \@ARGV = '@ARGV'	\$argIndex = $argIndex	\$file = '$file' $#ARGV\n";
-# use warnings;
-@runArgs = splice(@ARGV, $argIndex, 1 + $blank);
-if (defined $file) {
-    shift(@runArgs) if $blank > 0;
-    unshift(@runArgs, $file) if $file ne "";
-}
-# print "2 \@ARGV = '@ARGV'	\@runArgs = '@runArgs'\n";
-$file = shift(@runArgs) ;
-# print "3 \@ARGV = '@ARGV'	\$file = '$file'\n";
-
-########################################################################
-#	Read optional INI file
-########################################################################
+convertFlags(\@ARGV);
+print "args    = '", join(" ", @args), "'\n" if $opt_Z;
+print "runArgs = '", join(" ", @runArgs), "'\n" if $opt_Z;
+@ARGV = @args;
 
 my $nr = qr/-?[1-9]\d*|0(x[\da-fA-F]+|b[01]+|[0-7]*)/;	# precompiled regex for number in all representations
 							# NOTE: oct() only handles lower case 0b, 0x
 my ($id, $ini, $from, $to, $res, $argNameRef);
 
-if ($file) {
-    open IN, $file or die "can't open ID file $file! $!";
-    LINE:
-    while (<IN>) {		# read next entry from ID file into $_
-	chomp;			# $_ is an ID line
-# print "$file:$.: '$_'\n";
-	my ($lead, $pos, $tail);
-	$pos = 0;
-	while (/(			# $1 lead
-		    .*?			# NOTE minimal matching
-		)
-		(			# $2 whole ID
-		    [IQ]?[XBWL]\d+	# IEC-1131 ID
-		    (			# optional
-			-\d{1,3}	# 3 digit instance
-		    )?
-		    (			# optional
-			\s*-\s*		# '-' 2nd ID
-			[IQ]?[XBWL]\d+	# IEC-1131 ID
-			(		# optional
-			    -\d{1,3}	# 3 digit instance
-			)?
-		    )?
-		    (			# optional initialiser
-			\s*=\s*		# '='
-			( $nr )?	# optional number
-		    )?
-		    (			# optional  from, to, resolution
-			(
-			    \s*,\s*	# ','
-			    ( $nr )?	# optional number
-			){0,3}		# 0 to 3 values ,<number>
-		    )
-		)/xog) {
-	    $lead = $1;
-	    $id = $2;
-	    $pos = pos;
-# print "$file:$.: pos = '$pos' lead = '$lead' id = '$id'\n";
-	    if ($lead =~ /^\s*(#.*)?$/) {
-		next LINE if $1;
-	    } else {
-		warn "$named: file $file:$.: '$_' contains badly formed ID '$lead'\n";
-	    }
-	    push(@ARGV, $id);	# put next ID on end of @ARGV
-	}
-	$tail = substr $_, $pos;
-# print "$file:$.: pos = '$pos' tail = '$tail'\n";
-	unless ($tail =~ /^\s*(#.*)?$/) {
-	    warn "$named: file $file:$.: '$_' contains badly formed ID '$tail'\n";
-	}
-    }
-    close IN;
-}
-
-########################################################################
-#	Handle -R option - count leading options up to -R
-#	splice -R to end - move app and remaining arguments to @runArgs
-########################################################################
-
-my ($app);
-$argIndex = $blank = 0;
-@runArgs = ();
-# print "6 \@ARGV = '@ARGV'\n";
-foreach (@ARGV) {
-    if (s/^-R(.*)$/$1/) {
-	$blank = 1 if $_ eq "";		# -R <app> <args ...>
-	$app = "";			# or -R<app> <args ...>
-	last;
-    } elsif (s/^(-[^spnicCQlR]+)R(.*)$/$1/) {
-	$app = $2;			# -abcR<app> <args ...> or -abcR<app> <args ...>
-	$argIndex++;
-	last;
-    }
-    $argIndex++;
-}
-# no warnings;
-# print "7 \@ARGV = '@ARGV'	\$argIndex = $argIndex	\$app = '$app' $#ARGV\n";
-# use warnings;
-@runArgs = splice @ARGV, $argIndex;
-if (defined $app) {
-    shift(@runArgs) if $blank;
-    unshift(@runArgs, $app) if $app ne "";
-}				# append a -z$opt_q later
-# print "8 \@ARGV = '@ARGV'	\@runArgs = '@runArgs'\n"; exit;
-
 ########################################################################
 #	Handle all remaining -switch options and non-switch options
 ########################################################################
 
-use vars qw($opt_ $opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_I $opt_O $opt_T);
-use vars qw($opt_q $opt_z $opt_s $opt_p $opt_n $opt_i $opt_c $opt_C $opt_Q $opt_l $opt_h);
+use vars qw($opt_ $opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_J $opt_O $opt_T);
+use vars qw($opt_q $opt_z $opt_s $opt_p $opt_n $opt_i $opt_c $opt_C $opt_S $opt_l $opt_h);
 use Getopt::Long qw(:config no_ignore_case bundling);
 GetOptions (
     ''    => \$opt_,			# lone - (not used)
-    '<>'  => sub { push(@argv, @_); },	# Transfer file argument to @argv
+    '<>'  => sub { push(@argv, @_); },	# Transfer I/O argument to @argv
     'b'   => \$opt_b,
     'd'   => \$opt_d,
     'r'   => \$opt_r,
@@ -284,10 +199,10 @@ GetOptions (
     'm'   => \$opt_m,
     'x'   => \$opt_x,
     't'   => \$opt_t,
-    'I'   => \$opt_I,
+    'J'   => \$opt_J,
     'O'   => \$opt_O,
     'q'   => \$opt_q,
-    'z'   => \$opt_z,
+    'z'   => \$opt_z,	# dummy flag for iCserver calls -R iCbox -z (stops error message)
     'T'   => \$opt_T,
     's=s' => \$opt_s,
     'p=s' => \$opt_p,
@@ -295,11 +210,11 @@ GetOptions (
     'i=i' => \$opt_i,
     'c=i' => \$opt_c,
     'C=i' => \$opt_C,
-    'Q=i' => \$opt_Q,
+    'S=i' => \$opt_S,
     'l=i' => \$opt_l,
     'h'   => \$opt_h,
 );
-scalar @ARGV == 0 or die "*** ERROR: $named: '@ARGV' remaining after Getopt::Long Getoptions() ???\n";
+scalar @ARGV == 0 or die "*** ERROR: $named: '@ARGV' remaining after Getopt::Long GetOptions() ???\n";
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -320,9 +235,9 @@ if ($opt_m) {
 $opt_c = 12	unless $opt_c;	# default maximum number of columns
 $opt_C = 18	unless $opt_C;	# absolute maximum number of columns
 $opt_c = $opt_C	if $opt_c > $opt_C;
-$opt_Q = 3	unless $opt_Q;	# absolute maximum number of rows
+$opt_S = 3	unless $opt_S;	# absolute maximum number of rows
 $opt_l = 170	unless $opt_l;	# default length of analog scale
-print "c = $opt_c C = $opt_C Q = $opt_Q l = $opt_l\n" if $opt_t;
+print "c = $opt_c C = $opt_C S = $opt_S l = $opt_l\n" if $opt_t;
 
 if ($opt_b) {
     $indicatoron = 0;		# 0 button    1 checkbox
@@ -394,7 +309,7 @@ if (defined $opt_i and $opt_i ne '') {
 ########################################################################
 
 unshift(@argv, 'X0') unless @argv;	# default name X0
-print "ARGV:", join(':', @argv), ":\n" if $opt_t;
+print "argv: '", join(':', @argv), "'\n" if $opt_t;
 
 my ($argv);
 while ($argv = shift @argv) {
@@ -553,15 +468,15 @@ if ($opt_t) {
 #
 ########################################################################
 
-my $host = defined $opt_s ? $opt_s : 'localhost';
+my $host = defined $opt_s ? $opt_s : '127.0.0.1';
 my $port = defined $opt_p ? $opt_p : 8778;
 my $name = untaint($opt_n ? "$opt_n$instance" : $ArgNames[0][0]);	# : $ArgNames [first entry] [$id]
 $named = $name;			# use individual ID for warnings from now on
 
-iCmsg->inhibit_nagle(1, $opt_I, $opt_O);	# inhibit Nagle's algorithm for real time response
+iCmsg->inhibit_nagle(1, $opt_J, $opt_O);	# inhibit Nagle's algorithm for real time response
 my $conn = iCmsg->connect($host, $port, \&rcvd_msg_from_server);
 die "Client '$named' could not connect to $host:$port\n" unless $conn;
-print STDERR "iCbox '$named' connecting at server\n" unless $opt_q;
+print STDERR "iCbox '$named' connected to server at '$host:$port'\n" unless $opt_q;
 
 ############# send registration ############################
 
@@ -615,11 +530,11 @@ my ($frame, $ch, $maxColumn, $mw, $pane);
 my ($row, $column, $scroll) = (0, 0, 0);
 
 $frameCount++ if $opt_H;			# extra Hold frame
-if ($frameCount > $opt_C*$opt_Q) {
+if ($frameCount > $opt_C*$opt_S) {
     $maxColumn = $opt_C;
     $scroll = 1;
 } else {
-    for (my $r = $opt_Q; $r > 0; $r--) {
+    for (my $r = $opt_S; $r > 0; $r--) {
 	my $r1 = $r - 1;
 	if ($frameCount > $opt_c*$r1) {
 	    $maxColumn = int(($frameCount + $r1) / $r);
@@ -628,7 +543,7 @@ if ($frameCount > $opt_C*$opt_Q) {
     }
 }
 print "frameCount = $frameCount maxColumn = $maxColumn scroll = $scroll\n" if $opt_t;
-exit if $opt_x;	# deliberate exit with -x option
+exit if $opt_x;	# deliberate exit with -x option before any network activity
 
 ########################################################################
 #	Optionally run -R option
@@ -637,6 +552,7 @@ if (@runArgs) {
     splice(@runArgs, 1, 0, "-s", "$host") unless $host eq "localhost" or $host eq "127.0.0.1";
     splice(@runArgs, 1, 0, "-p", "$port") unless $port eq "8778";
     splice(@runArgs, 1, 0, "-z$opt_q",);	# -z not used in iCbox - place holder
+    print "at fork	runArgs: '", join(':', @runArgs), "'\n" if $opt_t;
     fork_and_exec(@runArgs);
 }
 
@@ -713,7 +629,7 @@ if ($scroll) {
     use Tk::Pane;
     $pane = $mw->Scrolled('Pane',
 			  -scrollbars => 'oe',
-			  -height     => $opt_Q * 218,	# 3 rows = 654
+			  -height     => $opt_S * 218,	# 3 rows = 654
 			 )->pack(
 			         -fill   => 'both',
 			         -expand => 1,
@@ -1033,10 +949,115 @@ $mw->fileevent($conn->{sock}, 'readable', sub { iCmsg->event_loop(1); });
 #
 ########################################################################
 
-MainLoop();
+MainLoop();					# should never return
 exit(0);
 
 ####### End of main program ############################################
+
+########################################################################
+#
+#	Convert from Posix bundled flag interpretation to Go type flags.
+#	Extract -f flag and open next argument as an include file
+#	Extract first -R flag and save all further arguments in runArgs
+#
+#	Modify command line bundled flags to interpret -abc as -a -b -c,
+#	which is the way flag.Parse must be presented with Bool flags.
+#	flag.Parse interprets -abc as the flag named "abc".
+#	Mofify Value flags to interpret -xVal as -x Val. Can also have
+#	-abcx Val or -abcxVal, which are both converted to -a -b -c -x Val.
+#	Value flags could be identified by the flag initialisers above,
+#	but it is simpler to define a map of Value flag identifiers.
+#	Command line flags starting with -- are not touched, which is the
+#	Posix way of mixed flags starting with - or --.
+#	https://www.gnu.org/software/libc/manual/html_node/Argument-Syntax.html
+#
+#	The -f <include file> argument opens the include file, which is
+#	trimmed of extraneous spaces and comments and produces another slice
+#	of command line arguments. A recursive call of convertFlags() moves
+#	these arguments into args and runargs, replacing the f<> argument.
+#
+#	The -R option starts a Bernstein chain. Each -R option in the chain
+#	starts a new iC app. Apps in a Bernstein chain are started sequentially
+#	to run their initialization code, at which point the app starts
+#	the next iC app in the Bernstein chain with its -R option. The
+#	current app keeps running in parallel with the app that started it.
+#	Finally all iC apps in a Bernstein chain run in parallel after their
+#	initialization codes have been run sequentially.
+#	The first iC app in the Bernstein chain must have the -z option, which
+#	suppresses stdin interrupts. This is necessary, because programs started
+#	with exec.Command().run() close stdin, which causes EOF for stdin in
+#	the iC app, which causes it to shut down. -z suppresses that.
+#
+#	Modifying command line options and interpreting -f is stopped after the
+#	first -R option because any further options are interpreted by apps in the
+#	Bernstein chain and may not be set correctly in the commandLineFlags map.
+#
+########################################################################
+
+sub convertFlags {
+    my ($argp) = @_;
+    my ($ch);
+    print "cF:	*argp = '", join(" ", @{$argp}), "'\n" if $opt_Z;
+    my $Fflag = 0;
+    foreach my $arg (@{$argp}) {
+	if (length($arg) == 0) { next; }
+	print "    \"$arg\"\n" if $opt_Z;
+	my $Sflag = 1;
+	my $s0 = substr $arg, 0, 1;
+	my $s1 = substr $arg, 1, 1;
+	if ($arg ne "-" && $s0 eq '-' && $s1 ne '-' && ($Rflag eq 0 || $s1 eq 'R')) {
+	    $Sflag = 0;
+	    my $i     = 0;
+	    foreach my $sf (split(//, substr($arg, 1))) {
+		print "	$sf	Sflag = $Sflag	Rflag = $Rflag	Fflag = $Fflag\n" if $opt_Z;
+		unless (exists $commandLineFlags{$sf}) {
+		    $arg = substr($arg, $i+1);	# not a flag value
+		    $Sflag = 1;
+		    last;
+		}
+		if ($sf eq "R" && $Rflag == 0) {
+		    $Rflag = 1;			# first -R not appended to args or runArgs
+		    $argsP = \@runArgs		# now fill arguments for -R option in runArgs
+		} elsif ($sf eq "f" && $Rflag == 0) {
+		    $Fflag = 1;
+		} else {
+		    push(@{$argsP}, "-$sf");
+		}
+		if ($commandLineFlags{$sf} == 1 && $i+2 < length($arg)) {
+		    $arg = substr($arg, $i+2);	# value flag followed directly by value
+		    $Sflag = 1;
+		    last;
+		}
+		$i++;
+	    }
+	}
+	print "		Sflag = $Sflag	Rflag = $Rflag	Fflag = $Fflag\n" if $opt_Z;
+	if ($Sflag) {
+	    if (not $Fflag) {
+		push(@{$argsP}, $arg);		# append a value after a value flag
+	    } else {
+		my @incArgs;
+		$Fflag = 0;
+		open IN, $arg or die "can't open ID file $arg! $!";
+		LINE:
+		while (<IN>) {			# read next entry from include file into $_
+		    chomp;
+		    print "$arg:$.: '$_'\n" if $opt_Z;
+		    s/(^\s+)|(\s*(#.*)?$)//g;	# strip leading space and trailing comment
+		    s/\s*([=:,;.])\s*/$1/g;	# remove spaces around separators
+		    if (length($_) > 0) {
+			push(@incArgs, split(" ", $_));
+		    }
+		}
+		close IN;
+		if (@incArgs) {
+		    print "cF:	incArgs = '", join(" ", @incArgs), "'\n" if $opt_Z;
+		    convertFlags(\@incArgs)	# recursive call to add options in include file
+		}
+	    }
+	}
+    }
+} # convertFlags
 
 ########################################################################
 #
@@ -1047,9 +1068,16 @@ exit(0);
 
 sub quit_program {
     my (undef, $flag) = @_;
-    print "$named: quit\n" if $opt_T;
-    $conn->send_now("X$named") if $conn and not $flag;	# stop iCserver unless 'Q'
-    $mw->destroy();
+    print "$named: quit\n" if $opt_t;
+    if ($conn) {
+	if (not $flag) {
+	    $conn->send_now("X$named");		# stop iCserver - (X), 'q' or disconnected by server
+	} else {
+	    $conn->send_now("");		# disconnect this app at iCserver only - 'Q'
+	}
+	$conn->disconnect();
+    }
+    $mw->destroy() if $mw;
     exit(0);
 } # quit_program
 
@@ -1108,11 +1136,10 @@ sub rcvd_msg_from_server {
     printMicroSeconds();
     if (defined $msg) {
         my $len = length $msg;
-	print "($len)$msg<\n" if $opt_T;
+	print "($len)$msg<\n" if $opt_t;
 	if ($len == 0) {
-	    $conn->disconnect();
 	    print STDERR "iCbox '$named' disconnected by server\n" unless $opt_q;
-	    exit;
+	    quit_program();			# never returns
 	}
 	my ($msg1, $channel, $value, $old, $bitRef, $id, $ini, $from, $to, $res, $regId);
 	foreach $msg1 (split /,/, $msg) {	# break up comma separated multiple messages
@@ -1135,7 +1162,7 @@ sub rcvd_msg_from_server {
 			}
 			$ChannelsQ[$channel] = $value;	# ready for next message
 			print "$named: $msg1	> $ChannelNames[$channel]\n" if $opt_t;
-			printf "%s	< %2d:%d\n", $ChannelNames[$channel], $channel, $value if $opt_I;
+			printf "%s	< %2d:%d\n", $ChannelNames[$channel], $channel, $value if $opt_J;
 		    }
 		} else {
 		    warn "$named: not registered for $msg1 from iCserver - not OK\n";
@@ -1200,6 +1227,8 @@ sub rcvd_msg_from_server {
 		warn "$named: WARNING: '$msg1' out of '$msg' from iCserver has wrong format - ignored";
 	    }
 	}
+    } elsif ($opt_T) {
+	warn "$named: undefined messagefrom iCserver - ignored $err";
     }
 } # rcvd_msg_from_server
 
@@ -1288,8 +1317,8 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
 
 =head1 SYNOPSIS
 
- iCbox [-qHbdrtIOmTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
-       [ -c <col>][ -C <col>][ -Q <rows>][ -l <len>][ -f <file>]
+ iCbox [-qHbdrtJOmTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+       [ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
        [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
        [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
@@ -1314,23 +1343,23 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
     B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
     B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
-    -s host name of server host    (default 'localhost')
+    -s host name of server host    (default '127.0.0.1')
     -p port service port of server (default '8778')
     -n name registration name (default first full ID)
     -i inst instance ID for this iCbox (1 to 3 numeric digits)
     -q      quiet - do not report clients connecting and disconnecting
     -c col  maximum number of columns in a row (default 12)
     -C col  absolute maximum number of columns in a row (default 18)
-    -Q rows absolute maximum number of rows (default 3)
+    -S rows absolute maximum number of rows (default 3)
     -l len  length of scales (default 170 pixels)
-    -f file read additional ID parameters from this file
+    -f file read flags and additional ID parameters from this file
     -H      a Hold button is generated which holds input changes
     -b      use buttons instead of checkboxes for digital I/O
     -d      display inputs IMn (no change and no ini values allowed)
     -r      reverse - display inputs IMn, send outputs QMn like inputs
         DEBUG options
     -t      trace debug messages
-    -I      trace rcv messages in iCmsg.pm
+    -J      trace rcv messages in iCmsg.pm
     -O      trace send messages in iCmsg.pm
     -m      display elapsed time in seconds and microseconds
     -T      extra static debug messages

@@ -8,8 +8,8 @@ usage()
     echo '	-c	make immediate C compiler immcc' >&2
     echo '	-l	make immediate C static library libict.a' >&2
     echo '	-S	make immediate C shared library libict.so' >&2
+    echo '	-G	make goserver if golang is installed' >&2
     echo '	-P	make iCpiFace for RASPBERRYPI PiFace with YYDEBUG only' >&2
-    echo '	-G	make iCgpioPUD for RASPBERRYPI as SUID auxiliary program' >&2
     echo '	-V	make iCpiPWM for RASPBERRYPI as SUID PWM and serVo program' >&2
     echo '	-r	make standalone interpreter icr' >&2
     echo '	-t	make standalone interpreter ict' >&2
@@ -36,11 +36,11 @@ usage()
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m 1.23 $' >&2
+    echo '$Id: m 1.24 $' >&2
 }
 
 name=${0##*/}
-clSrtm=''
+clSGrtm=''
 gpudsyez=''
 dw=''
 i=''
@@ -53,12 +53,13 @@ o=''
 
 while getopts ":clSNPGVrtmgpudsyezD:W:Iih" opt; do
     case $opt in
-    c ) clSrtm="${clSrtm}c";;
-    l ) clSrtm="${clSrtm}l";;
-    S ) clSrtm="${clSrtm}S";;
-    r ) clSrtm="${clSrtm}r";;
-    t ) clSrtm="${clSrtm}t";;
-    m ) clSrtm="${clSrtm}m";;
+    c ) clSGrtm="${clSGrtm}c";;
+    l ) clSGrtm="${clSGrtm}l";;
+    S ) clSGrtm="${clSGrtm}S";;
+    G ) clSGrtm="${clSGrtm}G";;
+    r ) clSGrtm="${clSGrtm}r";;
+    t ) clSGrtm="${clSGrtm}t";;
+    m ) clSGrtm="${clSGrtm}m";;
     g ) gpudsyez="${gpudsyez}g";;
     p ) gpudsyez="${gpudsyez}p";;
     u ) gpudsyez="${gpudsyez}u";;
@@ -71,7 +72,6 @@ while getopts ":clSNPGVrtmgpudsyezD:W:Iih" opt; do
     W ) dw="$dw -W$OPTARG";;
     N ) N="N";;
     P ) P="P";;
-    G ) G="G";;
     V ) V="V";;
     I )
 	echo "Enter root:" >&2
@@ -91,13 +91,13 @@ shift $(($OPTIND - 1))
 if [ -n "$N" -o -n "$P" -o -n "$G" -o -n "$V" ]; then
     echo "### make Const and/or iCpiFace and/or iCgpioPUD and/or iCpiPWM"
     ./makeAll -qg$N$P$G$V$gpudsyez$dw
-elif [ -z "$clSrtm" ]; then
-    clSrtm="cl"
+elif [ -z "$clSGrtm" ]; then
+    clSGrtm="cl"
 fi
 
-if [ -n "$clSrtm" ]; then
-    echo "### ./makeAll -qg$clSrtm$gpudsyez$dw"
-    ./makeAll -qg$clSrtm$gpudsyez$dw
+if [ -n "$clSGrtm" ]; then
+    echo "### ./makeAll -qg$clSGrtm$gpudsyez$dw"
+    ./makeAll -qg$clSGrtm$gpudsyez$dw
 fi
 
 if [ -n "$i" ]; then

@@ -37,8 +37,9 @@ usage ()
     echo '	-C	make immcc only; generate an empty cexe.c' >&2
     echo '	-L	make libict.a only' >&2
     echo '	-S	make libict.so without YYDEBUG if OSTYPE ~= linux' >&2
+    echo '	-G	make goserver if golang is installed' >&2
     echo '	-P	make iCpiFace digital I/O for RASPBERRYPI, YYDEBUG only' >&2
-    echo '	-G	make iCgpioPUD for RASPBERRYPI as SUID auxiliary program' >&2
+    echo '		   + iCgpioPUD for RASPBERRYPI as SUID auxiliary program' >&2
     echo '	-V	make iCpiPWM analog I/O for RASPBERRYPI, PWM, serVo and ADC' >&2
     echo '	-R	make icr only without modifying cexe.c' >&2
     echo '	-T	make ict only without modifying cexe.c' >&2
@@ -60,7 +61,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll 1.44 $' >&2
+    echo '	$Id: makeAll 1.45 $' >&2
 }
 
 makeLib ()
@@ -93,6 +94,11 @@ makeShared ()
 	mv rpi_gpio.$O mcp23s17.$O pifacecad.$O SharedObjs
     fi
     mv Make_tmp/* . 2> /dev/null
+}
+
+makeGOserver ()
+{
+    make goserver
 }
 
 makeIcr ()
@@ -186,7 +192,7 @@ makePiPWM ()
 	mv misc.$O icend.$O tcpc.$O rpi_rev.$O PiPWMObjs
 	mv Make_tmp/* . 2> /dev/null
     else
-	echo "Error makeAll -P: cannot make iCpiPWM for a '$cpu' cpu - only for an 'armv*' on a Raspberry Pi"
+	echo "Error makeAll -V: cannot make iCpiPWM for a '$cpu' cpu - only for an 'armv*' on a Raspberry Pi"
     fi
 }
 
@@ -204,8 +210,8 @@ y=""
 C=0
 L=0
 S=0
-P=0
 G=0
+P=0
 V=0
 R=0
 T=0
@@ -236,13 +242,13 @@ while getopts ":qgpclrtmCLSPGVRTNMuedsyzhD:W:o:" opt; do
     C )	C=1; IM_LIB=0;;
     L )	L=1; IM_LIB=0;;
     S )	S=1; IM_LIB=0;;
-    P )	P=1; IM_LIB=0;;
     G )	G=1; IM_LIB=0;;
-    V )	V=1; IM_LIB=0;;
-    R )	R=1; IM_LIB=0;;
-    T )	T=1; IM_LIB=0;;
-    N )	N=1; IM_LIB=0;;
-    M )	M=1; IM_LIB=0;;
+    P )	P=1;;
+    V )	V=1;;
+    R )	R=1;;
+    T )	T=1;;
+    N )	N=1;;
+    M )	M=1;;
     u )	u=" -DSYUNION";;
     d )	d=" -DDEQ";;
     e )	e=" -DEFENCE";;
@@ -277,7 +283,7 @@ fi
 if [ $YN -ne 0 ]; then
     Y=" -DYYDEBUG=$YN"
 fi
-if [ $P -eq 0 ] && [ $G -eq 0 ] && [ $V -eq 0 ] && ! perl icg.pl $Y$u$d$e$o$s$y icc.h | cmp -s - icg.h; then
+if [ $P -eq 0 ] && [ $V -eq 0 ] && ! perl icg.pl $Y$u$d$e$o$s$y icc.h | cmp -s - icg.h; then
     echo "Options changed to '$Y$u$d$e$o$s$y'"
     if [ $R -eq 0 ] && [ $T -eq 0 ]; then
 	echo "   make clean"
@@ -306,6 +312,11 @@ if [ $IM_LIB = 1 ] || [ $S = 1 ]; then
     fi
 fi
 
+if [ $IM_LIB = 1 ] || [ $G = 1 ]; then
+    echo "make goserver"
+    makeGOserver  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+fi
+
 if [ $R = 1 ]; then
     echo "make OPT=\"-DRUN$r$u$d$e$os$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" icr"
     makeIcr  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
@@ -328,10 +339,6 @@ fi
 
 if [ $P = 1 ]; then
     echo "make OPT=\"-DTCP -DYYDEBUG$o\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCpiFace"
-    makePiFace  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
-fi
-
-if [ $G = 1 ]; then
     echo "make OPT=\"$o\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCgpioPUD"
     makeGpioPUD  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
@@ -368,9 +375,10 @@ makeAll - supports Makefile in immediate-C develeopment
     -C      make immcc only; generate an empty cexe.c
     -L      make libict.a only
     -S      make libict.so without YYDEBUG if OSTYPE ~= linux
-    -P	    make iCpiFace digital I/O for RASPBERRYPI, YYDEBUG only
-    -G	    make iCgpioPUD for RASPBERRYPI as SUID auxiliary program
-    -V	    make iCpiPWM analog I/O for RASPBERRYPI, PWM, serVo and ADC
+    -G      make goserver if golang is installed
+    -P      make iCpiFace digital I/O for RASPBERRYPI, YYDEBUG only
+               + iCgpioPUD for RASPBERRYPI as SUID auxiliary program
+    -V      make iCpiPWM analog I/O for RASPBERRYPI, PWM, serVo and ADC
     -R      make icr only without modifying cexe.c
     -T      make ict only without modifying cexe.c
     -N      make const test internal constant expression compiler

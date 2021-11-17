@@ -86,7 +86,7 @@ Usage:
                 Such an appended instance code takes precedence over the
                 general instance specified with the -i <inst> (see below).
         -S server +options+equivalences  (default 'iCserver -ak')
-        -s host name of iCserver host    (default 'localhost')
+        -s host name of iCserver host    (default '127.0.0.1')
         -p port service port of iCserver (default '8778')
         -n name registration name        (default first full IEC)
         -i inst instance ID for this iCtherm (1 to 3 numeric digits)
@@ -106,7 +106,7 @@ Usage:
                      as a separate process; -R ... must be last arguments.
 Copyright (C) 2014  John E. Wulff              <immediateC@gmail.com>
 							'@'
-$Id: iCtherm 1.8 $
+$Id: iCtherm 1.9 $
 .
 
 ########################################################################
@@ -586,7 +586,7 @@ if ($lenArgNames) {
     #
     ########################################################################
 
-    my $host = defined $opt_s ? $opt_s : 'localhost';
+    my $host = defined $opt_s ? $opt_s : '127.0.0.1';
     my $port = defined $opt_p ? $opt_p : 8778;
     my $name = untaint($opt_n ? "$opt_n$instance" : "$named$instance");
     $named = $name;			# use individual ID for warnings from now on
@@ -1068,7 +1068,7 @@ iCtherm - an iC driver or standalone program supplying temperature values
                 Such an appended instance code takes precedence over the
                 general instance specified with the -i <inst> (see below).
         -S server +options+equivalences  (default 'iCserver -ak')
-        -s host name of iCserver host    (default 'localhost')
+        -s host name of iCserver host    (default '127.0.0.1')
         -p port service port of iCserver (default '8778')
         -n name registration name        (default first full IEC)
         -i inst instance ID for this iCtherm (1 to 3 numeric digits)

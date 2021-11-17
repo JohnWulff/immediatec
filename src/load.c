@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.78 $";
+"@(#)$Id: load.c 1.79 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2020  John E. Wulff
@@ -18,8 +18,10 @@ static const char load_c[] =
 
 #include	<stdio.h>
 #include	<stdlib.h>
+#include	<sys/stat.h>
 #include	<string.h>
 #include	<assert.h>
+#include	<errno.h>
 #include	<fcntl.h>
 #ifndef	LOAD
 #error - must be compiled with LOAD defined to make a linkable library
@@ -235,11 +237,12 @@ static const char *	usage =
 "    Care is taken that any GPIOs or PiFaces used in one app, iCpiFace, iCpiPWM\n"
 "    or even iCtherm do not clash with another app (using ~/.iC/gpios.used).\n"
 #else	/* RASPBERRYPI */
-"    -l      start 'iClive' with correct source\n"
+"    -l      start 'iClive' with correct source\n"	// declared differently for RASPBERRYPI
 #endif	/* RASPBERRYPI */
 #endif	/* TCP */
 "                      DEBUG options\n"
 #if	YYDEBUG && !defined(_WINDOWS)
+"    -o <debug_out>  debug output file (default stdout)\n"
 "    -d <debug>2000  display scan_cnt and link_cnt\n"
 "             +1000  do not trace non-active timers TX0.n\n"
 "              +400  exit after initialisation\n"
@@ -350,6 +353,7 @@ main(
     int			i;
     unsigned		df = 0;
     char *		cp;
+    char *		outFN = NULL;
     int			len;
     char		iqt[2];		/* single char buffer - space for 0 terminator */
     char		xbwl[2];	/* single char buffer - space for 0 terminator */
@@ -568,6 +572,20 @@ main(
 #endif	/* RASPBERRYPI */
 		    break;
 #endif	/* TCP */
+		case 'o':
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+		    if (strlen(*argv)) {
+#ifdef	_WIN32
+			outFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
+			strcpy(outFN, *argv);
+			while ((cp = strchr(outFN, '\\')) != 0) {
+			    *cp = '/';		/* convert '\' to '/' under _WIN32 */
+			}
+#else	/* ! _WIN32 Linux */
+			outFN = *argv;		/* compiler output file name */
+#endif	/* _WIN32 */
+		    } else goto missing;
+		    goto break2;
 		case 'd':
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if (!(slen = strlen(*argv))) goto missing;
@@ -2563,8 +2581,17 @@ main(
 #endif	/* RASPBERRYPI */
 
     /********************************************************************
+     * Optionally open a debug output file (required when running with goserver)
      * Execute iC load object
      *******************************************************************/
+    if (outFN) {				/* debug out file nominated ? */
+	if ((chmod(outFN, 0644) &&		/* yes - make debug out file writable */
+	errno != ENOENT) ||			/* if it exists - so it can be re-opened */
+	(iC_outFP = fopen(outFN, "a")) == NULL) {	/* append to previous debug output */
+	    perror("chmod or fopen");
+	    iC_quit (SIGUSR1);			/* error quit */
+	}
+    }						/* else iC_outFP = stdout from initialisation */
     iC_icc();				/* Gate ** sTable, Gate ** sTend are global */
     /********************************************************************
      * never returns - exits via iC_quit()

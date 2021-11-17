@@ -252,7 +252,7 @@ Usage:
        [ -F <font>][ -E <code>][ -l <num>][ -w <num>][ -g <geometry>]
        [ -A <cmd>][ -d <deb>][ <file> ...]
        [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
-    -s host name of server host    (default 'localhost')
+    -s host name of server host    (default '127.0.0.1')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
     -D IXy.z optional Debug Stop output to control moving parts in a plant
@@ -355,7 +355,7 @@ Usage:
 
 Copyright (C) 2000-2021  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.94 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.95 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -415,7 +415,7 @@ GetOptions (
     'u'   => \$opt_u,
     'X'   => \$opt_X,
     'q'   => \$opt_q,
-    'z'   => \$opt_z,
+    'z'   => \$opt_z,			# dummy option for -R; iClive needs stdin
     'd=i' => \$opt_d,
     's=s' => \$opt_s,
     'p=s' => \$opt_p,
@@ -522,7 +522,7 @@ $SIG{PIPE} = 'IGNORE';		# ignore signal in syswrite() in iCmsg.pm line 103
 #
 ########################################################################
 
-my $host = defined $opt_s ? $opt_s : 'localhost';
+my $host = defined $opt_s ? $opt_s : '127.0.0.1';
 my $port = defined $opt_p ? $opt_p : 8778;
 my %symbolTable = ();	# $symbolTable{$symbol} [0, 1]   = ($ftype, $index)
 my @symbolNames = ();	# $symbolNames[$index] = symbol-id (does not include ALIASes or variations)
@@ -2865,7 +2865,7 @@ sub register_at_server {
 	until ($conn) {
 	    $conn = iCmsg->connect($host, $port, \&rcvd_msg_from_server, 1); # return imme if connect fails
 	    if ($conn) {
-		print STDERR "$named connecting at server\n" unless $opt_q;
+		print STDERR "$named connected to server at '$host:$port'\n" unless $opt_q;
 		$mainWindow->fileevent($conn->{sock}, 'readable', sub { iCmsg->event_loop(1); });
 		info_display(2000, 'blue', "Connection to '$host:$port'");
 	    } elsif ($host ne "localhost" and $host ne "127.0.0.1") {
@@ -2892,44 +2892,40 @@ sub register_at_server {
 	    }				# try to connect immediately
 	}
     }
-    if ($instName ne '') {
-	if ($conn) {
-	    if ($regName eq '') {
-		my $ret = '';
-		my $Registrations = "N-$instName,RC$instName,SD$instName";
-		$Registrations .= ",S$debugStop" if $debugStop;	# optional Debug Stop signal
-		$Registrations .= ",Z";
-		$regName = $instName;		# register but may not connect to application
-		print "$named: Registrations: $Registrations\n" if $opt_T;
-		conn_send_now($Registrations);
-		info_display(2000, 'blue', "Register as '-$instName'");
-		my ($tmsg, $terr) = $conn->rcv_now();
+    if ($conn) {
+	$regName = $instName ne "" ? $instName : "iClive";
+	my $ret = '';
+	my $Registrations = "N-$regName,RC$regName,SD$regName";
+	$Registrations .= ",S$debugStop" if $debugStop;	# optional Debug Stop signal
+	$Registrations .= ",Z";	# register but may not connect to application
+	print "$named: Registrations: $Registrations\n" if $opt_T;
+	conn_send_now($Registrations);
+	info_display(2000, 'blue', "Register as '-$regName'");
+	my ($tmsg, $terr) = $conn->rcv_now();
 no warnings;
-		print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
-		$i = 1;
-		REPEAT:
-		if ($tmsg !~ /^(\d+),(\d+)(,(\d+))?$/) {	# analyse registration reply from iCserver now
-		    rcvd_msg_from_server($conn, $tmsg, $terr);	# not a registration reply - delayed data
-		    unless ($conn) {
-			print "$named: failed to register on attempt $i\n" if $opt_T;
-			goto FAILED_TO_REGISTER;	# stop trying if registered twice
-		    }
-		    ($tmsg, $terr) = $conn->rcv_now();
-		    print "$named: Reply: '$tmsg' err = '$terr' ($i)\n" if $opt_T;
-		    die "registration failed\n" if $i++ >= 100;	# ridiculous number of delayed data messages
-		    goto REPEAT;	# cannot use while, because $1 $2 not in scope - if OK
-		}
-use warnings;
-		$C_channel = $1;	# receiver channel from control program
-		$D_channel = $2;	# sender channel to control program
-		$B_channel = $4 if $3;	# sender channel for optional Debug Stop signal
-		print "$named: registered: C_channel = $C_channel D_channel = $D_channel B_channel = $B_channel\n" if $opt_T;
-		conn_send_now("$D_channel:2");			# poll application to see if it is live
+	print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
+	$i = 1;
+	REPEAT:
+	if ($tmsg !~ /^(\d+),(\d+)(,(\d+))?$/) {	# analyse registration reply from iCserver now
+	    rcvd_msg_from_server($conn, $tmsg, $terr);	# not a registration reply - delayed data
+	    unless ($conn) {
+		print "$named: failed to register on attempt $i\n" if $opt_T;
+		goto FAILED_TO_REGISTER;	# stop trying if registered twice
 	    }
-	} else {
-	    FAILED_TO_REGISTER: info_display(2000, 'red',
-		"Could not connect to '$host:$port' - no live listing - edit only");
+	    ($tmsg, $terr) = $conn->rcv_now();
+	    print "$named: Reply: '$tmsg' err = '$terr' ($i)\n" if $opt_T;
+	    die "registration failed\n" if $i++ >= 100;	# ridiculous number of delayed data messages
+	    goto REPEAT;	# cannot use while, because $1 $2 not in scope - if OK
 	}
+use warnings;
+	$C_channel = $1;	# receiver channel from control program
+	$D_channel = $2;	# sender channel to control program
+	$B_channel = $4 if $3;	# sender channel for optional Debug Stop signal
+	print "$named: registered: C_channel = $C_channel D_channel = $D_channel B_channel = $B_channel\n" if $opt_T;
+	conn_send_now("$D_channel:2");			# poll application to see if it is live
+    } else {
+	FAILED_TO_REGISTER: info_display(2000, 'red',
+	    "Could not connect to '$host:$port' - no live listing - edit only");
     }
 } # register_at_server
 
@@ -2944,6 +2940,7 @@ sub unregister_from_server {
 	print "$named: unregister '$regName' '$D_channel:0'.\n" if $opt_T;
 	conn_send_now("$D_channel:0");
 	my $UnRegistrations = "n-$regName,rC$regName,sD$regName";
+	$UnRegistrations .= ",s$debugStop" if $debugStop;	# optional Debug Stop signal
 	$regName = '';
 	print "$named: UnRegistrations: $UnRegistrations\n" if $opt_T;
 	$mainWindow->title("$named$u: $fileName$readOnly");
@@ -5307,7 +5304,7 @@ sub quit_program {
 	print "$named: quit\n" if $opt_T;
 	if ($server > 0) {
 	    print "quit_program() sends 'X$named'\n" if $opt_T;
-	   conn_send_now("X$named") if $conn;	# iClive started iCserver - stop it
+	    conn_send_now("X$named") if $conn;	# iClive started iCserver - stop it
 	} elsif ($runName ne '') {
 	    print "quit_program() sends '$D_channel:7,$D_channel:0'\n" if $opt_T;
 	    conn_send_now("$D_channel:7,$D_channel:0");
@@ -5322,6 +5319,7 @@ sub quit_program {
 	$dbL->Exit() if Exists $dbL;		# when $mainWindow is destroyed
 	$mainWindow->destroy();
 	print "quit_program() exit\n" if $opt_T;
+	conn_send_now("") if $conn;		# disconnect app at iCserver
 	exit;
     }
     ## continue if check_save() was cancelled
@@ -5429,7 +5427,7 @@ iClive - an editor and live debugger for immediate-C apps
         [ -F <font>][ -E <code>][ -l <num>][ -w <num>][ -g <geometry>]
         [ -A <cmd>][ -d <deb>][ <file> ...]
         [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
-    -s host name of server host    (default 'localhost')
+    -s host name of server host    (default '127.0.0.1')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
     -D IXy.z optional Debug Stop output to control moving parts in a plant

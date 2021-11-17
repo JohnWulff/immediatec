@@ -48,6 +48,7 @@ my @normal_hide = ('normal', 'hidden', 'normal');
 my @transp_show = ('transparent', 'transparent', undef);
 my $server      = 0;
 my $debugStop	= 0;	# stops door and cage movements at iClive Watch and single step breaks
+my @dummy = ();		# collect non flag arguments, which is an error
 
 my @masks       = (1, 2, 4, 8, 16, 32, 64, 128);
 my @bitIndex    = (
@@ -77,12 +78,13 @@ my @bitIndex    = (
 
 my $named = $0; $named =~ s#.*[/\\]##;
 my ($conn, $host, $port, $name);
-use vars qw($opt_s $opt_p $opt_n $opt_i $opt_c $opt_r $opt_L $opt_F $opt_w $opt_k $opt_v $opt_o $opt_g
-    $opt_U $opt_J $opt_Y $opt_u $opt_j $opt_y $opt_x $opt_t $opt_R $opt_S $opt_m $opt_T $opt_q $opt_B
-    $opt_C $opt_D $opt_I $opt_b $opt_e $opt_d $opt_l $opt_K $opt_h);
 my $ofh = select(STDERR);	# save old file handle
 $= = 1000;			# stop page overflow (default 60 lines)
 select($ofh);			# retore old file handle
+
+use vars qw($opt_ $opt_s $opt_p $opt_n $opt_i $opt_c $opt_r $opt_L $opt_F $opt_w $opt_k $opt_v $opt_o $opt_g);
+use vars qw($opt_U $opt_V $opt_Y $opt_u $opt_j $opt_y $opt_x $opt_t $opt_J $opt_O $opt_m $opt_T $opt_q $opt_z);
+use vars qw($opt_B $opt_C $opt_D $opt_S $opt_b $opt_e $opt_d $opt_l $opt_K $opt_h);
 
 format STDERR =
 Usage:
@@ -97,7 +99,7 @@ Usage:
     and using IEC outputs received from an iC control application to
     initiate and stop simulated movement and to reset buttons.
 
-	-s host	host name of server        (default localhost )
+	-s host	host name of server        (default 127.0.0.1 )
 	-p port	service port of server     (default 8778      )
 	-n name	registration name          (default iClift    )
 	-i inst instance ID for this iClift (1 to 3 numeric digits)
@@ -107,7 +109,7 @@ Usage:
 						$opt_F
 	-C	continuous test    (if supported by controller)
 	-D	inhibit turning off continuous test
-	-I	show up/down indicators in cage
+	-S	show up/down indicators in cage
 	-b      build control program 'lifts_...' unles it exists
 	-e      execute control program 'lifts_...' (implies -b)
 	-d      start 'iCbox -d -C19' automatically (implies -e)
@@ -127,8 +129,8 @@ Usage:
 						$opt_o
 	-U pix	cage width                 (default @<< pixels)
 						$opt_U
-	-J pix	cage height                (default @<< pixels)
-						$opt_J
+	-V pix	cage height                (default @<< pixels)
+						$opt_V
 	-Y pix	cage sensor offset         (default @<< pixels)
 						$opt_Y
 	-u pix	door width                 (default @<< pixels)
@@ -138,8 +140,8 @@ Usage:
 	-y pix	door sensor offset         (default @<< pixels)
 						$opt_y
 	-t	trace debug messages
-	-R	trace rcv messages in iCmsg.pm
-	-S	trace send messages in iCmsg.pm
+	-J	trace rcv messages in iCmsg.pm
+	-O	trace send messages in iCmsg.pm
 	-m	display elapsed time in seconds and microseconds
 	-T	extra static debug messages
 	-q	quiet - do not report clients connecting and disconnecting
@@ -150,6 +152,11 @@ Usage:
 				    -file outputs without comments
 				    @file transposed Q and I outputs
 				    '^'
+	    This option is now obselete, because iCserver -A 'iCbox -d'
+	    autovivifies a much cleaner monitoring file automatically
+	    with the 'iClift -d' option
+	-R <app ...> run one app followed by -z and its arguments as a
+		     separate process; -R ... must be last arguments
 	-K	activate the following Key bindings: (default off)
 
 	    @	move lift 0 up   Home up continuous   Page up   fast
@@ -187,12 +194,87 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift 1.20 $ uses Tk-@<<<<<<
+$Id: iClift 1.21 $ uses Tk-@<<<<<<
 							$Tk::VERSION
 .
 
-use Getopt::Std;
-getopts('s:p:n:i:L:F:CDIbedlc:r:w:k:v:g:o:U:J:Y:u:j:y:tRSmTqxB:Kh');	# sets $opt_h if -h etc
+########################################################################
+#	Handle -R option - count leading options up to -R
+#	splice -R to end - move app and remaining arguments to @runArgs
+########################################################################
+
+my ($argIndex, $blank, $app, @runArgs);
+$argIndex = $blank = 0;
+@runArgs = ();
+# print "6 \@ARGV = '@ARGV'\n";
+foreach (@ARGV) {
+    if (s/^-R(.*)$/$1/) {
+	$blank = 1 if $_ eq "";		# -R <app> <args ...>
+	$app = "";			# or -R<app> <args ...>
+	last;
+    } elsif (s/^(-[^spnicCQlR]+)R(.*)$/$1/) {
+	$app = $2;			# -abcR<app> <args ...> or -abcR<app> <args ...>
+	$argIndex++;
+	last;
+    }
+    $argIndex++;
+}
+# no warnings;
+# print "7 \@ARGV = '@ARGV'	\$argIndex = $argIndex	\$app = '$app' $#ARGV\n";
+# use warnings;
+@runArgs = splice @ARGV, $argIndex;
+if (defined $app) {
+    shift(@runArgs) if $blank;
+    unshift(@runArgs, $app) if $app ne "";
+}				# append a -z$opt_q later
+# print "8 \@ARGV = '@ARGV'	\@runArgs = '@runArgs'\n"; exit;
+
+########################################################################
+#	Handle all remaining -switch options and non-switch options
+########################################################################
+
+use Getopt::Long qw(:config no_ignore_case bundling);
+GetOptions (
+    ''    => \$opt_,			# lone - (not used)
+    '<>'  => sub { push(@dummy, @_); },	# Transfer file argument to @dummy
+    's=s' => \$opt_s,
+    'p=s' => \$opt_p,
+    'n=s' => \$opt_n,
+    'i=i' => \$opt_i,
+    'L=i' => \$opt_L,
+    'F=s' => \$opt_F,
+    'C'   => \$opt_C,
+    'D'   => \$opt_D,
+    'S'   => \$opt_S,
+    'b'   => \$opt_b,
+    'e'   => \$opt_e,
+    'd'   => \$opt_d,
+    'l'   => \$opt_l,
+    'c=i' => \$opt_c,
+    'r=i' => \$opt_r,
+    'w=i' => \$opt_w,
+    'k=i' => \$opt_k,
+    'v=i' => \$opt_v,
+    'g=i' => \$opt_g,
+    'o=i' => \$opt_o,
+    'U=i' => \$opt_U,
+    'V=i' => \$opt_V,
+    'Y=i' => \$opt_Y,
+    'u=i' => \$opt_u,
+    'j=i' => \$opt_j,
+    'y=i' => \$opt_y,
+    't'   => \$opt_t,
+    'J'   => \$opt_J,
+    'O'   => \$opt_O,
+    'm'   => \$opt_m,
+    'T'   => \$opt_T,
+    'q'   => \$opt_q,
+    'z'   => \$opt_z,	# dummy flag for iCserver calls -R iClift -z (stops error message)
+    'x'   => \$opt_x,
+    'B=s' => \$opt_B,
+    'K'   => \$opt_K,
+    'h'   => \$opt_h,
+);
 
 ########################################################################
 #	Note: all parameter y coordinates are reversed like engineering drawings
@@ -210,7 +292,7 @@ $opt_g = 133 unless defined $opt_g;	# door opening height
 $opt_o = 15 unless defined $opt_o;	# door opening offset	(35)
 
 $opt_U = 110 unless defined $opt_U;	# cage width
-$opt_J = 145 unless defined $opt_J;	# cage height
+$opt_V = 145 unless defined $opt_V;	# cage height
 $opt_Y = 10 unless defined $opt_Y;	# cage sensor offset
 
 $opt_u = 55 unless defined $opt_u;	# door width
@@ -233,6 +315,10 @@ if (defined $opt_i and $opt_i ne '') {
     } else {
 	warn "$named: badly formed option -i $opt_i - ignored\n";
     }
+}
+
+if (@dummy) {
+    warn "$named: non flag arguments '@dummy' - ignored\n";
 }
 
 if ($opt_h) {
@@ -281,6 +367,11 @@ if ($floors < 2 or $lifts < 1) {
 $opt_e = 1 if $opt_l;		# -l: iClive requires an executable to be built and started
 $opt_b = 1 if $opt_d or $opt_e;	# -d -e -l imply -b: building the executable if not present
 $opt_e = undef if $opt_d;	# -d -e: both start executable - but before or after registration
+$host = defined $opt_s ? $opt_s : '127.0.0.1';
+$port = defined $opt_p ? $opt_p : 8778;
+$name = $opt_n ? "$opt_n$i" : "$named$i";
+$named = $name;			# use individual ID for warnings from now on
+
 ########################################################################
 #
 #	Now	$opt_b means:	build the executable lifts controller
@@ -745,6 +836,17 @@ if ($opt_B) {
     print OUT " *******************************************************************/\n" if not $control and $star;
     print OUT "\n" if $control;
     close(OUT);
+
+    ########################################################################
+    #	Optionally run -R option after generating parameter file for iCbox 
+    ########################################################################
+    if (@runArgs) {
+	print "-R runArgs = @runArgs\n" if $opt_t;
+	splice(@runArgs, 1, 0, "-s", "$host") unless $host eq "localhost" or $host eq "127.0.0.1";
+	splice(@runArgs, 1, 0, "-p", "$port") unless $port eq "8778";
+	splice(@runArgs, 1, 0, "-z$opt_q",);	# -z not used in iCbox - place holder
+	fork_and_exec(@runArgs);
+    }
     exit(0);
 }
 
@@ -769,11 +871,6 @@ exit(0) if $opt_x;	# deliberate exit with -x option
 #	Register I/Os
 #
 ########################################################################
-
-$host = defined $opt_s ? $opt_s : 'localhost';
-$port = defined $opt_p ? $opt_p : 8778;
-$name = $opt_n ? "$opt_n$i" : "$named$i";
-$named = $name;			# use individual ID for warnings from now on
 
 connect_to_server(		# connects to $conn
     "-z$opt_q",
@@ -858,7 +955,7 @@ if ($opt_l) {
 ########################################################################
 
 my ($ww, $wh, $dow, $doh, $doo, $cw, $ch, $cso, $dw, $dh, $dso) =
-    ($opt_w, $opt_k, $opt_v, $opt_g, $opt_o, $opt_U, $opt_J, $opt_Y, $opt_u, $opt_j, $opt_y);
+    ($opt_w, $opt_k, $opt_v, $opt_g, $opt_o, $opt_U, $opt_V, $opt_Y, $opt_u, $opt_j, $opt_y);
 my $c_width  = ($ww+5) * ($lifts < 4 ? $lifts : 4);
 my $c_height = ($wh+5) * ($floors < 5 ? $floors : 5) + 2;
 
@@ -1038,6 +1135,18 @@ $mw->bind('<Key-Escape>', sub { $opt_C = not $opt_C; startContinuous(); });	# tu
 ########################################################################
 
 $mw->bind('<Key-w>',      \&hide_next_wall);
+
+########################################################################
+#	Optionally run -R option
+########################################################################
+if (@runArgs) {
+    print "-R runArgs = @runArgs\n" if $opt_t;
+    splice(@runArgs, 1, 0, "-s", "$host") unless $host eq "localhost" or $host eq "127.0.0.1";
+    splice(@runArgs, 1, 0, "-p", "$port") unless $port eq "8778";
+    splice(@runArgs, 1, 0, "-z$opt_q",);	# -z not used in iCbox - place holder
+    select(undef, undef, undef, 0.2);		# 0.2 seconds to let iClift initialize
+    fork_and_exec(@runArgs);
+}
 
 ########################################################################
 #
@@ -1675,7 +1784,7 @@ sub draw_cage {
     );
 
     my ($upInd, $downInd);
-    if ($opt_I) {
+    if ($opt_S) {
 	my $to1 = 5;			# cage up/down indicator (optional)
 	my $xtl = $xCage-$ww_2+$dow*0.42;	# centre of right up indicator
 	my $ytl = $yCage-($floors+3)*22-$to1*3;	# centre of top indicators
@@ -1859,7 +1968,7 @@ sub move_cage {
 	$canv->move($RAcageDoors->[0][2], 0, -$inc);		# back door
 	$canv->move($RAcageDoors->[0][3], 0, -$inc);		# front door
 	$canv->move($cageButtons, 0, -$inc);			# button panel
-	if ($opt_I) {
+	if ($opt_S) {
 	    $canv->move($upInd, 0, -$inc);			# up indicator (optional)
 	    $canv->move($downInd, 0, -$inc);			# down indicator
 	}
@@ -2007,7 +2116,7 @@ sub send_input {
 	printMicroSeconds();
 	print "$named: $ch:$val	> $ChannelNames[$ch]\n" if $opt_t;
 ### 	printf "%s	%2d:%08b\n", $ChannelNames[$ch], $ch, $val;
-	printf "%s	%2d:%d	>\n", $ChannelNames[$ch], $ch, $val if $opt_S;
+	printf "%s	%2d:%d	>\n", $ChannelNames[$ch], $ch, $val if $$opt_O;
 	$ChannelsI[$ch] = $val;
 	conn_send_now("$ch:$val");	# send latest value
     }
@@ -2026,9 +2135,8 @@ sub rcvd_msg_from_server {
         my $len = length $msg;
 	print "($len)$msg<\n" if $opt_T;
 	if ($len == 0) {
-	    $conn->disconnect();
 	    print STDERR "iClift '$named' disconnected by server\n" unless $opt_q;
-	    exit;
+	    quit_program();			# never returns
 	}
 	my ($msg1, $channel, $value, $old, $bitRef, $id, $ini, $regId, $chS, $bitSef, $wordSef, $button, $butMask, $val, $RAcmd);
 	foreach $msg1 (split /,/, $msg) {	# break up comma separated multiple messages
@@ -2040,7 +2148,7 @@ sub rcvd_msg_from_server {
 		    if ($value != $old) {
 			$id = $ChannelNames[$channel];
 			print "$named: $msg1	< $id\n" if $opt_t;
-			printf "%s	%2d:%d	<\n", $id, $channel, $value if $opt_R;
+			printf "%s	%2d:%d	<\n", $id, $channel, $value if $opt_J;
 			$bitRef = $ChannelsQX[$channel];
 			$bitSef = $wordSef = undef;
 			if (defined $bitRef) {
@@ -2230,10 +2338,10 @@ sub connect_to_server {
     my $i = 0;
     if ($server >= 0) {
 	until ($conn) {
-	    iCmsg->inhibit_nagle(1, $opt_R, $opt_S);	# inhibit Nagle's algorithm for real time response
+	    iCmsg->inhibit_nagle(1, $opt_J, $$opt_O);	# inhibit Nagle's algorithm for real time response
 	    $conn = iCmsg->connect($host, $port, \&rcvd_msg_from_server, 1); # return imme if connect fails
 	    if ($conn) {
-		print STDERR "iClift '$named' connecting at server\n" unless $opt_q;
+		print STDERR "iClift '$named' connected to server at '$host:$port'\n" unless $opt_q;
 	    } elsif ($host ne "localhost" and $host ne "127.0.0.1") {
 		print "$named: '$host:iCserver -p $port' cannot be started here - start it on $host\n";
 		$server = -1;		# no iCserver possible
@@ -2295,8 +2403,13 @@ sub fork_and_exec {
 
 sub quit_program {
     print "$named: quit\n" if $opt_T;
-    if ($server > 0) {
-       conn_send_now("X$named") if $conn;	# iClift started iCserver - stop it
+    if ($conn) {
+	if ($server > 0) {
+	    $conn->send_now("X$named");		# iClift started iCserver - stop it
+	} else {
+	    $conn->send_now("");		# disconnect this app at iCserver
+	}
+	$conn->disconnect();
     }
     $mw->destroy();
     exit(0);
@@ -2351,7 +2464,7 @@ iClift -simulation of the physics and appearance of lifts in a building
     and using IEC outputs received from an iC control application to
     initiate and stop simulated movement and to reset buttons.
 
-	-s host	host name of server        (default localhost )
+	-s host	host name of server        (default 127.0.0.1 )
 	-p port	service port of server     (default 8778      )
 	-n name	registration name          (default iClift    )
 	-i inst instance ID for this iClift (1 to 3 numeric digits)
@@ -2359,7 +2472,7 @@ iClift -simulation of the physics and appearance of lifts in a building
 	-F floors number of floors         (default   3 floors)
 	-C	continuous test    (if supported by controller)
 	-D	inhibit turning off continuous test
-	-I	show up/down indicators in cage
+	-S	show up/down indicators in cage
 	-b      build control program 'lifts_...' unles it exists
 	-e      execute control program 'lifts_...' (implies -b)
 	-d      start 'iCbox -d -C19' automatically (implies -e)
@@ -2372,14 +2485,14 @@ iClift -simulation of the physics and appearance of lifts in a building
 	-g pix	door opening height        (default 133 pixels)
 	-o pix	door opening offset        (default  40 pixels)
 	-U pix	cage width                 (default 110 pixels)
-	-J pix	cage height                (default 145 pixels)
+	-V pix	cage height                (default 145 pixels)
 	-Y pix	cage sensor offset         (default  10 pixels)
 	-u pix	door width                 (default  55 pixels)
 	-j pix	door height                (default 137 pixels)
 	-y pix	door sensor offset         (default   5 pixels)
 	-t	trace debug messages
-	-R      trace rcv messages in iCmsg.pm
-	-S      trace send messages in iCmsg.pm
+	-J      trace rcv messages in iCmsg.pm
+	-O      trace send messages in iCmsg.pm
 	-m	display elapsed time in seconds and microseconds
 	-T	extra static debug messages
 	-q	quiet - do not report clients connecting and disconnecting
@@ -2389,6 +2502,11 @@ iClift -simulation of the physics and appearance of lifts in a building
 		file '-' is stdout; +file outputs C comment block
 		                    -file outputs without comments
 		                    ^file transposed Q and I outputs
+	    This option is now obselete, because iCserver -A 'iCbox -d'
+	    autovivifies a much cleaner monitoring file automatically
+	    with the 'iClift -d' option
+	-R <app ...> run one app followed by -z and its arguments as a
+		     separate process; -R ... must be last arguments
 	-K	activate the following Key bindings: (default off)
 
 	    @	move lift 0 up   Home up continuous   Page up   fast

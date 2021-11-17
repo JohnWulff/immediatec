@@ -174,7 +174,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiPWM.c 1.6 $\n"
+"Version	$Id: iCpiPWM.c 1.7 $\n"
 ;
 
 /********************************************************************
@@ -1341,7 +1341,7 @@ iCpiPWM - real PWM analog I/O on a Raspberry Pi for the iC environment
          [ IW<x>,<adc_channel>[-<inst>] ...]
          [ -r <time>][ -e <expf>][ -H <hyst>]
          [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
-    -s host IP address of server    (default 'localhost')
+    -s host IP address of server    (default '127.0.0.1')
     -p port service port of server  (default '8778')
     -i inst instance of this client (default '') or 1 to 3 digits
     -B      start iCbox -d to monitor active analog I/O

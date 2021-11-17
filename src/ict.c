@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.82 $";
+"@(#)$Id: ict.c 1.83 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -226,16 +226,16 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 #endif	/* EFENCE */
     signal(SIGSEGV, iC_quit);		/* catch memory access signal */
 
+#ifndef LOAD
     if (iC_outFP && iC_outFP != stdout) {
 	fclose(iC_outFP);
-#ifndef LOAD
 	if (iFlag) {
 	    iC_inversionCorrection();	/* only applies to compiler listing */
 	    iFlag = 0;
 	}
-#endif	/* LOAD */
     }
     iC_outFP = stdout;			/* standard output from here */
+#endif	/* ! LOAD */
     if (iC_errFP && iC_errFP != stderr) {
 	fclose(iC_errFP);
     }
@@ -2144,8 +2144,11 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 						    gp = sTable[index-1];		/* index in iClive starts at 1 */
 						    gp->gt_live |= stepMask;		/* set step or next active */
 #if	YYDEBUG && !defined(_WINDOWS)
-						    if (iC_debug & 040) fprintf(iC_outFP, "T %3hu	%s	%u %u %3hu\n",
-							index, gp->gt_ids, gp->gt_live >> 15, (gp->gt_live >> 13) & 0x3, gp->gt_live & 0x1fff); fflush(iC_outFP);
+						    if (iC_debug & 040) {
+							fprintf(iC_outFP, "T %3hu	%s	%u %u %3hu\n",
+							    index, gp->gt_ids, gp->gt_live >> 15, (gp->gt_live >> 13) & 0x3, gp->gt_live & 0x1fff);
+							fflush(iC_outFP);
+						    }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 						}
 						if (val == 9 || val == 11) {
@@ -3494,9 +3497,11 @@ receiveWatchOrRestore(char * cp1)
 	gp->gt_live &= ~0x6000;			/* clear step/next or watch/ignore bits */
 	gp->gt_live |= value << 13;		/* set watch/ignore or restore step/next */
 #if	YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 040) fprintf(iC_outFP, "W %3d	%s	%u %u %3hu\n",
-	    index, gp->gt_ids, gp->gt_live >> 15, (gp->gt_live >> 13) & 0x3, gp->gt_live & 0x1fff);
-	fflush(iC_outFP);
+	if (iC_debug & 040) {
+	    fprintf(iC_outFP, "W %3d	%s	%u %u %3hu\n",
+		index, gp->gt_ids, gp->gt_live >> 15, (gp->gt_live >> 13) & 0x3, gp->gt_live & 0x1fff);
+	    fflush(iC_outFP);
+	}
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 } /* receiveWatchOrRestore */

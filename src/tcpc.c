@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c 1.31 $";
+"@(#)$Id: tcpc.c 1.32 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -79,7 +79,7 @@ static const char RCS_Id[] =
 #include	"tcpc.h"
 #include	"icc.h"
 
-const char *	iC_hostNM = LOCALHOST;		/* localhost or 127.0.0.1 */
+const char *	iC_hostNM = LOCALHOST1;		/* localhost or 127.0.0.1 */
 const char *	iC_portNM = iC_PORT;		/* 8778 iC well known port */
 char *		iC_iccNM  = "stdin";		/* immcc name qualified with instance */
 char *		iC_iidNM  = "";			/* instance ID */
@@ -148,6 +148,7 @@ iC_microPrint(const char * str, int mask)
 	}
 	fprintf(iC_outFP, "%3ld.%03ld,%03ld: %s\n", sec, usec/1000, usec%1000, str);
     }
+    fflush(iC_outFP);
     gettimeofday(&mt0, 0);			/* start of next measurement without print time */
     iC_micro &= ~mask;
 } /* iC_microPrint */
@@ -395,9 +396,15 @@ iC_rcvd_msg_from_server(SOCKET sock, char * buf, int maxLen)
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 02) {
 		fprintf(iC_outFP, "%s < '%s'\n", iC_iccNM, buf);	/* trace recv buffer */
+		fflush(iC_outFP);
 	    }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	}
+#if YYDEBUG && !defined(_WINDOWS)
+    } else if (iC_debug & 02) {
+	fprintf(iC_outFP, "%s < received zero length message\n", iC_iccNM);
+	fflush(iC_outFP);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
     return len;
 } /* iC_rcvd_msg_from_server */
@@ -419,6 +426,7 @@ iC_send_msg_to_server(SOCKET sock, const char * msg)
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 01) {
 	fprintf(iC_outFP, "%s > '%s'\n", iC_iccNM, msg);	/* trace send buffer */
+	fflush(iC_outFP);
     }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     netBuf.length = htonl(len);

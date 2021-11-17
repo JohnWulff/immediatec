@@ -222,7 +222,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.14 $\n"
+"Version	$Id: iCpiFace.c 1.15 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -2270,7 +2270,7 @@ iCpiFace - real digital I/O on a Raspberry Pi for the iC environment
           [ [~]<IEC>,<gpio>[,<gpio>,...][-<inst>] ...]
           [ [~]<IEC>.<bit>,<gpio>[-<inst>] ...]    # at least 1 IEC argument
           [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
-    -s host IP address of server    (default 'localhost')
+    -s host IP address of server    (default '127.0.0.1')
     -p port service port of server  (default '8778')
     -i inst instance of this client (default '') or 1 to 3 digits
     -G      service GPIO I/O only - block PiFaces and PiFace arguments
