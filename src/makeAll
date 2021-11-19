@@ -61,7 +61,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll 1.45 $' >&2
+    echo '	$Id: makeAll 1.46 $' >&2
 }
 
 makeLib ()
@@ -339,6 +339,7 @@ fi
 
 if [ $P = 1 ]; then
     echo "make OPT=\"-DTCP -DYYDEBUG$o\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCpiFace"
+    makePiFace  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
     echo "make OPT=\"$o\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCgpioPUD"
     makeGpioPUD  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi

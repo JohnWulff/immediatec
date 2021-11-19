@@ -38,7 +38,7 @@ import (
     "fmt"
 )
 
-const ID_goserver_go = "$Id: goserver.go 1.1 $"
+const ID_goserver_go = "$Id: goserver.go 1.2 $"
 const TCP_PORT = "8778"			// default TCP port for iC system
 
 /********************************************************************
@@ -469,32 +469,17 @@ func printTables() {
 
 /********************************************************************
  *
- *	Push messages for different connections
- *
- *******************************************************************/
-
-func pushReceiverData(receiverData map[net.Conn]string, rconn net.Conn, msg string) {
-    if m, ok := receiverData[rconn]; ok {
-	receiverData[rconn] = m + "," + msg	// 2nd or later message for this receiver
-    } else {
-	receiverData[rconn] = msg		// first message for this receiver
-    }
-} // pushReceiverData
-
-/********************************************************************
- *
  *	Write messages for different connections
  *
  *******************************************************************/
 
-func writeReceiverData(receiverData map[net.Conn]string, goId int) {
-    for con, msg := range receiverData {
-	wbuf := []byte{ 0, 0, 0, 0 }			// clear wbuf for this iteration
-	wbuf = append(wbuf, msg...)			// build Perl type message
-	if *opt_t { fmt.Printf("%02d: (%d)%s> %q\n", goId, len(msg), msg, clientNames[con]) }
+func writeReceiverData(receiverData map[net.Conn][]string, goId int) {
+    for con, msgSlice := range receiverData {
+	wbuf := append([]byte{ 0, 0, 0, 0 }, strings.Join(msgSlice, ",")...)	// build Perl type message
+	if *opt_t { fmt.Printf("%02d: (%d)%s> %q\n", goId, len(wbuf)-4, wbuf[4:], clientNames[con]) }
 	err := tcpcomm.Write(con, &wbuf, len(wbuf)-4)
 	if err != nil {
-	    fmt.Fprintf(os.Stderr, "%02d: msg = %q client = %q\n", goId, string(msg), clientNames[con])
+	    fmt.Fprintf(os.Stderr, "%02d: msg = %q client = %q\n", goId, wbuf[4:], clientNames[con])
 	    shutdownServer(4, fmt.Sprint(err))
 	}
     }
@@ -514,7 +499,7 @@ func writeReceiverData(receiverData map[net.Conn]string, goId int) {
 func disconnect (name string, goId int) {
     if name != "" {
 	if ! *opt_q { fmt.Printf("%02d: %s: client unregistering now\n", goId, name) }
-	receiverData := map[net.Conn]string{}	// clear all keys and entries
+	receiverData := map[net.Conn][]string{}	// clear all keys and entries
 	for channel := 0; channel <= maxChannel; channel++ {
 	    rflag := false
 	    con := senderCon[channel]
@@ -532,7 +517,7 @@ func disconnect (name string, goId int) {
 		for _, con := range receiverCons[channel] {
 		    if clientNames[con] != name {
 			msg := fmt.Sprintf("%d:0", channel)
-			pushReceiverData(receiverData, con, msg)	// reset message to receiver channels
+			receiverData[con] = append(receiverData[con], msg) // reset message to receiver channels
 		    }
 		}
 		if _, ok := altRecvCons[channel]; ok {			// exists
@@ -540,7 +525,7 @@ func disconnect (name string, goId int) {
 			ch := aref.altsecCh				// alternate channel
 			for _, con := range aref.altCons {
 			    msg := fmt.Sprintf("%d:0", ch)
-			    pushReceiverData(receiverData, con, msg)	// reset message to alternate channels
+			    receiverData[con] = append(receiverData[con], msg)	// reset message to alternate channels
 			}
 		    }
 		}
@@ -673,11 +658,11 @@ func disconnect (name string, goId int) {
 
 func warnD(warnMsg string) {
     fmt.Fprintf(os.Stderr, "%s: WARNING: %s\n", named, warnMsg)
-    receiverData := map[net.Conn]string{}	// clear all keys and entries
+    receiverData := map[net.Conn][]string{}	// clear all keys and entries
     if aref := receiverCons[0]; aref != nil {	// channel 0 for error messages
 	for _, rconn := range aref {
 	    if *opt_t { fmt.Fprintf(os.Stderr, "%s: sent warning => %s\n", named, clientNames[rconn]) }
-	    pushReceiverData(receiverData, rconn, "0:1;" + warnMsg)	//  message to channel 0
+	    receiverData[rconn] = append(receiverData[rconn], "0:1;" + warnMsg)	//  message to channel 0
 	    writeReceiverData(receiverData, 0)	// write data collected for different receivers
 	}
     }
@@ -717,7 +702,7 @@ func handleConnection(conn net.Conn) {
      *    . else eror
      *******************************************************************/
     for {
-	receiverData := map[net.Conn]string{} // hashed by con - built in pushReceiverData()
+	receiverData := map[net.Conn][]string{} // hashed by con
 					      // { con1-> "ch1:val1,ch2:val2", con2-> "ch3:val3,ch4:val4" ... }
 					      // sent at end of Read - must be local to this goroutine
 	wbuf := make([]byte, 4, tcpcomm.REPLY+4)	// Perl type length+message buffer 
@@ -774,7 +759,7 @@ func handleConnection(conn net.Conn) {
 		 *  to each receiver on that channel - most common case.
 		 *******************************************************************/
 		for _, rconn := range receiverCons[channel] {
-		    pushReceiverData(receiverData, rconn, msg)	//  messages to receiver channels
+		    receiverData[rconn] = append(receiverData[rconn], msg) //  messages to receiver channels
 		    sendFlag = true
 		}
 		/********************************************************************
@@ -793,7 +778,7 @@ func handleConnection(conn net.Conn) {
 			ch := aref.altsecCh				// alternate channel
 			for _, rconn := range aref.altCons {
 			    msg = fmt.Sprintf("%d:%s", ch, m[2])	// message value
-			    pushReceiverData(receiverData, rconn, msg)	//  message to alternate channels
+			    receiverData[rconn] = append(receiverData[rconn], msg) //  message to alternate channels
 			    sendFlag = true
 			}
 		    }
@@ -933,7 +918,7 @@ func handleConnection(conn net.Conn) {
 		    senderValue[channel] = "0"		// default initial value
 		    flag := false
 		    for _, rconn := range receiverCons[channel] {
-			pushReceiverData(receiverData, rconn, fmt.Sprintf("%d:0", channel))	//  reset receiver
+			receiverData[rconn] = append(receiverData[rconn], fmt.Sprintf("%d:0", channel))	//  reset receiver
 			flag = true			// sender has at least one receiver
 		    }
 		    if reQXBWL.FindString(name) != "" {	// `^Q[XBWL]\d+`
@@ -1290,6 +1275,10 @@ func keyboardIn() {
 	switch r {
 	case 'T':
 	    printTables()
+	case 'm':
+	    *opt_m = ! *opt_m			// toggle -m option
+	case 't':
+	    *opt_t = ! *opt_t			// toggle -t option
 	case 'q':
 	    break kbLoop
 	}
@@ -1486,11 +1475,22 @@ func main() {
     opt_q = flag1.Bool("q", false, "quit - do not report clients connecting and disconnecting")
     opt_r = flag1.Bool("r", false, "reset registered receivers when sender disconnects - ie reset\noutputs of an app when it shuts down (default no change)")
     opt_k = flag1.Bool("k", false, "kill previous client when a new client with the same name registers\n(default: do not accept the new client)")
-    opt_z = flag1.Bool("z", false, fmt.Sprintf("block keyboard input - must be used when running in background\n    %q\n    %q", ID_goserver_go, tcpcomm.ID_tcpcomm_go))
+    opt_z = flag1.Bool("z", false, fmt.Sprintf(`block keyboard input - must be used when running in background
+
+    KEYBOARD inputs
+    t   toggle -t option - trace messages for debugging
+    m   toggle -m option - display elapsed time
+    T   output %s Client Tables
+    q   stop %s and all registered iC apps
+    The last two actions can also be triggered from the iClive Build Menu
+%q
+%q`, named, named, ID_goserver_go, tcpcomm.ID_tcpcomm_go))
+
     // The -f and -R option are handled directly in convertFlags(). Include here for help info
     _     = flag1.String("f", "", "include file containing options, equivalences and client calls")
-    _     = flag1.String("R", "", "run one app followed by -z and its arguments as a\nseparate process; -R ... must be last arguments")
-    Rflag = 0
+    _     = flag1.String("R", "", `run one app followed by -z and its arguments as a
+separate process; -R ... must be last arguments`)
+
     argsP = &args				// intially fill []args
     convertFlags(&os.Args, 1)			// convert POSIX flags to individual flags - process -f -R flags
     flag1.Parse(args)

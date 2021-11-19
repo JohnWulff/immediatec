@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.79 $
+# @(#)$Id: Makefile.in 1.80 $
 
 #######################################################################
 #
@@ -98,7 +98,7 @@ manext = 1
 manprefix =
 
 REV  = $(shell perl -e 'while (<>) { if ( m/\$$(Revision: icc_|Id: icc.v(,v)? )(\d+)\.(\d+)\b/ ) { print "$$3.$$4"; last; } }' $(srcdir)/icc.v)
-PADD = perl -e 'while (<>) { if ( m /^[a-z_A-Z]/ ) { s /^/icc_$(REV)\//; print; } }'
+PADD = perl -e 'while (<>) { if ( $$_ !~ m/^\$$Id/ ) { print; } }'
 TKGE803 = $(shell perl -e 'use Tk; if ($$Tk::VERSION >= 803) { print "true"; }')
 
 #### End of system configuration section. ####
@@ -435,7 +435,7 @@ distclean: clean
 	cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 
 distribution:
-	@echo "making icc_$(REV).tgz"; cd ${srcdir}/../..; test -h icc_$(REV) || ln -s immediatec icc_$(REV); tar -czf icc_$(REV).tgz `$(PADD) icc_$(REV)/src/manifest`; cd -;
+	@echo "making icc_$(REV).tgz"; cd ${srcdir}/../..; test -h icc_$(REV) || ln -s immediatec icc_$(REV); cd immediatec; tar -czf icc_$(REV).tgz $$($(PADD) manifest); cd $(srcdir);
 
 genr.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp.tab.h
 
