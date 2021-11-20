@@ -27,9 +27,9 @@ import (
 	"fmt"
 )
 
-const ID_tcpcomm_go = "$Id: tcpcomm.go 1.1 $"
+const ID_tcpcomm_go = "$Id: tcpcomm.go 1.2 $"
 const (
-    REPLY	= 1400			// max size of TCP reply, in bytes
+    REPLY	= 1400-4		// max size of TCP reply, in bytes - room for 4 byte length
 )
 
 /********************************************************************
@@ -40,18 +40,15 @@ const (
  *
  *******************************************************************/
 
-func Read(conn net.Conn) ([]byte, int, error) {
+func Read(conn net.Conn) ([]byte, error) {
     var err error
     lbuf := make([]byte, 4)
     if _, err = io.ReadFull(conn, lbuf); err != nil {
-	return lbuf, 0, err
+	return lbuf, err
     }
-    length := int(binary.BigEndian.Uint32(lbuf))
-    rbuf := make([]byte, length)
-    if _, err := io.ReadFull(conn, rbuf); err != nil {
-	return rbuf, 0, err
-    }
-    return rbuf, length, err
+    rbuf := make([]byte, int(binary.BigEndian.Uint32(lbuf)))
+    _, err = io.ReadFull(conn, rbuf)
+    return rbuf, err
 }
 
 /********************************************************************
@@ -65,14 +62,15 @@ func Read(conn net.Conn) ([]byte, int, error) {
 type lengthError struct{}
 
 func (m *lengthError) Error() string {
-    return fmt.Sprintf("tcpcomm.Write: message length is too long (> %d)", REPLY)
+    return fmt.Sprintf("tcpcomm.Write: message length is too long (> %d)", REPLY+4)
 }
 
-func Write(conn net.Conn, wbufP *[]byte, length int) (error) {
-    if length > REPLY {
+func Write(conn net.Conn, wbufP *[]byte) (error) {
+    length := len(*wbufP)
+    if length > REPLY+4 {
 	return &lengthError{};
     }
-    binary.BigEndian.PutUint32((*wbufP)[:4], uint32(length))
-    _, err := conn.Write((*wbufP)[:length+4])
+    binary.BigEndian.PutUint32((*wbufP)[:4], uint32(length-4))
+    _, err := conn.Write(*wbufP)
     return err
 }

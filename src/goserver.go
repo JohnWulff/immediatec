@@ -13,7 +13,11 @@
  *  based on the PERL version of iCserver, which uses the Messaging Toolkit
  *  from Advanced Perl Programming by Sriram Srinivasan, which communicates
  *  with TCP/IP messages consisting of a 4 byte header containing the length
- *  of the data (BigEndian). This code is contained in the package 'tcpcomm'.
+ *  of the data (BigEndian).
+ *
+ *  The Perl program has been migrated to the GO language. The code
+ *  implementing the lenth+message format from the Messaging Toolkit
+ *  is contained in the GO package 'tcpcomm'.
  *
  ***********************************************************************/
 
@@ -38,7 +42,7 @@ import (
     "fmt"
 )
 
-const ID_goserver_go = "$Id: goserver.go 1.2 $"
+const ID_goserver_go = "$Id: goserver.go 1.3 $"
 const TCP_PORT = "8778"			// default TCP port for iC system
 
 /********************************************************************
@@ -476,8 +480,8 @@ func printTables() {
 func writeReceiverData(receiverData map[net.Conn][]string, goId int) {
     for con, msgSlice := range receiverData {
 	wbuf := append([]byte{ 0, 0, 0, 0 }, strings.Join(msgSlice, ",")...)	// build Perl type message
-	if *opt_t { fmt.Printf("%02d: (%d)%s> %q\n", goId, len(wbuf)-4, wbuf[4:], clientNames[con]) }
-	err := tcpcomm.Write(con, &wbuf, len(wbuf)-4)
+	if *opt_t { fmt.Printf("%02d: (%d) %s > %q\n", goId, len(wbuf)-4, wbuf[4:], clientNames[con]) }
+	err := tcpcomm.Write(con, &wbuf)
 	if err != nil {
 	    fmt.Fprintf(os.Stderr, "%02d: msg = %q client = %q\n", goId, wbuf[4:], clientNames[con])
 	    shutdownServer(4, fmt.Sprint(err))
@@ -711,7 +715,7 @@ func handleConnection(conn net.Conn) {
 	    t0 = time.Now()
 	}
 	muConn.Unlock()
-	rbuf, length, err := tcpcomm.Read(conn)		// Read message from client
+	rbuf, err := tcpcomm.Read(conn)		// Read message from client
 	muConn.Lock()
 	if err != nil {
 	    if err == io.EOF {
@@ -730,8 +734,8 @@ func handleConnection(conn net.Conn) {
 		fmt.Printf("S %f\n", diff.Seconds())
 	    }
 	}
-	if *opt_t { fmt.Printf("%02d: (%d)%s< %q\n", goId, length, rbuf, sender) }
-	if length == 0 {
+	if *opt_t { fmt.Printf("%02d: (%d) %s < %q\n", goId, len(rbuf), rbuf, sender) }
+	if len(rbuf) == 0 {
 	    /********************************************************************
 	     *  Client 'conn' has signalled shutdown - disconnect client
 	     *  clear all entries for 'conn' in 'senderCon' and 'receiverCons'
@@ -1115,7 +1119,7 @@ func handleConnection(conn net.Conn) {
 	     *  registration
 	     *******************************************************************/
 	    if *opt_t { fmt.Printf("%02d: ACK: %s => %s\n", goId, wbuf[4:], sender) }
-	    err = tcpcomm.Write(conn, &wbuf, len(wbuf)-4)	// registration acknowledgement
+	    err = tcpcomm.Write(conn, &wbuf)	// registration acknowledgement
 	    if err != nil {
 		shutdownServer(5, fmt.Sprint(err))
 	    }
@@ -1125,7 +1129,7 @@ func handleConnection(conn net.Conn) {
 		    if *opt_t { fmt.Printf("%02d: INI: %s => %s\n", goId, iniString, sender) }	// registration initialization
 		    wbuf = []byte{ 0, 0, 0, 0 }			// clear wbuf for this iteration
 		    wbuf = append(wbuf, []byte(iniString)...)	// build Perl type message
-		    err = tcpcomm.Write(conn, &wbuf, len(wbuf)-4)
+		    err = tcpcomm.Write(conn, &wbuf)
 		    if err != nil {
 			shutdownServer(6, fmt.Sprint(err))
 		    }
@@ -1607,8 +1611,8 @@ iCserver - the central server for iC clients
 
 =head1 SYNOPSIS
 
-  iCserver[ -qadrkztmh][ -s <host>][ -p <port>][ -e <equivalences>]
-          [ -f <file>][ -A <cmd>]
+  iCserver[ -qadrkztmh][ -s <host>][ -p <port>]
+          [ -e <equivalences>][ -A <cmd>][ -f <file>]
           [ -R <aux_app>[ <aux_argument> -R ...]] # must be last arguments
     -s host address of server - clients must specify the same address
             unless (default '0.0.0.0' which accepts any client host)
@@ -1616,7 +1620,6 @@ iCserver - the central server for iC clients
             make sure the Firewall is open for the TCP port used.
     -e equivalences  eg: -e IX0=IX0-1     (can be used more than once)
             or a comma separated list eg: -e IX0=IX0-1,QX0=QX0-1,IB1=IB1-1
-    -f file read options, equivalences and client calls from this INI file
     -q      quiet - do not report clients connecting and disconnecting
     -a      autovivify I/O clients 'iCbox' for missing I/O's (any number
             of iCbox's can be autovivified with -a as apps register)
@@ -1625,28 +1628,31 @@ iCserver - the central server for iC clients
             vivified to avoid recursive calls for missing senders to the
             display only 'iCbox -d')
     -A cmd  use <cmd> to autovivify I/O clients (eg -A 'iCbox -Q2 -C19')
+    -f file read options, equivalences and client calls from this INI file
     -r      reset registered receivers when sender disconnects - ie reset
             outputs of an app when it shuts down (default no change)
     -k      kill previous client when a new client with the same name
             registers (default: do not accept the new client)
     -z      block keyboard input (required when iCserver is executed as a
             background process)
+    -h      help, ouput Usage text only
         DEBUG options
     -t      trace messages for debugging
     -m      display elapsed time in seconds and microseconds
-    -h      help, ouput this Usage text only
         AUXILIARY app   - start a Bernstein chain
     -R <app ...> run one app followed by -z and its arguments as a
                  separate process; -R ... must be last arguments,
                  which do not need to be quoted.
              eg: -R iCbox X0-X3 X10 -R sorter
         KEYBOARD inputs
+        t   toggle -t option - trace messages for debugging
+        m   toggle -m option - display elapsed time
         T   output iCserver Client Tables
         q   stop iCserver and all registered iC apps
-            These two actions can also be triggered from the iClive
-            Build Menu
-        The easiest way to stop iCserver and all registered iC apps
-        is to stop an iCbox by clicking its (X) button
+    The last two actions can also be triggered from the iClive Build
+    Menu. The easiest way to stop the iC system is to stop an iCbox
+    by clicking its (X) button, which shuts down iCserver and all
+    registered iC apps.
 
 =head1 DESCRIPTION
 
@@ -1732,8 +1738,8 @@ Additional functionality in B<iCserver>.
     place for a channel, until a receiver has been registered for that
     channel and all other registrations have taken place.
 
-    Equivalencing two or more output addresses (Q...) in an iC control
-    application will lead to an error. Both output addresses try to
+    Equivalencing two or more output addresses (Q...) in an iC
+    control application is an error. Both output addresses try to
     register as senders - this leads to two or more senders on the
     same channel. When the second or later output sender registers,
     the error will be reported. A similar error will be reported
@@ -1746,8 +1752,8 @@ Additional functionality in B<iCserver>.
     output. This practice is highly deprecated, because transparency
     in the documentation is lost.
 
-    Formally equivalences consist of two or more IEC base identifiers
-    followed by an optional '-' and a 1 to 3 digit instance specifier
+    Formally equivalences consist of two or more IEC base identifiers,
+    optionally followed by '-' and a 1 to 3 digit instance specifier,
     separated by an equal sign '='. Several equivalences may be
     specified in a comma ',' separated list or several -e equivalence
     parameters may be used.
@@ -1756,12 +1762,10 @@ Additional functionality in B<iCserver>.
     X B W L or H, since the consequences are not what is expected.
 
 *   I<Equivalances can also be defined later by iC programs> for
-    input IEC variables in that application before the variables
-    are registered using the -e option. The same calling sequence
-    described for iCserver above applies.
-
-    For control applications for which several instances are
-    instantiated, there is an extra -e option:
+    input IEC variables in that application before the variables are
+    registered using the -e option. The same calling sequence described
+    for iCserver above applies.  For control applications for which
+    several instances are instantiated, there is an extra -e option:
 
         -eI # equivalence all IEC input names to the same names-<inst>
 
@@ -1781,10 +1785,10 @@ Additional functionality in B<iCserver>.
 
     When generating equivalences with the -e option from an iC app IEC I/O
     names which have already been registered by other iC apps may not be
-    used. This leads to an error.
+    used. This is an error.
 
  b) Autovivification
-    -a option - automatic startup of one or more iCbox
+    -a option - automatic startup of one or more iCbox virtual I/O's.
     When a control application registers its I/O's, 'iCserver -a' starts up
     a matching 'iCbox' for all complementary I/O's, which have not already
     been registered. With the -a option, clients must be started in a
@@ -1798,13 +1802,12 @@ Additional functionality in B<iCserver>.
     iii)iC control application(s), which causes iCserver to autovivify
         any missing I/O's as an iCbox with appropriate ranges for each app.
 
-    Alternatively autovififying for monitoring real I/O's
-    -d option - automatic startup of one iCbox -d
-    When a control application registers its I/O's, 'iCserver -d' starts up
-    a matching 'iCbox -d' for all complementary I/O's for monitoring.
-    Outputs are the same but inputs will only display their value and
-    cannot be changed. With the -d option, clients must be started in a
-    different order:
+    -d option - automatic startup of one iCbox -d for monitoring real
+    I/O's. When a control application registers its I/O's, 'iCserver -d'
+    starts up a matching 'iCbox -d' for all complementary I/O's for
+    monitoring.  Outputs are the same as without the -d option, but
+    inputs will only display their value and cannot be changed. With
+    the -d option, clients must be started in a different order:
 
     i)  iCserver -d   # always first anyway.
 
@@ -1820,7 +1823,7 @@ Additional functionality in B<iCserver>.
         controlling iCbox.
 
     -A <cmd> - automatic startup of one or more <cmd>
-               usually <cmd> is iCbox with extra options eg -A 'iCbox -C19'
+               usually <cmd> is iCbox with extra options eg -A 'iCbox -H'
     Startup and calling order is the same as for the -a option unless the
     -d option is also used - in which case the -d option applies.
 
@@ -1846,13 +1849,7 @@ Additional functionality in B<iCserver>.
     start again by stopping iCserver with q or ctrl-C. When iCserver
     exits, all connected clients are disconnected and closed.
 
- e) -R <aux_app>[ <aux_app_argument> ...] # must be last arguments
-    Start a Bernstein chain of iC application which are each initialised
-    serially and then run in parallel - in this case with iCserver.
-    Example 3:
-        iCserver -R iCbox -n sorter-IO IX0 QX0 QX1 -R sorter
-
- f) -f <INI_file> - execute a file with iCserver options at startup.
+ e) -f <INI_file> - execute a file with iCserver options at startup.
     For very large equivalence tables a file defining equivalences and
     possibly other iCserver switches and options can be used.
 
@@ -1880,7 +1877,13 @@ Additional functionality in B<iCserver>.
 
     Comments in the INI file are started with #
 
-B<iCserver -a -z> is started as a forked process by the first I<iC
+ f) -R <aux_app>[ <aux_app_argument> ...] # must be last arguments
+    Start a Bernstein chain of iC application which are each initialised
+    serially and then run in parallel - in this case with iCserver.
+    Example 3:
+        iCserver -R iCbox -n sorter-IO IX0 QX0 QX1 -R sorter
+
+B<iCserver -a -z> is started as a parallel process by the first I<iC
 program> started or by B<iClive> unless it is already running, which
 means that for most cases B<iCserver> does not need to be started
 separately, unless special options are needed.  Equivalences can
@@ -2210,11 +2213,6 @@ John E. Wulff
 
 Email bug reports to B<immediateC@gmail.com> with L<iC Project> in the
 subject field.
-
-Error and warning messages for transmissions to missing clients have
-not been implemented yet (-w option).
-
-Mixed instance warning not yet implemented.
 
 The SPECIFICATION supplements the DESCRIPTION of B<iCserver> and may be
 useful in understanding its workings.

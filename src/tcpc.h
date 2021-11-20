@@ -22,7 +22,7 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h 1.24 $";
+"@(#)$Id: tcpc.h 1.25 $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767
@@ -51,8 +51,8 @@ static const char tcpc_h[] =
 #define INT_MAX 32767
 #endif
 
-#define REQUEST	1400			/* max size of request, in bytes */
-#define REPLY	1400			/* max size of reply, in bytes */
+#define REQUEST	1400-4			/* max size of request, in bytes - leave room for 4 byte length header */
+#define REPLY	1400-4			/* max size of reply, in bytes - leave room for 4 byte length header */
 
 #define LOCALHOST	"localhost"
 #define LOCALHOST1	"127.0.0.1"

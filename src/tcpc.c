@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c 1.32 $";
+"@(#)$Id: tcpc.c 1.33 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -104,7 +104,7 @@ typedef struct NetBuffer {
 #else
     int		length;
 #endif
-    char	buffer[REPLY];
+    char	buffer[REPLY+4];
 } NetBuffer;
 
 #ifdef	_WIN32
