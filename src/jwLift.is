@@ -10,7 +10,7 @@
 #
 #  Call: iCserver -f jwLift.is
 #
-#  $Id: jwLift.is 1.3 $
+#  $Id: jwLift.is 1.4 $
 #
 ########################################################################
 
@@ -24,7 +24,7 @@
 
 # iCboxes:
 # IB3 maximum delay to keep door open * 0.1 second (for kbLift -i0)
--R iCbox -njwLift-IO -c 16 IB3-0 QX20,222 QX21,30 QX30,14 QX31,14 QX35,28 QX36,28 QX37,222 QX38,127
+-R iCbox -njwLift-IO -c 16 IB3-0 QX20,222 QX21,30 QX30,14 QX31,14 QX35,28 QX36,28 QX37,222 QX38,127 QX44,143 QB44
 
 # monitor outputs equivalenced from jwLift and kbLift inputs and outputs
 -R iCbox -d -nkbLift-IO QX40,31 IX40 IX41 QX42 IX42,3 QX43,15 IX43 IB43

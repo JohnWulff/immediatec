@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.134 $";
+"@(#)$Id: comp.y 1.135 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -4186,7 +4186,6 @@ immCarrayVariable
 #define CBUFSZ 125				/* listing just fits on 132  cols */
 #define YTOKSZ 66
 #endif
-#define ABUFSZ 2048				/* allow for a large comment block */
 static char	chbuf[2][CBUFSZ];		/* used in get() errline() andd yyerror() */
 static char	prevNM[BUFS];
 static char *	getp[2] = {NULL,NULL};		/* used in get() unget() andd yyerror() */
@@ -4200,9 +4199,11 @@ static int	eofLineno = 0;
 static int	savedLineno = 0;
 static int	errline = 0;
 
-static char	auxBuf[ABUFSZ];
-static char *	auxp = 0;
-static char *	auxe = 0;
+#define ABUFSZ	256				/* dynamic to allow for a large comment block */
+static char *	auxBuf = NULL;
+static int	auxBufLen = 0;
+static char *	auxp = NULL;
+static char *	auxe = NULL;
 
 /********************************************************************
  *	lexflag is bitmapped and controls the input for lexers
@@ -4367,11 +4368,14 @@ get(FILE* fp, int x)
 {
     int		c;
     int		temp1;
+    int		offset;
     int		slen;
     int		prevflag;
     char *	cp;
     char	tempNM[BUFS];
     char	tempBuf[TSIZE];
+    char	lineBuf[BUFS];
+    char *	linep;
 %ifndef	BOOT_COMPILE
     static int	genCount = 0;
 %endif	/* BOOT_COMPILE */
@@ -4424,9 +4428,10 @@ get(FILE* fp, int x)
      *  is exhausted. Then further input is take from the input file.
      ************************************************************/
     if (x == 0 && cBlockFlag) {
-	auxp = auxBuf;
+	auxp = auxBuf = (char*)realloc(NULL, ABUFSZ);
+	auxBufLen = ABUFSZ;
 	*auxp++ = ' ';				/* placeholder to be overwritten by '\x1f' */
-	auxe = 0;
+	auxe = NULL;
 	if (getp[0] == 0) {			/* happens if file ends without '\n' */
 	    getp[0] = strchr(chbuf[0], '\0');	/* point to string terminator */
 	}
@@ -4434,33 +4439,52 @@ get(FILE* fp, int x)
 	while (1) {
 	    while (sscanf(auxp, " %s", tempBuf) != 1) {
 		cp = auxe;
-		auxe = auxp + strlen(auxp);	/* the rest of the current line has no token */
-		if ((auxp = fgets(auxe, &auxBuf[ABUFSZ] - auxp, fp)) == NULL) {
+		temp1 = auxp - auxBuf;		/* offset in current auxBuf */
+		slen = strlen(auxp);		/* the rest of the current line has no token */
+		if ((linep = fgets(lineBuf, BUFS, fp)) == NULL) {
 		    auxe = cp;			/* file has terminated after initial if () cBlock */
 		    tempBuf[0] = '\0';		/* no else will be found - complete if statement */
 		    goto endInput;
 		}
+		while (temp1 + slen + strlen(linep) >= auxBufLen) {
+		    auxBuf = (char*)realloc(auxBuf, (auxBufLen + ABUFSZ));
+		    assert(auxBuf);
+		    memset(&auxBuf[auxBufLen], '\0', ABUFSZ);
+		    auxBufLen += ABUFSZ;
+		}
+		auxp = auxBuf + temp1;		/* auxp points into reallocated buffer */
+		auxe = auxp + slen;		/* auxe points into reallocated buffer */
+		auxp = strcpy(auxe, linep);
 	    }
 	    if (memcmp(tempBuf, "/*", 2) == 0) { /* a C comment block has started */
 		cp = strchr(auxp, '*');
 		assert(cp);			/* because of previous compare */
 		do {				/* start C style comment */
-		    while ((cp = strchr(cp + 1, '*')) == 0) {
+		    while ((cp = strchr(cp, '*')) == 0) {
 			cp = auxe;
-			auxe = auxp + strlen(auxp);	/* the line has no comment end */
-			if ((auxp = fgets(auxe, &auxBuf[ABUFSZ] - auxp, fp)) == NULL) {
+			temp1 = auxp - auxBuf;	/* offset in current auxBuf */
+			slen = strlen(auxp);	/* the line has no comment end */
+			if ((linep = fgets(lineBuf, BUFS, fp)) == NULL) {
 			    auxe = cp;		/* file terminated in C comment after if ... */
 			    tempBuf[0] = '\0';	/* no else will be found - complete if statement */
 			    goto endInput;
 			}
+			while (temp1 + slen + strlen(linep) >= auxBufLen) {
+			    auxBuf = (char*)realloc(auxBuf, (auxBufLen + ABUFSZ));
+			    assert(auxBuf);
+			    memset(&auxBuf[auxBufLen], '\0', ABUFSZ);
+			    auxBufLen += ABUFSZ;
+			}
+			auxp = auxBuf + temp1;	/* auxp points into reallocated buffer */
+			auxe = auxp + slen;	/* auxe points into reallocated buffer */
+			auxp = strcpy(auxe, linep);
 			cp = auxp - 1;
 			continue;
 		    }
 		} while (*++cp != '/');
 		auxp = cp + 1;			/* C comment end was found */
 		continue;
-	    } else
-	    if (memcmp(tempBuf, "//", 2) == 0 || /* a C++ comment line was found */
+	    } else if (memcmp(tempBuf, "//", 2) == 0 || /* a C++ comment line was found */
 		memcmp(tempBuf, "#", 1) == 0) {	/* or a C-preprocessor line - # 1 */
 		auxp += strcspn(auxp, "\n");	/* both are terminated by '\n' */
 		continue;
@@ -4477,7 +4501,7 @@ get(FILE* fp, int x)
 	    getp[0] = strncpy(chbuf[0], auxBuf, slen); /* copy the BF + first line back to chbuf[] */
 	    chbuf[0][slen] = '\0';		/* terminate */
 	}
-	auxp = auxe ? auxBuf + slen : 0;	/* get ready for more lines in auxBuf[] */
+	auxp = auxe ? auxBuf + slen : NULL;	/* get ready for more lines in auxBuf[] */
 	cBlockFlag = 0;
     }
     prevflag = lineflag;
