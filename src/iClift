@@ -116,6 +116,8 @@ Usage:
 	-l      start 'iClive' with correct source  (implies -e)
 	-c del	delay between cage steps   (default @<< ms    )
 						$opt_c
+		can be set with environment variable iCliftSpeed
+		eg: export iCliftSpeed=2 # for very high speed
 	-r typ	door type 0 open from centre, 1 left, -1 right
 	-w pix	wall width                 (default @<< pixels)
 						$opt_w
@@ -194,7 +196,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift 1.21 $ uses Tk-@<<<<<<
+$Id: iClift 1.22 $ uses Tk-@<<<<<<
 							$Tk::VERSION
 .
 
@@ -956,6 +958,11 @@ if ($opt_l) {
 
 my ($ww, $wh, $dow, $doh, $doo, $cw, $ch, $cso, $dw, $dh, $dso) =
     ($opt_w, $opt_k, $opt_v, $opt_g, $opt_o, $opt_U, $opt_V, $opt_Y, $opt_u, $opt_j, $opt_y);
+if ($ENV{iCliftSpeed}) {
+    $opt_c = $ENV{iCliftSpeed};
+    $dso = int(29/$opt_c) + 1;
+    $cso = $dso * 2;
+}
 my $c_width  = ($ww+5) * ($lifts < 4 ? $lifts : 4);
 my $c_height = ($wh+5) * ($floors < 5 ? $floors : 5) + 2;
 
@@ -984,6 +991,12 @@ my @cageHome = ();	# cage home sensor
 my @doorTarg = ();	# inside door posn sensor
 my @doorNear = ();	# inside door near sensor
 my @doorHome = ();	# inside door home sensor
+my @prevTim  = ();
+for ($lift = 0; $lift < $lifts; $lift++) {
+    for ($floor = 0; $floor <= $floors; $floor++) {
+	$prevTim[$lift][$floor] = 100000;
+    }
+}
 
 my $ww_2     = $ww     * 0.5;	# half wall width
 my $wh_2     = ($wh+5) * 0.5;	# half wall height + distance bewtween walls
@@ -1620,6 +1633,14 @@ sub move_door {
 	$bitOver = 5;
     }
     if (defined $tim) {
+	if ($tim == 0) {
+	    $prevTim[$lift][$f] = 100000;
+	} elsif ($tim < $prevTim[$lift][$f]) {
+	    $prevTim[$lift][$f] = $tim;
+	} else {
+	    $tim = $prevTim[$lift][$f];
+	}
+	$dummy = $tim;
 	if ($idR) {
 	    print "$lift $floor $type door" if $opt_t;
 	    if ($$idR and (defined $inc or not $tim)) {
@@ -1658,6 +1679,7 @@ sub move_door {
 	    $$door[6] = 1;			# $rev normal for next iteration
 	    print STDERR "$lift $floor $type door: stop - auto, doorPosn = $doorPosn, inc = $inc, rev = $rev\n" if $opt_t or $opt_C;
 	}
+    $prevTim[$lift][$f] = 100000;
 	if ($inc > 0 and $doorPosn < 70 or $inc < 0 and $doorPosn > -15) {	# absolute limits
 	    print "$lift $floor $type door: $doorPosn $inc $target, rev = $rev\n" if $opt_t;
 	    if ($inc > 0) {			# door opening
@@ -1675,16 +1697,18 @@ sub move_door {
 		    if ($doorHome[$lift][$f]) {
 			$doorHome[$lift][$f] = 0;		# sensor home off
 			send_data($useHome, $lift, $bitHome, 1, $floor);	# IX1.4 = 1
-			if ($opt_C and $doorPosn > $dw) {
-			    send_data('Debug', $lift, $bitOver, 1, -1);		# IX0.1 = 1 or IX0.5 = 1
-			    print STDERR "$lift $floor $type door: overshoot  $doorPosn $testCount\n";
-			}
 		    }
 		}
 		elsif ($doorPosn >= $target) {
 		    unless ($doorHome[$lift][$f]) {
 			$doorHome[$lift][$f] = 1;		# sensor home on
 			send_data($useHome, $lift, $bitHome, 0, $floor);	# IX1.4 = 0
+		    }
+		}
+		elsif ($doorPosn >= $target - $dso) {
+		    unless ($doorNear[$lift][$f]) {
+			$doorNear[$lift][$f] = 1;		# sensor near on
+			send_data($useNear, $lift, $bitNear, 0, $floor);	# IX1.3 = 0
 			if ($rev == -1) {
 			    send_data($usePosn, $lift, $bitPosn, 0, $floor);	# IX1.2 = 1 door open (if stuck)
 			    print STDERR "$lift $floor $type door: complete - reverse, doorPosn = $doorPosn, inc = $inc, rev = $rev\n" if $opt_t or $opt_C;
@@ -1692,12 +1716,6 @@ sub move_door {
 			    $$idR = undef;
 			    $$door[6] = 1;			# $rev normal for next iteration
 			}
-		    }
-		}
-		elsif ($doorPosn >= $target - $dso) {
-		    unless ($doorNear[$lift][$f]) {
-			$doorNear[$lift][$f] = 1;		# sensor near on
-			send_data($useNear, $lift, $bitNear, 0, $floor);	# IX1.3 = 0
 		    }
 		}
 	    } else {				# door closing
@@ -1715,16 +1733,18 @@ sub move_door {
 		    if ($doorHome[$lift][$f]) {
 			$doorHome[$lift][$f] = 0;		# sensor home off
 			send_data($useHome, $lift, $bitHome, 1, $floor);	# IX1.4 = 1
-			if ($opt_C and $doorPosn < 0) {
-			    send_data('Debug', $lift, $bitUnder, 1, -1);	# IX0.0 = 1 or IX0.4 = 1
-			    print STDERR "$lift $floor $type door: undershoot $doorPosn $testCount\n";
-			}
 		    }
 		}
 		elsif ($doorPosn <= $target) {
 		    unless ($doorHome[$lift][$f]) {
 			$doorHome[$lift][$f] = 1;		# sensor home on
 			send_data($useHome, $lift, $bitHome, 0, $floor);	# IX1.4 = 0
+		    }
+		}
+		elsif ($doorPosn <= $target + $dso) {
+		    unless ($doorNear[$lift][$f]) {
+			$doorNear[$lift][$f] = 1;		# sensor near on
+			send_data($useNear, $lift, $bitNear, 0, $floor);	# IX1.3 = 0
 			if ($rev == -1) {
 			    send_data($usePosn, $lift, $bitPosn, 1, $floor);	# IX1.2 = 0 door shut (if stuck)
 			    print STDERR "$lift $floor $type door: complete - reverse, doorPosn = $doorPosn, inc = $inc, rev = $rev\n" if $opt_t or $opt_C;
@@ -1732,12 +1752,6 @@ sub move_door {
 			    $$idR = undef;
 			    $$door[6] = 1;			# $rev normal for next iteration
 			}
-		    }
-		}
-		elsif ($doorPosn <= $target + $dso) {
-		    unless ($doorNear[$lift][$f]) {
-			$doorNear[$lift][$f] = 1;		# sensor near on
-			send_data($useNear, $lift, $bitNear, 0, $floor);	# IX1.3 = 0
 		    }
 		}
 	    }
@@ -2000,17 +2014,17 @@ sub move_cage {
 		    unless ($cageHome[$l]) {
 			$cageHome[$l] = 1;			# cage sensor home on
 			send_data('Sensors', $l, 1, 0);	# IX1.1 = 0
-			if ($rev == -1) {
-			    $$idR->cancel() if $$idR;		# stop continuous door movement when reversing
-			    $$idR = undef;
-			    $$cag[8] = 1;			# $rev normal for next iteration
-			}
 		    }
 		}
 		elsif ($cageBottom <= $target + $cso) {
 		    unless ($cageNear[$l]) {
 			$cageNear[$l] = 1;			# cage sensor near on
 			send_data('Sensors', $l, 0, 0);	# IX1.0 = 0
+			if ($rev == -1) {
+			    $$idR->cancel() if $$idR;		# stop continuous door movement when reversing
+			    $$idR = undef;
+			    $$cag[8] = 1;			# $rev normal for next iteration
+			}
 		    }
 		}
 	    } else {				# cage moving down
@@ -2036,17 +2050,17 @@ sub move_cage {
 		    unless ($cageHome[$l]) {
 			$cageHome[$l] = 1;			# cage sensor home on
 			send_data('Sensors', $l, 1, 0);	# IX1.1 = 0
-			if ($rev == -1) {
-			    $$idR->cancel() if $$idR;		# stop continuous door movement when reversing
-			    $$idR = undef;
-			    $$cag[8] = 1;			# $rev normal for next iteration
-			}
 		    }
 		}
 		elsif ($cageBottom >= $target - $cso) {
 		    unless ($cageNear[$l]) {
 			$cageNear[$l] = 1;			# cage sensor near on
 			send_data('Sensors', $l, 0, 0);	# IX1.0 = 0
+			if ($rev == -1) {
+			    $$idR->cancel() if $$idR;		# stop continuous door movement when reversing
+			    $$idR = undef;
+			    $$cag[8] = 1;			# $rev normal for next iteration
+			}
 		    }
 		}
 	    }
@@ -2478,6 +2492,8 @@ iClift -simulation of the physics and appearance of lifts in a building
 	-d      start 'iCbox -d -C19' automatically (implies -e)
 	-l      start 'iClive' with correct source  (implies -e)
 	-c del	delay between cage steps   (default 7    ms   )
+		can be set with environment variable iCliftSpeed
+		eg: export iCliftSpeed=2 # for very high speed
 	-r typ	door type 0 open from centre, 1 left, -1 right
 	-w pix	wall width                 (default 300 pixels)
 	-k pix	wall height                (default 200 pixels)
