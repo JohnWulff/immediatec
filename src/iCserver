@@ -21,8 +21,9 @@
 #
 ########################################################################
 
-use iCmsg;		# Messaging Toolkit: from Advanced Perl Programming
-			##                   by Sriram Srinivasan
+use iCmsg;		# Messaging Toolkit: from Advanced Perl Programming by Sriram Srinivasan
+			# which communicates with TCP/IP messages consisting of a 4 byte header
+			# containing the BigEndian length of the data followed by the data.
 use strict;
 use warnings;
 
@@ -67,26 +68,23 @@ my $argsP = \@args;			# intially fill @args
 my $Rflag = 0;
 my $opt_Z = 0;		# 1 for debugging sub convertFlags()
 my %commandLineFlags = (
-    'z'   => 0,				# Bool flag
-    'a'   => 0,
+    'a'   => 0,				# Bool flag
     'd'   => 0,
-    'g'   => 0,
-    'k'   => 0,
-    'r'   => 0,
     't'   => 0,
+    'm'   => 0,
+    'q'   => 0,
+    'r'   => 0,
+    'k'   => 0,
+    'z'   => 0,
     'J'   => 0,
     'O'   => 0,
-    'm'   => 0,
-    'T'   => 0,
-    'q'   => 0,
-    'e'   => 1,				# value flag
-    's'   => 1,
-    'p'   => 1,
-    'A'   => 1,
-    'G'   => 1,
     'h'   => 0,
-    'f'   => 1,				# include file
-    'R'   => 1,				# Run an app
+    's'   => 1,				# value flag
+    'p'   => 1,
+    'e'   => 1,
+    'A'   => 1,
+    'f'   => 1,
+    'R'   => 1,
 );
 
 ########################################################################
@@ -98,61 +96,55 @@ my %commandLineFlags = (
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-     @<<<<<<<[ -qadrkztIOmTh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
+     @<<<<<<<[ -qadrkztJOmh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
 	$named
-             [ [-e]<list of equivalences>][ <list of client calls>]
-             [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
-        -s host address of server - clients must specify the same address
-                unless (default '0.0.0.0' which accepts any client host)
-        -p port service port of server for all clients  (default '8778')
-                make sure the Firewall is open for the TCP port used.
-        -e <equivalences> eg: IX0=IX0-1     (can be used more than once)
-                or a comma separated list eg: IX0=IX0-1,QX0=QX0-1,IB1=IB1-1
-        -f file read options, equivalences and client calls from this file
-        -q      quiet - do not report clients connecting and disconnecting
-        -a      autovivify I/O clients 'iCbox' for missing I/O's (any number
-                of iCbox's can be autovivified with -a as apps register)
-        -d      autovivify I/O client 'iCbox -d' for missing I/O's, which is
-                useful to monitor real I/O (only one 'iCbox -d' can be auto-
-                vivified to avoid recursive calls for missing senders to the
-                display only 'iCbox -d')
-        -A cmd  use <cmd> to autovivify I/O clients (eg -A 'iCbox -Q2 -C19')
-        -r      reset registered receivers when sender disconnects - ie reset
-                outputs of an app when it shuts down (default no change)
-        -k      kill previous client when a new client with the same name
-                registers (default: do not accept the new client)
-        -z      block keyboard input
-            DEBUG options
-        -t      trace messages for debugging
-        -J      trace rcv messages in iCmsg.pm
-        -O      trace send messages in iCmsg.pm
-        -m      display elapsed time in seconds and microseconds
-        -T      extra static debug messages
-        -h      help, ouput this Usage text only
-            OLD STYLE CALLS
-        <equivalences> - deprecated - use -e <equivalences> instead
-                eg deprecated old style: IX8=IX8-0=IX8-1,IX9=IX9-0=IX9-1
-        <client calls> - deprecated - use -R <app ...> instead
-                eg deprecated: 'iCbox -n sorter-IO X0-X3 X10' sorter
-                if a client call has arguments, the call must be quoted
-            AUXILIARY app   - start a Bernstein chain
-        -R <app ...> run one app followed by -z and its arguments as a
-                     separate process; -R ... must be last arguments,
-                     which do not need to be quoted.
-                eg: -R iCbox -n sorter-IO X0-X3 X10 -R sorter
-            KEYBOARD inputs
-            T   output @<<<<<<< Client Tables
+         [ -e <list of equivalences>]
+         [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
+    -s host address of server - clients must specify the same address
+            unless (default '0.0.0.0' which accepts any client host)
+    -p port service port of server for all clients  (default '8778')
+            make sure the Firewall is open for the TCP port used.
+    -e <equivalences> eg: IX0=IX0-1     (can be used more than once)
+            or a comma separated list eg: IX0=IX0-1,QX0=QX0-1,IB1=IB1-1
+    -f file read options, equivalences and -R client calls from this file
+    -q      quiet - do not report clients connecting and disconnecting
+    -a      autovivify I/O clients 'iCbox' for missing I/O's (any number
+            of iCbox's can be autovivified with -a as apps register)
+    -d      autovivify I/O client 'iCbox -d' for missing I/O's, which is
+            useful to monitor real I/O (only one 'iCbox -d' can be auto-
+            vivified to avoid recursive calls for missing senders)
+    -A cmd  use <cmd> to autovivify I/O clients (eg -A 'iCbox -Q2 -C19')
+    -r      reset registered receivers when sender disconnects - ie reset
+            outputs of an app when it shuts down (default no change)
+    -k      kill previous client when a new client with the same name
+            registers (default: do not accept the new client)
+    -z      block keyboard input
+        DEBUG options
+    -t      trace messages for debugging
+    -J      trace rcv messages in iCmsg.pm
+    -O      trace send messages in iCmsg.pm
+    -m      display elapsed time in seconds and microseconds
+    -h      help, ouput this Usage text only
+        AUXILIARY app   - start a Bernstein chain
+    -R <app ...> run one app followed by -z and its arguments as a
+                 separate process; -R ... must be last arguments,
+                 which do not need to be quoted.
+            eg: -R iCbox -n sorter-IO X0-X3 X10 -R sorter
+        KEYBOARD inputs
+        t   toggle -t option - trace messages for debugging.
+        m   toggle -m option - display elapsed time.
+        T   output @<<<<<<< Client Tables.
 			$named
-            q   stop @<<<<<<< and all registered iC apps
+        q   stop @<<<<<<< and all registered iC apps.
 			$named
-                These two actions can also be triggered from the iClive
-                Build Menu
-            The easiest way to stop @<<<<<<< and all registered iC apps
-				    $named
-            is to stop an iCbox by clicking its (X) button
+    The last two actions can also be triggered from the iClive Build
+    Menu. The easiest way to stop the iC system is to stop an iCbox
+    by clicking its (X) button, which shuts down @<<<<<<< and all
+						$named
+    registered iC apps.
 Copyright (C) 2000-2017  John E. Wulff    <immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.66 $
+$Id: iCserver 1.67 $
 .
 
 ########################################################################
@@ -169,26 +161,25 @@ print "runArgs = '", join(" ", @runArgs), "'\n" if $opt_Z;
 ########################################################################
 
 use vars qw($opt_z $opt_a $opt_d @opt_e $opt_k $opt_r $opt_t $opt_J $opt_O);
-use vars qw($opt_m $opt_T $opt_q $opt_s $opt_p $opt_A $opt_h);
+use vars qw($opt_m $opt_q $opt_s $opt_p $opt_A $opt_h);
 use Getopt::Long qw(:config no_ignore_case bundling);
 GetOptions (
-    'z'   => \$opt_z,			# -z blocks STDIN
     '<>'  => sub { push(@argv, @_); },	# Transfer file argument to @argv
     'a'   => \$opt_a,
     'd'   => \$opt_d,
-    'k'   => \$opt_k,
-    'r'   => \$opt_r,
     't'   => \$opt_t,
+    'm'   => \$opt_m,
+    'q'   => \$opt_q,
+    'r'   => \$opt_r,
+    'k'   => \$opt_k,
+    'z'   => \$opt_z,			# -z blocks STDIN
     'J'   => \$opt_J,
     'O'   => \$opt_O,
-    'm'   => \$opt_m,
-    'T'   => \$opt_T,
-    'q'   => \$opt_q,
-    'e=s' => \@opt_e,
+    'h'   => \$opt_h,
     's=s' => \$opt_s,
     'p=s' => \$opt_p,
+    'e=s' => \@opt_e,
     'A=s' => \$opt_A,
-    'h'   => \$opt_h,
 );
 scalar @ARGV == 0 or die "*** ERROR: $named: '@ARGV' remaining after Getopt::Long Getoptions() ???\n";
 
@@ -208,7 +199,7 @@ if (defined $opt_A) {
     $opt_A = 'iCbox';
 }
 if (@opt_e) {
-    print "Equivalences '@opt_e' from -e\n" if $opt_T;
+    print "Equivalences '@opt_e' from -e\n" if $opt_t;
     allocate_equivalences(join(",", @opt_e));
 }
 
@@ -218,62 +209,19 @@ if ($opt_a or $opt_m) {
     $t0 = [gettimeofday] if $opt_m;	# start time of program
 }
 
-$SIG{PIPE} = \&catch_zap;		# signal 13
-$SIG{ALRM} = \&autoVivify;		# signal 14 - Timer signal from ualarm()
+$SIG{ALRM} = \&autoVivify;	# signal 14 - Timer signal from ualarm()
+$SIG{INT}  = \&shutdown_server;	# signal 2	(ctrl-C interrupt from keyboard)
+$SIG{TERM} = \&shutdown_server;	# signal 2	(terminate)
+$SIG{HUP}  = \&catch_zap;	# signal 1
+$SIG{PIPE} = \&catch_zap;	# signal 13
+$SIG{USR1} = 'IGNORE';		# signal 10
+$SIG{USR2} = 'IGNORE';		# signal 12
 if ($opt_t or $opt_J or $opt_O) {
     $| = 1;			# autoflush stdout
-}
-$SIG{INT}  = \&shutdown_server;	# signal 2	(ctrl-C interrupt from keyboard)
-if ($opt_t) {
-    $SIG{HUP}  = \&catch_zap;	# signal 1
-    $SIG{USR1} = \&catch_zap;	# signal 10	(stop -10 iCserver)
-    $SIG{USR2} = \&catch_zap;	# signal 12	(stop -12 iCserver)
-} else {
-    $SIG{USR1} = 'IGNORE';	# signal 10	(stop -10 iCserver)
-    $SIG{USR2} = 'IGNORE';	# signal 12	(stop -12 iCserver)
 }
 
 my $host = defined $opt_s ? $opt_s : '0.0.0.0';
 my $port = defined $opt_p ? $opt_p : 8778;
-
-########################################################################
-#
-#	Analyse equivalences and client call parameters
-#
-#	Equivalences consist of two or more identifiers separated by an
-#	equal sign (=).
-#
-#	Individual equivalences must be written without spaces in the
-#	command line. In the optional INI file which can be read with
-#	the -f option, white spaces may be used in equivalence lines.
-#
-#	Client calls consist of an identifier optionally followed by a
-#	space separated list of parameters. Unless the client call is
-#	a single identifier it must be quoted in the usual shell manner
-#	both in the command line and the optional INI file.
-#
-#	Allocate equivalences and start clients named in argument list
-#
-#	Start each client call as a separate process after splicing in
-#	optional global switches -p <port> -t -m
-#
-########################################################################
-
-my ($argv);
-
-if (scalar @argv > 1) {
-    $AutoDelay = 2_000_000;		# 2 seconds for autovivify delay with more than 1 process
-}
-while ($argv = shift @argv) {
-    if ($argv =~ /^[IQ][XBWLH]\d+(-\d{1,3})?/) {
-	print "Equivalences '$argv' from command line\n" if $opt_T;
-	allocate_equivalences($argv);
-    } else {
-	$AutoDelay = 2_000_000;		# 2 seconds for autovivify delay with more than 1 process
-	$argv =~ s/['"]//g;		# for this mode call and args are quoted
-	fork_and_exec($argv);		# old style start of client call (deprecated - use -R)
-    }					# particularly if starting more than 1 process
-}
 
 ########################################################################
 #	Optionally run -R option
@@ -476,7 +424,11 @@ sub readStdin {
 	shutdown_server("stopped from terminal");
     } elsif ($line =~ m/^T/) {
 	print_tables();
-    }				# ignore other inputs
+    } elsif ($line =~ m/^m/) {
+	$opt_m = ! $opt_m;			# toggle -m option
+    } elsif ($line =~ m/^t/) {
+	$opt_t = ! $opt_t;			# toggle -t option
+    }						# ignore other inputs
 } # readStdin
 
 ########################################################################
@@ -561,11 +513,7 @@ sub shutdown_server {
 
 sub catch_zap {
     my $signame = shift;
-    if ($signame =~ /^USR1/) {
-	print_tables();
-    } else {
-	die "$named: Caught SIG$signame: $!";
-    }
+    die "$named: Caught SIG$signame: $!";
 } # catch_zap
 
 ########################################################################
@@ -600,7 +548,7 @@ sub disconnect {
     my ($name, $base, $primCh, $secCh);
     $sender = $ClientNames{$conn} unless defined $sender;
     if (defined $sender) {
-	print "$sender: client no. $numberOfConnections unregistering now\n" if $opt_t;
+	print "$numberOfConnections: $sender: disconnecting now\n" unless $opt_q;
 	%ReceiverData = ();		# clear all keys and entries
 	for ($channel = 0; $channel <= $maxChannel; $channel++) {
 	    $rflag = 0;
@@ -681,8 +629,9 @@ sub disconnect {
 	}
 	delete $ClientNames{$conn};
 	delete $Clients{$sender};
+	delete $AutoVivify{$sender} if exists $AutoVivify{$sender};
 	delete $AutoVivified{$sender} if exists $AutoVivified{$sender};
-	print "Disconnected '$sender'\n" unless $opt_q;
+	print "$numberOfConnections: $sender: disconnected\n" unless $opt_q;
 	$numberOfConnections--;
 	if ($numberOfConnections <= 0) {
 	    ############################################################
@@ -716,7 +665,7 @@ sub disconnect {
 		    }
 		}
 	    }
-	    print "$named: last client has unregistered\n" if $opt_t;
+	    print "$named: last client has disconnected\n" if not $opt_q;
 	}
     } else {
 	warnD("the connection $conn is not currently registered - system error");
@@ -770,11 +719,14 @@ sub allocate_channel {
 
 ############################################################
 #
-# Allocate equivalences in $arg either as a single equivalence or as a
-# space or comma separated list of simple equivalences IX0=IX0-1=IX0-2
-# or group-equivalences IX0=IX2=IX4, which belong to one instance of
-# an app characterized by having the same connection (this precludes
-# them from being simple equivalences on the same channel).
+#	Allocate equivalences  -  with the -e option in this server
+#	or from another iC app either
+#	    as a single equivalence IX0=IX0-1
+#	    or as a multiple equivalence IX0=IX0-1=IX0-2
+#	    or as group-equivalences IX0=IX2=IX4, which belong to one instance of
+#		an app characterized by having the same connection (this precludes
+#		them from being simple equivalences on the same channel)
+#	    or as a space or comma separated list of the above equivalences
 #
 # %Equivalences		# Auxiliary structure only used to build %EquivBase
 # hashed by $base - points to equivalent names with same or different channel as base IX0
@@ -789,20 +741,20 @@ sub allocate_channel {
 #
 # %EquivBase		# Used during registration and autovivification
 # hashed by $name - points to base name of equivalenced names (even own name if base)
-# [primaryBase, primaryChannel, secondaryChannel, \$Equivalences{}->[] ]
-# {           [0]  [1]  [2]  [3]
-#  IX0   => [ IX0, ch0, ch0, \$Equivalences{IX0}->[0] ],
-#  IX0-1 => [ IX0, ch0, ch0, \$Equivalences{IX0}->[0] ],
-#  IX0-2 => [ IX0, ch0, ch0, \$Equivalences{IX0}->[0] ],
-#  IX1   => [ IX0, ch0, ch1, \$Equivalences{IX0}->[1] ],
-#  IX1-1 => [ IX0, ch0, ch1, \$Equivalences{IX0}->[1] ],
-#  IX1-2 => [ IX0, ch0, ch1, \$Equivalences{IX0}->[1] ],
-#  IX2   => [ IX0, ch0, ch2, \$Equivalences{IX0}->[2] ],
-#  IX2-1 => [ IX0, ch0, ch2, \$Equivalences{IX0}->[2] ],
-#  IX2-2 => [ IX0, ch0, ch2, \$Equivalences{IX0}->[2] ],
-#  IX5   => [ IX5, ch3, ch3, \$Equivalences{IX5}->[0] ],
-#  IX5-1 => [ IX5, ch3, ch3, \$Equivalences{IX5}->[0] ],
-#  IX5-2 => [ IX5, ch3, ch3, \$Equivalences{IX5}->[0] ],
+# [primaryBase, primaryChannel, secondaryChannel ]
+# {           [0]  [1]  [2]
+#  IX0   => [ IX0, ch0, ch0 ],
+#  IX0-1 => [ IX0, ch0, ch0 ],
+#  IX0-2 => [ IX0, ch0, ch0 ],
+#  IX1   => [ IX0, ch0, ch1 ],
+#  IX1-1 => [ IX0, ch0, ch1 ],
+#  IX1-2 => [ IX0, ch0, ch1 ],
+#  IX2   => [ IX0, ch0, ch2 ],
+#  IX2-1 => [ IX0, ch0, ch2 ],
+#  IX2-2 => [ IX0, ch0, ch2 ],
+#  IX5   => [ IX5, ch3, ch3 ],
+#  IX5-1 => [ IX5, ch3, ch3 ],
+#  IX5-2 => [ IX5, ch3, ch3 ],
 #  ...   => ...
 # }
 #
@@ -878,10 +830,10 @@ no warnings;
 		}
 		$in = defined $3 ? $3 : '';		# instance (may be null string)
 		if (exists $EquivBase{$nn}) {
-		    ($base, $primCh, $secCh, $ref) = @{$EquivBase{$nn}};
+		    ($base, $primCh, $secCh) = @{$EquivBase{$nn}};
 		} else {
 		    $ch = $Channels{$nn};
-		    print "%%% N nn = '$nn' base = '$base' primCh = '$primCh' secCh = '$secCh' ch = '$ch'\n" if $opt_T;
+		    print "%%% N nn = '$nn' base = '$base' primCh = '$primCh' secCh = '$secCh' ch = '$ch'\n" if $opt_t;
 		    if (not $base or $iq eq "Q" or $ch) {
 			if ($ch and $primCh) {
 			    ########################################################################
@@ -901,7 +853,7 @@ no warnings;
 			    }
 			    $dupFlag = 1;
 			    $Equivalences{$nn} = $Equivalences{$base};	# 2) move equivalence set to new base
-			    print "    nn = '$nn' delete \$Equivalences{$base}\n" if $opt_T;
+			    print "    nn = '$nn' delete \$Equivalences{$base}\n" if $opt_t;
 			    delete $Equivalences{$base};		#    delete old base entry
 			    foreach $name (sort keys %EquivBase) {	# 3)
 				if ($EquivBase{$name}->[1] == $primCh) {	# find old primary channel
@@ -921,7 +873,7 @@ no warnings;
 				unshift @{$AltRecrNames{$ch}}, [ @{$ReceiverNames[$primCh]} ]; 
 				@{$ReceiverNames[$primCh]} = ();
 			    }
-			    print "remove Autovivify entry '$AutoVivify{$base}'\n" if $opt_T;
+			    print "remove Autovivify entry '$AutoVivify{$base}'\n" if $opt_t;
 			    delete $AutoVivify{$base};			# 6)
 			} else {
 			    $ch = 0;			# no primary channel (or no channel)
@@ -938,10 +890,10 @@ no warnings;
 	## Now a base IEC name has been determined distribute equivalences
 	## in %Equivalences - also update %EquivBase.
 	########################################################################
-	print "base = $base\n" if $opt_T;
+	print "base = $base\n" if $opt_t;
 	foreach $ref (@equivSet) {
 	    ($nn, $in) = @{$ref};
-	    print "    nn = '$nn' in = '$in' primCh = '$primCh' ch = '$ch'\n" if $opt_T;
+	    print "    nn = '$nn' in = '$in' primCh = '$primCh' ch = '$ch'\n" if $opt_t;
 	    if ($ch) {
 		$primCh = $secCh = $ch;
 	    } else {
@@ -952,8 +904,8 @@ no warnings;
 			unless (exists $ref1->{$in}) {
 			    $ref1->{$in} = $nn;			# extend equivalence group with different instances
 			    allocate_channel($nn, $secCh);	# allocate same channel for next IEC instance
-			    $EquivBase{$nn} = [$base, $primCh, 0, $refEq ];
-			    print "ext \$secCh = $secCh \$nn = $nn\n" if $opt_T;
+			    $EquivBase{$nn} = [$base, $primCh, 0];
+			    print "ext \$secCh = $secCh \$nn = $nn\n" if $opt_t;
 			    goto EquivStored;
 			}
 		    }
@@ -963,7 +915,7 @@ no warnings;
 	    undef $ref1;
 	    $ref1->{$in} = $nn;				# new equivalence with instance used in previous group
 	    $primCh = $secCh unless $primCh;
-	    print "new \$secCh = $secCh \$nn = $nn\n" if $opt_T;
+	    print "new \$secCh = $secCh \$nn = $nn\n" if $opt_t;
 	    $refEq = [ $secCh, $ref1 ];			# secondary channel for equivalence group and first IEC
 	    if ($ch) {
 		unshift @{$Equivalences{$base}}, $refEq;	# new equivalence group for pre-registered input
@@ -971,8 +923,8 @@ no warnings;
 	    } else {
 		push @{$Equivalences{$base}}, $refEq;	# new equivalence group on a different channel
 	    }
-	    # [primaryBase, primaryChannel, secondaryChannel, \$Equivalences{}->[] ]
-	    $EquivBase{$nn} = [ $base, $primCh, 0, $refEq ];
+	    # [primaryBase, primaryChannel, secondaryChannel ]
+	    $EquivBase{$nn} = [ $base, $primCh, 0];
 	  EquivStored: ;
 	}
     }
@@ -1085,7 +1037,7 @@ sub pushReceiverData {
     if (not defined $ReceiverData{$rconn}) {
 	## this is the first message for this receiver
 	push @{$ReceiverData{$rconn}}, $rconn;	# save real connection
-    } elsif ($opt_T and $sender) {
+    } elsif ($opt_t and $sender) {
 	my $aref = $ReceiverData{$rconn};
 	my $msg2 = join ',', @$aref;	# one or more channel:value pairs
 	$msg2 =~ s/[^,]*,//;
@@ -1113,7 +1065,7 @@ sub autoVivify {
 	    ## sort order is instance then names in the following order
 	    ## IX IB IW IL IH QX QB QW QL QH .. finally number
 	    ##  0  1  2  3  4  5  6  7  8  9 .. correct for alpha cmp
-	    ## print "$a $ha $na $za	$b $hb $nb $zb\n" if $opt_T;
+	    ## print "$a $ha $na $za	$b $hb $nb $zb\n" if $opt_t;
 	    ############################################################
 	    $za cmp $zb || $ha cmp $hb || $na <=> $nb;
 	} keys %AutoVivify) {				# same key could have been entered more than once
@@ -1121,13 +1073,17 @@ sub autoVivify {
 	}
 	%AutoVivify = ();
 	$autovivify = join " ", @iCbox_params;
-	$autovivify = "$opt_A -n$ioName $autovivify";
-	unless (exists $AutoVivified{$ioName}) {
-	    $AutoVivified{$ioName}++;
-	    print "AUTOVIVIFY: '$autovivify'\n" if $opt_t;
-	    fork_and_exec($autovivify);			# run iCbox or app specified in $opt_A
-	    $opt_a = undef if $opt_A =~ m/\s-\w*d\w*\b/;# stop recursive exec of iCbox -d
-	}						# other iCbox switches are ignored
+	if ($opt_a) {
+	    $autovivify = "$opt_A -n$ioName $autovivify";
+	    unless (exists $AutoVivified{$ioName}) {
+		$AutoVivified{$ioName}++;
+		print "AUTOVIVIFY: '$autovivify'\n" if $opt_t;
+		fork_and_exec($autovivify);		# run iCbox or app specified in $opt_A
+		$opt_a = undef if $opt_A =~ m/\s-\w*d\w*\b/;# stop recursive exec of iCbox -d
+	    }						# other iCbox switches are ignored
+	} else {
+	    warnD("$named:\"$autovivify\" I/Os are missing\n");
+	}
     }
 } # autoVivify
 
@@ -1177,7 +1133,7 @@ sub rcvd_msg_from_client {
 	$sender = $ClientNames{$conn};		# set when name registered for this $conn
 	$rcvCnt++;
 no warnings;
-	print "($len)$msg< '$sender'\n" if $opt_T;
+	print "($len)$msg< '$sender'\n" if $opt_t;
 use warnings;
 	if ($len == 0) {
 	    ############################################################
@@ -1236,8 +1192,18 @@ use warnings;
 		}
 		elsif ($msg1 =~ /^N(.+)/) {	# name part of registration
 		    $name = $1;
-		    $con = $Clients{$name};
-		    if ($con) {
+		    if ($name =~ /^-/) {
+			my $i = 0;				# registering iClive name
+			foreach $con (@{$Receivers[0]}) {	# no need to check %AltReceivers
+			    if ($con eq $conn) {
+				$ReceiverNames[0][$i] = $name;	# name has changed in old warning registration
+				goto ALREADY_REGISTRERD;
+			    }
+			    $i++;			# index of next entry to be spliced out
+			}
+			push @{$Receivers[0]}, $conn;	# new warning registration
+			push @{$ReceiverNames[0]}, $name;
+		    } elsif (($con = $Clients{$name})) {
 			############################################################
 			## a client with the same name was previously registered
 			############################################################
@@ -1253,31 +1219,17 @@ use warnings;
 			## -k option: unregister and disconnect previous instance
 			## proceed with new registration
 			############################################################
-			warnD("kill previous client '$name' - restarted\n");
 			disconnect($con, $name);	# kills old client process
 			if ($channel = $Channels{"D$name"}) {
 			    $iniString = "$channel:1";	# get S.T. from new client
 			}
 		    }
+		  ALREADY_REGISTRERD:
 		    $Clients{$name} = $conn;		# client by this name exists now
 		    $ClientNames{$conn} = $sender = $name;	# name may change for iClive connections
-		    if ($name =~ /^-/) {
-			my $i = 0;
-			foreach $con (@{$Receivers[0]}) {
-			    if ($con eq $conn) {
-				$ReceiverNames[0][$i] = $name;	# name has changed in old warning registration
-				goto ALREADY_REGISTRERD;
-			    }
-			    $i++;			# index of next entry to be spliced out
-			}
-			push @{$Receivers[0]}, $conn;	# new warning registration
-			push @{$ReceiverNames[0]}, $name;
-		    }
-		    ALREADY_REGISTRERD:
 		    $numberOfConnections++;
 		    $regFlag = 1;			# registration string has started
-		    print STDERR "$name: client no. $numberOfConnections registering now\n" unless $opt_q;
-		    print_tables()if $opt_T;
+		    print STDERR "$numberOfConnections: $name: registering now\n" unless $opt_q;
 		}
 		elsif ($msg1 =~ /^([SR])([\\\/\w]+(-\d*)?)(\((\d+)\))?/) {
 		    ############################################################
@@ -1303,7 +1255,7 @@ use warnings;
 			($base, $primCh, $secCh) = ($name, $channel, 0);
 		    }
 		    my $ack = $channel;		# used to build acknowledge string
-		    if ($opt_T) {
+		    if ($opt_t) {
 			$secCh = 0 unless defined $secCh;
 			print "*** register $direction $name base = $base primCh = $primCh secCh = $secCh channel = $channel ack = $ack\n";
 		    }
@@ -1313,7 +1265,8 @@ use warnings;
 			    ## A client is trying to register a sender on a channel for
 			    ## an alternate equivalence group
 			    ############################################################
-			    if ($EquivBase{$base}->[2] and 0) {	# secondary channel of base name already registered
+			    printf("*** register S name = '%s' base = '%s' primCh = %d secCh = %d channel = %d\n", $name, $base, $primCh, $secCh, $channel) if $opt_t;
+			    if ($EquivBase{$base}->[2] != 0) {	# secondary channel of base name already registered
 				$ack = -$channel;
 				warnD("$sender: trying to register S $name for alternative channel $primCh/$channel - aborted\n");
 				disconnect($conn);
@@ -1336,7 +1289,7 @@ use warnings;
 			    my @temp = splice @{$Equivalences{$base}}, $i, 1;
 			    unshift @{$Equivalences{$base}}, @temp;
 			    $Equivalences{$name} = $Equivalences{$base};	# move equivalence set to new base
-			    print "S delete \$Equivalences{$base}\n" if $opt_T;
+			    print "S delete \$Equivalences{$base}\n" if $opt_t;
 			    delete $Equivalences{$base};			# delete old base entry
 			    foreach $nn (sort keys %EquivBase) {
 				if ($EquivBase{$nn}->[1] == $primCh) {		# find old primary channel
@@ -1379,12 +1332,11 @@ use warnings;
 			    }
 			}
 			unless ($rconn) {
-			    if ($opt_a and
-				$name =~ /^Q[XBWL]\d+/) {	# not even first for senders
+			    if ($name =~ /^Q[XBWL]\d+/) {		# not even first for senders
 				my $iCbox_param = $bits ? "$name,$bits" : $name;
 				$AutoVivify{$name} = $iCbox_param;
 				$ioName = "$sender-IO";
-				print "Autovivify sender '$iCbox_param'\n" if $opt_T;
+				print "Autovivify sender '$iCbox_param'\n" if $opt_t;
 			    }
 			}
 			print "$sender: S $name	ack = $ack\n" if $opt_t;
@@ -1454,12 +1406,11 @@ use warnings;
 				    }
 				}
 			    }
-			    elsif ($opt_a and			# no, sender not registered on primary channel
-				$base =~ /^I[XBWL]\d+/) {	# from $EquivBase{$name} or own $name
-				my $iCbox_param = $bits ? "$base,$bits" : $base;
+			    elsif ($base =~ /^I[XBWL]\d+/) {	#  no, sender not registered on primary channel from
+				my $iCbox_param = $bits ? "$base,$bits" : $base;	# $EquivBase{$name} or own $name
 				$AutoVivify{$base} = $iCbox_param;
 				$ioName = "$sender-IO";
-				print "Autovivify receiver '$iCbox_param'\n" if $opt_T;
+				print "Autovivify receiver '$iCbox_param'\n" if $opt_t;
 			    }
 			}
 			if ($opt_t) {
@@ -1482,7 +1433,7 @@ use warnings;
 		elsif ($msg1 =~ /^n(.+)/) {	# must happen after s and/or r
 		    $name = $1;
 		    if ($Clients{$name}) {
-			print "$name: client no. $numberOfConnections unregistering now\n" unless $opt_q;
+			print "$numberOfConnections: $name: unregistering now\n" unless $opt_q;
 			delete $ClientNames{$conn};
 			delete $Clients{$name};
 			$numberOfConnections--;
@@ -1538,7 +1489,7 @@ use warnings;
 		    }
 		}
 		elsif ($msg1 =~ /^E(.*)$/) {	# Equivalance message from an app
-		    print "Equivalences '$1' from app\n" if $opt_T;
+		    print "Equivalences '$1' from app\n" if $opt_t;
 		    allocate_equivalences($1);
 		}
 		elsif ($msg1 =~ /^X(.*)$/) {	# termination by named parent
@@ -1598,62 +1549,55 @@ __END__
 
 =head1 NAME
 
-iCserver - the central server for iC clients
+iCserver - the central server for iC clients (Perl version)
 
 =head1 SYNOPSIS
 
-  iCserver[ -qadrkztIOmTh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
-          [ [-e]<list of equivalences>][ <list of client calls>]
-          [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
+  iCserver[ -qadrkztJOmh][ -s <host>][ -p <port>]
+          [ -e <equivalences>][ -A <cmd>][ -f <file>]
+          [ -R <aux_app>[ <aux_argument> -R ...]] # must be last arguments
     -s host address of server - clients must specify the same address
             unless (default '0.0.0.0' which accepts any client host)
     -p port service port of server for all clients  (default '8778')
             make sure the Firewall is open for the TCP port used.
-    -e <equivalences> eg: -e IX0=IX0-1     (can be used more than once)
+    -e equivalences  eg: -e IX0=IX0-1     (can be used more than once)
             or a comma separated list eg: -e IX0=IX0-1,QX0=QX0-1,IB1=IB1-1
-    -f file read options, equivalences and client calls from this file
     -q      quiet - do not report clients connecting and disconnecting
     -a      autovivify I/O clients 'iCbox' for missing I/O's (any number
             of iCbox's can be autovivified with -a as apps register)
     -d      autovivify I/O client 'iCbox -d' for missing I/O's, which is
             useful to monitor real I/O (only one 'iCbox -d' can be auto-
-            vivified to avoid recursive calls for missing senders to the
-            display only 'iCbox -d')
+            vivified to avoid recursive calls for missing senders)
     -A cmd  use <cmd> to autovivify I/O clients (eg -A 'iCbox -Q2 -C19')
+    -f file read options, equivalences and client calls from this INI file
     -r      reset registered receivers when sender disconnects - ie reset
             outputs of an app when it shuts down (default no change)
     -k      kill previous client when a new client with the same name
             registers (default: do not accept the new client)
-    -z      block keyboard input
+    -z      block keyboard input (required when iCserver is executed as a
+            background process)
+    -h      help, ouput Usage text only
         DEBUG options
     -t      trace messages for debugging
     -J      trace rcv messages in iCmsg.pm
     -O      trace send messages in iCmsg.pm
     -m      display elapsed time in seconds and microseconds
-    -T      extra static debug messages
-    -h      help, ouput this Usage text only
-        OLD STYLE CALLS
-    <equivalences> - deprecated - use -e <equivalences> instead
-            eg deprecated old style: IX8=IX8-0=IX8-1,IX9=IX9-0=IX9-1
-    <client calls> - deprecated - use -R <app ...> instead
-            eg deprecated: 'iCbox X0-X3 X10' sorter
-            if a client call has arguments, the call must be quoted
         AUXILIARY app   - start a Bernstein chain
     -R <app ...> run one app followed by -z and its arguments as a
-                 separate process; -R ... must be last arguments,
-                 which do not need to be quoted.
-             eg: -R iCbox X0-X3 X10 -R sorter
+                 separate process; -R ... must be last arguments.
         KEYBOARD inputs
-        T   output iCserver Client Tables
-        q   stop iCserver and all registered iC apps
-            These two actions can also be triggered from the iClive
-            Build Menu
-        The easiest way to stop iCserver and all registered iC apps
-        is to stop an iCbox by clicking its (X) button
+        t   toggle -t option - trace messages for debugging.
+        m   toggle -m option - display elapsed time.
+        T   output iCserver Client Tables.
+        q   stop iCserver and all registered iC apps.
+    The last two actions can also be triggered from the iClive Build
+    Menu. The easiest way to stop the iC system is to stop an iCbox
+    by clicking its (X) button, which shuts down iCserver and all
+    registered iC apps.
 
 =head1 DESCRIPTION
 
-B<iCserver> acts as a router for a number of iC clients in a network,
+B<iCserver> acts as a hub for a number of iC clients in a network,
 who send data to each other. Each client connects via TCP/IP to
 iCserver on a specified port (default 8778).  Normally only one
 iCserver on one port runs in a network.  It is possible to run several
@@ -1666,29 +1610,34 @@ a different host than some iC applications, care must be taken that
 the local Firewall of the processor iCserver is running on allows TCP
 port 8778 (or the port chosen with the -p option) to make connections.
 The Zone is either the External Zone or the Public Zone if it exists.
+
 On connection each client registers itself and all its inputs and
 outputs with iCserver. This registration is an iC specific operation
 and has nothing to do with the TCP/IP connection process described
 above.
 
 Clients for B<iCserver> are I<iC programs>, I<real I/O programs> or
-I<virtual I/O programs> such as B<iCbox> and I<debugging programs> such
-as B<iClive>. These clients either send or receive data values from and
-to named I/O locations or debugging information.  As far as iCserver
-is concerned I/O locations could have any name, but the iC language
-calls for I/O names or addresses according to the IEC-1131 standard.
-Data values can be 8 bit bytes (eg: IB1 QB9), 16 bit words (IW2 QW10),
-32 bit long words (IL4 QL12) or 64 bit huge words (IH8 QH16 - these
-have not been implemented in any client so far).  Bit values like IX0.0
-IX0.1 QX8.2 QX8.3 are always transmitted as bytes - in this case via
-IX0 and QX8, which are the names used for registration.  Whenever any
-bit in the byte changes, the whole byte is transmitted.  Each client
-registers the I/O names it requires on connection to iCserver. Each
-unique name is stored in a Hash in iCserver, whose value is a channel
-number, which is used for all actual data transfers. The Hash is only
-required for registration. Each channel allows the naming of one Sender
-for data on the channel (or I/O name) and one or more Receivers for
-the data. A detailed description follows in the SPECIFICATION below.
+I<virtual I/O programs> such as B<iCbox> and I<debugging programs>
+such as B<iClive>. These clients either send or receive data values
+from and to named I/O locations or debugging information.  As far
+as iCserver is concerned I/O locations could have any name, but
+the iC language calls for I/O names or addresses according to the
+IEC-1131 standard.  Data values can be 8 bit bytes (eg: IB1 QB9),
+16 bit words (IW2 QW10), 32 bit long words (IL4 QL12) or 64 bit huge
+words (IH8 QH16).  Bit values like IX0.0 IX0.1 QX8.2 QX8.3 are always
+transmitted as bytes - in this case via IX0 and QX8, which are the
+names used for registration.  Whenever any bit in the byte changes,
+the whole byte is transmitted.
+
+Each client registers the I/O names it requires on connection to
+iCserver. Each unique name is stored in a Hash variable in iCserver,
+whose key is the name and whose value is a channel number, which is
+used for all actual data transfers.
+
+The Hash is only required for registration. Each channel allows the
+identification of one Sender for data on the channel (or I/O name)
+and one or more Receivers for the data. A detailed description follows
+in the SPECIFICATION below.
 
 Additional functionality in B<iCserver>.
 
@@ -1732,8 +1681,8 @@ Additional functionality in B<iCserver>.
     place for a channel, until a receiver has been registered for that
     channel and all other registrations have taken place.
 
-    Equivalencing two or more output addresses (Q...) in an iC control
-    application will lead to an error. Both output addresses try to
+    Equivalencing two or more output addresses (Q...) in an iC
+    control application is an error. Both output addresses try to
     register as senders - this leads to two or more senders on the
     same channel. When the second or later output sender registers,
     the error will be reported. A similar error will be reported
@@ -1746,22 +1695,20 @@ Additional functionality in B<iCserver>.
     output. This practice is highly deprecated, because transparency
     in the documentation is lost.
 
-    Formally equivalences consist of two or more IEC base identifiers
-    followed by an optional 1 to 3 digit instance specifier separated
-    by an equal sign '='. Several equivalences may be specified in a
-    comma ',' separated list or several equivalence parameters may be
-    used.
+    Formally equivalences consist of two or more IEC base identifiers,
+    optionally followed by '-' and a 1 to 3 digit instance specifier,
+    separated by an equal sign '='. Several equivalences may be
+    specified in a comma ',' separated list or several -e equivalence
+    parameters may be used.
 
     It is not allowed to equivalence IEC identifiers of different types
     X B W L or H, since the consequences are not what is expected.
 
 *   I<Equivalances can also be defined later by iC programs> for
-    input IEC variables in that application before the variables
-    are registered using the -e option. The same calling sequence
-    described for iCserver above applies.
-
-    For control applications for which several instances are
-    instantiated, there is an extra -e option:
+    input IEC variables in that application before the variables are
+    registered using the -e option. The same calling sequence described
+    for iCserver above applies.  For control applications for which
+    several instances are instantiated, there is an extra -e option:
 
         -eI # equivalence all IEC input names to the same names-<inst>
 
@@ -1779,8 +1726,12 @@ Additional functionality in B<iCserver>.
         Equivalence 'IX0=IX0-1'
         Equivalence 'IX2=IX2-1'
 
+    When generating equivalences with the -e option from an iC app IEC I/O
+    names which have already been registered by other iC apps may not be
+    used. This is an error.
+
  b) Autovivification
-    -a option - automatic startup of one or more iCbox
+    -a option - automatic startup of one or more iCbox virtual I/O's.
     When a control application registers its I/O's, 'iCserver -a' starts up
     a matching 'iCbox' for all complementary I/O's, which have not already
     been registered. With the -a option, clients must be started in a
@@ -1794,13 +1745,12 @@ Additional functionality in B<iCserver>.
     iii)iC control application(s), which causes iCserver to autovivify
         any missing I/O's as an iCbox with appropriate ranges for each app.
 
-    Alternatively autovififying for monitoring real I/O's
-    -d option - automatic startup of one iCbox -d
-    When a control application registers its I/O's, 'iCserver -d' starts up
-    a matching 'iCbox -d' for all complementary I/O's for monitoring.
-    Outputs are the same but inputs will only display their value and
-    cannot be changed. With the -d option, clients must be started in a
-    different order:
+    -d option - automatic startup of one iCbox -d for monitoring real
+    I/O's. When a control application registers its I/O's, 'iCserver -d'
+    starts up a matching 'iCbox -d' for all complementary I/O's for
+    monitoring.  Outputs are the same as without the -d option, but
+    inputs will only display their value and cannot be changed. With
+    the -d option, clients must be started in a different order:
 
     i)  iCserver -d   # always first anyway.
 
@@ -1811,10 +1761,12 @@ Additional functionality in B<iCserver>.
     iii)any manually started I/O's with real I/O or virtual I/O. Care must
         be taken to ensure that all missing inputs for the app are present,
         since no further missing IEC inputs are autovivified. Missing
-        outputs are optional, since they show up in the autovivified iCbox.
+        outputs are optional, since they show up in the autovivified iCbox,
+        although it is best to keep all inputs and outputs together in one
+        controlling iCbox.
 
     -A <cmd> - automatic startup of one or more <cmd>
-               usually <cmd> is iCbox with extra options eg -A 'iCbox -C19'
+               usually <cmd> is iCbox with extra options eg -A 'iCbox -H'
     Startup and calling order is the same as for the -a option unless the
     -d option is also used - in which case the -d option applies.
 
@@ -1826,8 +1778,8 @@ Additional functionality in B<iCserver>.
     ie reset outputs of an app when it shuts down (default no change)
 
  d) -k option - if a sender registers with the same name as one already
-    registered, kill the previously registerd sender, rather than
-    reporting an error. This allows a recompiled version of an iC
+    registered, iCserver kills the previously registerd sender, rather
+    than report an error. This allows a re-compiled version of an iC
     application to be started, while an old version is still running -
     the old one will quitly be killed. This should not be done in a
     production system.
@@ -1837,66 +1789,44 @@ Additional functionality in B<iCserver>.
     similar control application. If the restarted control application
     uses different I/O's a new iCbox is autovivified for any extra
     I/Os. This situation could be confusing and it would be better to
-    start again by stopping iCserver with ctrl-C. When iCserver exits,
-    all connected clients are disconnected and closed.
+    start again by stopping iCserver with q or ctrl-C. When iCserver
+    exits, all connected clients are disconnected and closed.
 
- e) -R <aux_app>[ <aux_app_argument> ...] # must be last arguments
+ e) -f <INI_file> - execute a file with iCserver options at startup.
+    For very large equivalence tables a file defining equivalences and
+    possibly other iCserver switches and options can be used.
+
+        iCserver -f <INI_file>
+
+    Format of the INI_file:
+        -e <equivalence_line>
+        ...                       # more equivalences
+        <other_options>
+        -R <client call>          # run a client in a Bernstein chain
+        ...                       # only further -R calls
+
+    Example same as Example 1, 2 and 3 above with extra options:
+      -e QX7-0 = IX7-1 QX7-1 = IX7-0 # equivalences joining 2 instances
+      -e IX8 = IX8-0 = IX8-1         # input equivalences
+      -e IX9 = IX9-0 = IX9-1
+      -a -k                          # extra switches for iCserver
+      -R iCbox -n sorter-IO IX0 QX0 QX1 # client call with multiple arguments
+      -R sorter                      # plain client call
+
+    Individual equivalences and client calls must be written without
+    spaces in the command line.  In the INI file white spaces before
+    and after an = or , may be used in equivalences.
+
+    Comments in the INI file are started with #
+
+ f) -R <aux_app>[ <aux_app_argument> ...] # must be last arguments
     Start a Bernstein chain of iC application which are each initialised
     serially and then run in parallel - in this case with iCserver.
     Example 3:
         iCserver -R iCbox -n sorter-IO IX0 QX0 QX1 -R sorter
 
- f) client calls (deprecated) - a list of calls with their parameters
-    allow iCserver to start a number of clients as separate processes
-    like a shell.  These are usually all the control application(s)
-    and I/O client(s) to make up a complete control system. By
-    providing this functionality in iCserver, all the information for
-    starting a control system is grouped in one place.
-
-    Client calls consist of a program path optionally followed by a
-    space separated list of parameters.  Calls with parameters must
-    be quoted on the command line and the optional INI file to make
-    them a single parameter for iCserver.
-
-    Example 4: (deprecated - use -R as in Example 3 above)
-        iCserver 'iCbox -n sorter-IO IX0 QX0 QX1' sorter
-
-    This starts iCserver and two clients - iCbox and the control
-    application 'sorter'. Correct initialisation of the client
-    processes started in parallel is not well controlled leading to bad
-    Autovivication (that is why direct client calls are deprecated).
-    Bernstein chaining with the -R option is a better choice.
-
- g) -f <option_file> - execute a file with iCserver options at startup.
-    For very large equivalence tables a file defining equivalences and
-    possibly other iCserver switches and options can be used.
-
-        iCserver -f <option_file>
-
-    Format of the option_file:
-        -e <equivalence_line>
-        ...                       # more equivalences
-        <other_options>
-        -R <client call>
-        ...                       # only further -R calls
-
-    Example same as Example 1, 2 and 3 above with extra options:
-      QX7-0 = IX7-1 QX7-1 = IX7-0 # equivalences joining 2 instances
-      IX8 = IX8-0 = IX8-1         # input equivalences
-      IX9 = IX9-0 = IX9-1
-      -ak                         # extra switches for iCserver
-      -R iCbox -n sorter-IO IX0 QX0 QX1 # client call with multiple arguments
-      -R sorter                   # plain client call
-
-    Individual equivalences and client calls must be written without
-    spaces in the command line unless client calls are quoted.
-    In the INI file white spaces before and after the = may be
-    used in equivalences
-
-    Comments in the INI file are started with #
-
-B<iCserver -a> is started as a forked process by the first I<iC
-program> started or by B<iClive> unless it is already running, which
+If B<iCserver> has not been started, the first I<iC program> or
+I<iClive> will start B<iCserver -a -z> as a parallel process, which
 means that for most cases B<iCserver> does not need to be started
 separately, unless special options are needed.  Equivalences can
 also be specified by I<iC programs> with the -e option as described
@@ -1904,10 +1834,16 @@ in a)* above.
 
 =head1 SPECIFICATION
 
+This specification of B<iCserver> is provided here to give users
+information on how communication in the iC network is handled. This
+specification was developed 10 jears before JSON was published,
+which has similarities. But the iC communication protocol is more
+compact than JSON, particularly for bits, so it is being retained.
+
  1) On connection to iCserver each client register by supplying the
     following registration information:
 
-    a)  The name of the client device.
+    a)  The name of the client device:
 
         <name_op><client_name>[-<instance>]
 
@@ -1922,12 +1858,12 @@ in a)* above.
         it is connected to preceded by a '-'. The leading - is used
         by iClive to detect live registrations, which may register
         and unregister with different names, to monitor different
-        iC applications.
+        iC applications running at the same time.
 
         -<instance>
         An optional instance number allows the registrations of several
         instances of the same control application. Its use is explained
-        in detail in section 7.
+        in detail in section 6.
 
     b)  Registration codes: the type of data the client is sending or
         receiving and the physical address in IEC-1131 format:
@@ -1941,23 +1877,23 @@ in a)* above.
         r receiver unregisters from iCserver (used by iClive only)
 
         <address_code>
-
-        The <address_code> is made up either of an IEC-1131 base
-        name used in iC programs to identify (address) a particular
-        input or output or by a special address for communicating
-        with debugging and monitoring clients consisting of an
-        <address_code> starting with C,D or M are used. These are
-        followed by the name of the debugging or monitoring client.
+        The <address_code> is made up either of an IEC-1131 base name
+        used in iC programs to identify (address) a particular input
+        or output or by a special address for communicating with
+        the debugging client iClive consisting of an <address_code>
+        starting with C or D. These are followed by the name of the
+        debugging client.
 
         -<instance>
-        An optional instance number for a particulat input or output.
+        An optional instance number for a particulat input or output
+        or debugging client.
 
         (<bit_map>)
         An optional bit map, which defines the bits implemented for
         a digital input or output. The default value is 255, which
         implements bits 0 to 7.
 
-    c)  Termination code for the registration string consisting of
+    c)  Termination code: for the registration string consisting of
         the single letter 'Z'. This allows the registration string
         to be longer than the TCP/IP transmission size of 1400 bytes
         (also maximum buffer size) - it will be sent in more than one
@@ -1965,13 +1901,13 @@ in a)* above.
 
     In summary: the registration string consists of a comma separated
     list beginning with 'Nname' followed by one or more individual
-    sender and receiver registration codes starting with 'S' or 'R'
-    and terminated with a single 'Z'. The whole is sent in one or
-    more transmissions. iCserver acknowledges each transmission by
-    sending a comma separated list of channel numbers used for each
-    sender or receiver for each partial registration string. These
-    acknowledge strings are always shorter than the registration
-    strings - hence there is no danger of buffer overflow.
+    sender and receiver registration codes starting with 'S', 'R',
+    'C' or 'D' and terminated with a single 'Z'. The whole is sent
+    in one or more TCP/IP transmissions. iCserver acknowledges each
+    transmission by sending a comma separated list of channel numbers
+    used for each sender or receiver for each partial registration
+    string. These acknowledge strings are always shorter than the
+    registration strings - hence there is no danger of buffer overflow.
 
         IEC-1131 base names are as follows:
 
@@ -1984,8 +1920,7 @@ in a)* above.
                         - the following are for debugging clients only
             C debug data is output from an iC control client to iClive
             D debug data is input to an iC control client from iClive
-            M signifies a monitor device (none implemented so far).
-                        - more details for C, D and M in section 6.
+                        - more details for C and D in section 5.
 
             <size_op>
             X signifies 8 bits of single bit data.
@@ -1996,16 +1931,21 @@ in a)* above.
             B signifies 8 bits or 1 byte of numerical data.
             W signifies 16 bits or 2 bytes of numerical data.
             L signifies 32 bits or 4 bytes of numerical data.
-            H signifies 64 bits (not implemented on 32 bit processors)
+            H signifies 64 bits or 8 bytes of numerical data.
 
             <address>
+            This number is the numerical IEC-1131 address. Each
+            data type QX, QB, QW, QL and QH as well as IX, IB, IW,
+            IL and IH has its own address space, which is a sparse
+            array.  The numbering of each of these address spaces is
+            independent of the others and continuous.
 
-            This number is the numerical IEC-1131 address. Unlike
-            previous implementations, each data type has its own
-            address space, which is independent of the others. Also
-            the numbering of W (16 bit) addresses is continuous 0, 1,
-            2, 3 and not 0, 2, 4, 6 as in previous implemetations. The
-            same applies to L (32 bit) addresses.
+            Some hardware I/O drivers may have a common address
+            space which may also enforce word, long word and long
+            long word baundaries.  Checking for such boundaries
+            and overlap of I/Os with different word length has been
+            implemented for iC apps but is normally not switched on.
+            This does not affect iCserver either way.
 
         NOTE: the syntax of correct IEC-1131 base names is only checked
         by iCserver for equivalence declarations. All other IEC_1131
@@ -2018,62 +1958,38 @@ in a)* above.
         SQX9(7) 3 single bits IX9.0 to IX9.2 sent from an iC controller
         RQX9(7) 3 single bits IX9.0 to IX9.2 received by an external sink
 
-        SIB10   single byte IB10 sent from an external source
-        RIB10   single byte IB10 received by an iC controller
-        SQB15   single byte QB15 sent from an iC controller
-        RQB15   single byte QB15 received by an external sink
+        SIB10   single 8 bit byte IB10 sent from an external source
+        RIB10   single 8 bit byte IB10 received by an iC controller
+        SQB15   single 8 bit byte QB15 sent from an iC controller
+        RQB15   single 8 bit byte QB15 received by an external sink
 
-        SIW10   single word IW10 sent from an external source
-        RIW10   single word IW10 received by an iC controller
-        SQW15   single word QW15 sent from an iC controller
-        RQW15   single word QW15 received by an external sink
+        SIW10   single 16 bit word IW10 sent from an external source
+        RIW10   single 16 bit word IW10 received by an iC controller
+        SQW15   single 16 bit word QW15 sent from an iC controller
+        RQW15   single 16 bit word QW15 received by an external sink
 
-        SIL10   single long IL10 sent from an external source
-        RIL10   single long IL10 received by an iC controller
-        SQL15   single long QL15 sent from an iC controller
-        RQL15   single long QL15 received by an external sink
+        SIL10   single 32 bit long IL10 sent from an external source
+        RIL10   single 32 bit long IL10 received by an iC controller
+        SQL15   single 32 bit long QL15 sent from an iC controller
+        RQL15   single 32 bit long QL15 received by an external sink
 
- 2) As indicated under <address> above, each data type QX, QB, QW, QL
-    and QH as well as IX, IB, IW, IL and IH define their own address
-    space in iC programs. This differs from the implementations 1.1
-    to 1.105, which defined a joint address space for inputs and a
-    separate but joint address space for outputs where 16 bit words
-    had to have an even byte address and 32 bit long addresses had
-    to be divisble by four. Also the control software had to check
-    that different types of data did not overlap and that a maxinum
-    address was not exceeded.  This will not be necessary with
-    this new specification. Using the overlap for obscure control
-    purposes was never implemented fully (sending worked, receiving
-    did not). Its use is deemed to be too obscure to be maintained,
-    and the new specification should be much easier to handle.
+        SIH10   single 64 bit long long IH10 sent from an external source
+        RIH10   single 64 bit long long IH10 received by an iC controller
+        SQH15   single 64 bit long long QH15 sent from an iC controller
+        RQH15   single 64 bit long long QH15 received by an external sink
 
-    In the new specification <address> simply indexes sparse arrays
-    of bytes, words, longs (or 64 bit huge integers on a 64 bit
-    machine). They are allocated by name to a channel number in
-    iCserver and only the channel numbers are used by the clients after
-    registration.
-
-    Nevertheless it may be advisable to maintain the currently
-    implemented checks on maximum I/O address and checks on word
-    and long boundaries as well as overlaps between bit, byte, word
-    and long fields as a compile option. This may be useful for real
-    I/O implementations in which the input and output fields are two
-    contiguous byte fields. Since this code is currently in place,
-    it is easier to change it to an option, than to discard it now
-    and to re-implement it later.
-
- 3) One client device has one two way TCP/IP connection to iCserver,
-    but it can register for any number of send and/or receive addresses.
-    For example the simple iCbox registers as X0 by default, supplying
-    8 bits of input data and sinking 8 bits of output data. It will
-    register itself as SIX0,RQX0. SIX0 is the source of the signals
-    IX0.0 to IX0.7 and RQX0 is the sink of QX0.0 to QX0.7.  An iC
-    control application handling those two signal groups will register
-    itself as RIX0,SQX0.  RIX0 for receiving IX0.0 to IX0.7 and SQX0
-    for sending QX0.0 to QX0.7.
+ 2) One client device has one two way TCP/IP connection to iCserver,
+    but it can register for any number of send and/or receive
+    I/O addresses.  For example the simple iCbox registers as X0
+    by default, supplying 8 bits of input data and sinking 8 bits
+    of output data. It will register itself as SIX0,RQX0. SIX0 is
+    the source of the signals IX0.0 to IX0.7 and RQX0 is the sink
+    of QX0.0 to QX0.7.  An iC control application handling those
+    two signal groups will register itself as RIX0,SQX0.  RIX0 for
+    receiving IX0.0 to IX0.7 and SQX0 for sending QX0.0 to QX0.7.
 
     This scheme makes I/O devices and controllers identical as far as
-    iCserver data handling is concerned. and opens the possibility,
+    iCserver data handling is concerned and opens the possibility,
     that one iC control application can communicate data to another via
     the iCserver network. This is a definite requirement when multiple
     iC applications are involved in an overall project. A more obscure
@@ -2081,25 +1997,20 @@ in a)* above.
     external output. More realistic would be using an iCbox output to
     monitor the data going to another client doing real output.
 
-    A shorter Registration code was used previously but registration
-    happens only once at startup and so a more comprehensive
-    registration code is preferable. The new specification allows
-    fast interpretation - S and R are separated first. It is also
-    readable for debugging.
-
- 4) To allow monitoring and to allow several iC programs to react
-    to input from a single source, iCserver supports the receive
-    registration of the same address from several clients. iCserver
+ 3) To allow monitoring and to allow several iC programs to react to
+    input from a single source, iCserver supports the registration
+    of the same receive I/O address from several clients.  iCserver
     will then send the same data to each of those clients, when it
-    is received from its source by iCserver for distribution.
+    is received from its sender source for distribution.
 
- 5) On the other hand, only one client may register as the sender for
-    a particular address. If iCserver did not catch this as an error,
-    serious malfunction would occur, if several clients were to
-    send data, which would then be overwritten inconsistently at the
-    destination sinks.
+ 4) On the other hand, only one client may register a particular I/O
+    address as its sender. If iCserver did not catch this as an error,
+    serious malfunction would occur. Several clients could then send
+    different data, which would be overwritten inconsistently at the
+    destination receivers, thereby breaking the fundemental strategy
+    of the single assignment rule of event driven systems.
 
- 6) Communication with debugging devices (iClive) is regulated with two
+ 5) Communication with debugging devices (iClive) is regulated with two
     alternative <io_op>s; 'C' for controller and 'D' for debugger.
     There can be several instances of iClive running together, but
     only one for each control application. They are addressed by the
@@ -2116,24 +2027,14 @@ in a)* above.
     iCserver and a live display needs both. This means that no special
     treatment of live display registration and data parsing is needed.
 
-    As an alternative to a live display, a plot program (iCplot) could
-    be connected. Since both could not be connected simultaneously
-    if they were controlled by the 'D' identification an alternative
-    for such a client programs is 'M' for monitor. Since live display
-    requires a lot of support from a running application, which should
-    not have to be duplicated for a monitor, yet other alternatives
-    may be required. One is to integrate the 'plot' function into
-    iClive. For specification purposes, all the alternatives are
-    covered (iCplot or any other monitor has not yet been implemented).
-
- 7) Allow every application to be started by specifying an optional
-    <instance> parameter (see 1), which is appended to all registration
-    codes or addresses. The same instance number is also appended
-    to the addresses of I/O clients communicating with a particular
-    controller instance. Such a set of a controller and I/O clients
-    with a common instance number are a set, which communicate with
-    each other. The instance parameter is passed to each client with
-    the calling parameter -i<instance>.
+ 6) iCserver allows every client to be started by specifying an
+    optional <instance> parameter (see 1), which is appended to
+    all registration codes or addresses. The same instance number
+    is also appended to the addresses of I/O clients communicating
+    with a particular controller instance. Such a set of a controller
+    and I/O clients with a common instance number are a set, which
+    communicate with each other. The instance parameter is passed to
+    each client with the calling parameter -i<instance>.
 
     Example without instance number:
         sorter     # (using IX0, QX0, QX1) will register with:
@@ -2159,57 +2060,48 @@ in a)* above.
         iClive -i1 sorter                # will register with:
             N-sorter-1,RCsorter-1,SDsorter-1,Z
 
-    Although mixed registrations, in which clients of the same name
-    are used with and without instance numbers as shown above will work
-    correctly, this will cause confusion in the project documentation
-    and iCserver will issue a warning if it occurs.
-
- 8) Registration of clients from the view of iCserver
+ 7) Registration of clients from the view of iCserver
 
     a)  A client connects to iCserver via TCP/IP, which accepts and
-        issues a $conn object.
+        issues a 'conn' object.
 
-    b)  The client sends a Message with all its registration codes in
-        a comma sperated list to iCserver (see specification).
+    b)  The client sends a Message with all its name and registration
+        codes in a comma separated list to iCserver (see 1).
 
     c)  In iCserver the registration code <address_code>[-<instance]
-        is used as a key in a hash table, which associates a unique
+        is used as a key in a Hash, which associates a unique
         channel number with the key.  The key identifies either an
         IEC-1131 I/O or a debug address. It is the identification or
         name of a communication send/receive pair and is unique. The
-        associated channel number is an index in an array which
-        holds run-time details for the communication pair or
-        channel. <send_receive_op> selects the correct entries in
-        that array.
+        associated channel number is an index in an array in each
+        client, which holds run-time details for the communication
+        pair or channel in each client app.
 
-        iCserver maps each code against the Hash %Channels,
-        which returns the correct channel number if it has already
-        been allocated. All further data transfers in iCserver and
-        the clients use the channel number to identify a particular
-        send/recive pair.
+        iCserver uses the Hash of I/O addresses during registration
+        to catch attempts to register an I/O address twice incorrectly.
 
     d)  iCserver acknowledges registration of a client by sending a
         comma separated list of channel numbers in the same order as
-        the registration codes. If a particular registration code
-        cannot be registered correctly, the comma separated list
-        contains a negative error number for that entry.
+        the I/O registration codes. If a particular registration code
+        cannot be registered correctly, the acknowledge list contains
+        a negative error number for that entry.
 
- 9) Registration from the view of clients
+ 8) Registration from the view of clients
 
     a)  When a client starts it tries to connect to iCserver. If it
         fails it will start 'iCserver -a' and try to connect again
-        a number of times, which should succeed. Once connected
-        it sends a string of all the registration codes it uses,
-        which are all I/O names as well as debug names if it is an
-        iC program or iClive.
+        a number of times, which should succeed. Once connected it
+        sends one or more strings of all the registration codes it
+        uses, which are all I/O names if it is an iC program or debug
+        names if iClive.
 
     b)  iCserver responds by sending the acknowledge string of channel
         numbers. When the client receives this positive acknowledgement,
         which will be the first message received, it pairs off the
-        registration codes and the channel numbers received in the
+        registration codes sent and the channel numbers received in the
         acknowledgement. The details depend on the client application.
 
-        For the first example in section 7, the following tables will
+        For the first example in section 6, the following tables will
         be set up in the different clients:
 
          client  direction  code    channel
@@ -2227,42 +2119,37 @@ in a)* above.
                      R     Csorter     1
                      S     Dsorter     2
 
- 10)When registration is complete, iCserver can determine, that each
-    channel has one and only one sender and at least one receiver. If a
-    project is run only as a simulation, a missing sender or receiver
-    may not matter and only a warning is issued. If a project drives
-    real I/Os an error must be reported by iCserver. The option flag
-    -w turns such error messages into warning messages only.
+ 9) When registration is complete, iCserver can determine, that each
+    channel has one sender and at least one receiver. If a project
+    is run only as a simulation with the -a option, missing senders
+    or receivers are autovivified. If a project drives real I/Os a
+    warning is issued by iCserver if I/Os are missing.
 
- 11)Formats of data messages between iCserver and clients follow a
+ 10)Formats of data messages between iCserver and clients follow a
     uniform pattern:
 
     <channel_number>:<data_value> in a comma separated list for a number
     of simultaneous values on different channels to the same client.
 
-    <channel_number> is always a simple decimal string identifying the
+    <channel_number> is an unsigned decimal string identifying the
     unique channel allocated by iCserver.
 
-    <data_value> is a decimal value with a - sign for negative values
-    in case of the numeric types X, B, W, L (or H). iClive uses a more
-    complex data format consisting of a semi-colon separated list of
-    data pairs (see specification of iClive).
+    <data_value> is a decimal string with a - sign for negative
+    values in case of the numeric types B, W, L or H, unsigned for
+    type X. iClive uses a more complex data format consisting of a
+    semi-colon separated list of space separated data pairs.
 
     Examples:
         4:1,5:2         # set QX0.0 and QX1.1 in the example above
         2:4;2 128;5 48  # a type 4 live data telegram for iClive
 
- 12)Unregistering a client.
+ 11)Unregistering a client.
 
     A client is able to unregister itself, without disrupting other
     running processes, particularly if it is only a secondary receiver.
     This will happen when a client closes a TCP/IP connection. When a
     client is disconnected, the Hash entries for the channel numbers
     are kept in case it connects again.
-
-For measuring reaction times the Module Time::HiRes is used.
-This activates the -m option and flash display of short events.
-Make sure you have installed Time::HiRes (provided in this distribution)
 
 =head1 AUTHOR
 
@@ -2272,11 +2159,6 @@ John E. Wulff
 
 Email bug reports to B<immediateC@gmail.com> with L<iC Project> in the
 subject field.
-
-Error and warning messages for transmissions to missing clients have
-not been implemented yet (-w option).
-
-Mixed instance warning not yet implemented.
 
 The SPECIFICATION supplements the DESCRIPTION of B<iCserver> and may be
 useful in understanding its workings.

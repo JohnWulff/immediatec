@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.83 $";
+"@(#)$Id: ict.c 1.84 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -709,6 +709,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		    (iC_debug & DQ) ? "q" : "", iC_iidNM, ii, ii, iC_iccNM);
 	    }
 	    iC_fork_and_exec(iC_string2argv(buffer, 3));	/* fork iClive -zq app.ic */
+	    iC_Xflag = 0;					/* retain iCserver when this app stops */
 	}
 	snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);	/* C_channel assigned in regAck() */
 #if YYDEBUG && !defined(_WINDOWS)

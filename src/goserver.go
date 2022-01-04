@@ -12,8 +12,8 @@
  *
  *  based on the PERL version of iCserver, which uses the Messaging Toolkit
  *  from Advanced Perl Programming by Sriram Srinivasan, which communicates
- *  with TCP/IP messages consisting of a 4 byte header containing the length
- *  of the data (BigEndian).
+ *  with TCP/IP messages consisting of a 4 byte header containing the
+ *  BigEndian length of the data followed by the data.
  *
  *  The Perl program has been migrated to the GO language. The code
  *  implementing the lenth+message format from the Messaging Toolkit
@@ -42,15 +42,8 @@ import (
     "fmt"
 )
 
-const ID_goserver_go = "$Id: goserver.go 1.3 $"
+const ID_goserver_go = "$Id: goserver.go 1.4 $"
 const TCP_PORT = "8778"			// default TCP port for iC system
-
-/********************************************************************
- *  The following slice and map variables are common to all goroutines
- *  handleConnection(). They are indexed by 'conn' or 'channel' or
- *  names, which are not shared by the different goroutines except
- *  when errors occur, which are then reported.
- *******************************************************************/
 
 type eq struct {
     channel	int
@@ -68,6 +61,13 @@ type altRecv struct {
 
 var muConn	sync.Mutex		// guard activity associated with one message in handleConnection()
 var muEquiv	sync.Mutex		// guard equivalences and equivBase modifications
+
+/********************************************************************
+ *  The following slice and map variables are common to all goroutines
+ *  handleConnection(). They are indexed by 'conn' or 'channel' or
+ *  names, which are not shared by the different goroutines except
+ *  when errors occur, which are then reported.
+ *******************************************************************/
 
 var clientCons    = map[string]net.Conn{}  // hashed by name - client connection - existence of client
 var clientNames   = map[net.Conn]string{}  // hashed by conn - client name for a connection
@@ -260,10 +260,10 @@ func allocateEquivalences (arg string) {
 			     *   1) ignore 2nd and further pre-registered inputs per equivalence
 			     *   2) move the equivalence set from the previous base to this input name
 			     *   3) re-assign the new name and channel as base and primary channel in equivBase[]
-			     *   4) rebase %altRecvCons entries already registered to new primary
+			     *   4) rebase map altRecvCons entries already registered to new primary
 			     *      channel before any more registrations take place
-			     *   5) rebase @receiverCons entries already registered as secondary channel
-			     *      entries in %altRecvCons because channels have already been acked
+			     *   5) rebase []receiverCons entries already registered as secondary channel
+			     *      entries in map altRecvCons because channels have already been acked
 			     *   6) delete Autovivify entry for primary input already registered
 			     *******************************************************************/
 			    if dupFlag {				// 1)
@@ -293,8 +293,8 @@ func allocateEquivalences (arg string) {
 				receiverNames[primCh] = []string{}
 			    }
 			    if boxName != "" {				// make sure AutoVivify is started
-				if *opt_t { fmt.Printf("delete Autovivify entry 'AutoVivify[%s]'\n", base) }
 				autoBoxCh<- "-" + base			// 6) delete AutoVivify entry
+				if *opt_t { fmt.Printf("delete Autovivify entry 'AutoVivify[%s]'\n", base) }
 			    }
 			} else {
 			    ch = 0					// no primary channel (or no channel)
@@ -502,7 +502,7 @@ func writeReceiverData(receiverData map[net.Conn][]string, goId int) {
 
 func disconnect (name string, goId int) {
     if name != "" {
-	if ! *opt_q { fmt.Printf("%02d: %s: client unregistering now\n", goId, name) }
+	if ! *opt_q { fmt.Printf("%02d: %s: disconnecting now\n", goId, name) }
 	receiverData := map[net.Conn][]string{}	// clear all keys and entries
 	for channel := 0; channel <= maxChannel; channel++ {
 	    rflag := false
@@ -517,7 +517,7 @@ func disconnect (name string, goId int) {
 		if *opt_t { fmt.Printf("%02d: %s: S %s	%d nil\n", goId, name, senderName[channel], channel) }
 	    }
 	    if rflag {
-		// scan once, resetting receivers, before slicing out any array elements
+		// scan once, resetting receivers, before splicing out any array elements
 		for _, con := range receiverCons[channel] {
 		    if clientNames[con] != name {
 			msg := fmt.Sprintf("%d:0", channel)
@@ -597,8 +597,11 @@ func disconnect (name string, goId int) {
 	writeReceiverData(receiverData, goId)		// write data collected for different receivers
 	delete(clientNames, clientCons[name])
 	delete(clientCons, name)
-	autoBoxCh<- "-" + name				// delete AutoVivify entry (ignored if already done)
-	if ! *opt_q { fmt.Printf("%02d: Disconnected %q\n", goId, name)	}
+	if boxName != "" {				// make sure AutoVivify is started
+	    autoBoxCh<- "-" + name			// delete AutoVivify entry (ignored if already done)
+	    if *opt_t { fmt.Printf("delete Autovivify entry 'AutoVivify[%s]'\n", name) }
+	}
+	if ! *opt_q { fmt.Printf("%02d: %s: disconnected\n", goId, name) }
 	numberOfConnections--
 	if numberOfConnections <= 0 {
 	    /********************************************************************
@@ -646,7 +649,7 @@ func disconnect (name string, goId int) {
 		    }
 		}
 	    }
-	    if ! *opt_q { fmt.Printf("%02d: Last client has unregistered\n", goId) }
+	    if ! *opt_q { fmt.Printf("%02d: last client has disconnected\n", goId) }
 	}
 
     } else {
@@ -792,8 +795,16 @@ func handleConnection(conn net.Conn) {
 		}
 	    } else if m := reNname.FindStringSubmatch(msg); len(m) != 0 {	// "^N(.+)$"
 		name := m[1]
-		con  := clientCons[name]
-		if con != nil {
+		if name[0] == '-' {			// -bar is name of iClive session for program bar
+		    for i, con := range receiverCons[0] {
+			if con == conn {
+			    receiverNames[0][i] = name	// name has changed in old warning registration
+			    goto ALREADY_REGISTRERD
+			}
+		    }
+		    receiverCons[0]  = append(receiverCons[0], conn)	// new warning registration
+		    receiverNames[0] = append(receiverNames[0], name)
+		} else if con  := clientCons[name]; con != nil {
 		    /********************************************************************
 		     *  a client with the same name was previously registered
 		     *******************************************************************/
@@ -815,23 +826,13 @@ func handleConnection(conn net.Conn) {
 			iniString = fmt.Sprintf("%d:1", channel)	// get S.T. from new client
 		    }
 		}
+	      ALREADY_REGISTRERD:
 		clientCons[name]  = conn		// client by this name exists now
 		clientNames[conn] = name		// name may change for iClive connections
 		sender = name
-		if name[0] == '-' {			// -bar is name of iClive session for program bar
-		    for i, con := range receiverCons[0] {
-			if con == conn {
-			    receiverNames[0][i] = name	// name has changed in old warning registration
-			    goto ALREADY_REGISTRERD
-			}
-		    }
-		    receiverCons[0]  = append(receiverCons[0], conn)	// new warning registration
-		    receiverNames[0] = append(receiverNames[0], name)
-		}
-	      ALREADY_REGISTRERD:
 		numberOfConnections++
 		if ! *opt_q { fmt.Printf("%02d: %s: client registering now\n", goId, sender) }
-	    } else if m = reSRiec.FindStringSubmatch(msg); len(m) != 0 {	// `^([SR])([\/\w]+(-\d*)?)(\((\d+)\))?$`
+	    } else if m = reSRiec.FindStringSubmatch(msg); len(m) != 0 {	// `^([SR])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`
 		/********************************************************************
 		 *  regex is permissive allowing any number of instance digits
 		 *  clients have to stay in specification 1 to 3 digits
@@ -876,8 +877,8 @@ func handleConnection(conn net.Conn) {
 			    break
 			}
 			/********************************************************************
-			 *  Locate secondary group in %equivalences and move it
-			 *  to the primary position - adjust %equivBase
+			 *  Locate secondary group in map equivalences and move it
+			 *  to the primary position - adjust map equivBase
 			 *******************************************************************/
 			var i int
 			var aref *eq
@@ -1053,7 +1054,7 @@ func handleConnection(conn net.Conn) {
 		    warnD(fmt.Sprintf("no client with n %q was previously registered", name))
 		}
 		regFlag = false			// client has deregistered (iClive only)
-	    } else if m = resrIec.FindStringSubmatch(msg); len(m) != 0 {	// `^([sr])([\/\w]+(-\d*)?)(\((\d+)\))?$`
+	    } else if m = resrIec.FindStringSubmatch(msg); len(m) != 0 {	// `^([sr])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`
 		direction := m[1]
 		name      := m[2]		// ignore bits in m[5]
 		channel   := channels[name]
@@ -1254,8 +1255,7 @@ func autoVivBox(avArg string) {
 		if *opt_d {
 		    flag1.Set("a", "false")	// autovivify iCbox -d only once to stop recursion
 		}
-	    }
-	    if ! *opt_a {
+	    } else {
 		warnD(fmt.Sprintf("%q I/Os are missing", strings.Join(iCboxArgs, " ")))
 	    }
 	}
@@ -1437,9 +1437,6 @@ func convertFlags(argp *[]string, offset int) {
  *	accepting connections from different iC clients.
  *	Each accepted client is handled in a different instance of the
  *	goroutine 'handleConnection()'.
- *	If option -a, goroutine 'autoVivBox() is started, which waits to
- *	be triggered by a name string on go channel 'autoBoxCh' from
- *	various instances of 'handleConnection()' to start an iCbox.
  *
  *******************************************************************/
 
@@ -1481,14 +1478,18 @@ func main() {
     opt_k = flag1.Bool("k", false, "kill previous client when a new client with the same name registers\n(default: do not accept the new client)")
     opt_z = flag1.Bool("z", false, fmt.Sprintf(`block keyboard input - must be used when running in background
 
-    KEYBOARD inputs
-    t   toggle -t option - trace messages for debugging
-    m   toggle -m option - display elapsed time
-    T   output %s Client Tables
-    q   stop %s and all registered iC apps
-    The last two actions can also be triggered from the iClive Build Menu
+        KEYBOARD inputs
+        t   toggle -t option - trace messages for debugging.
+        m   toggle -m option - display elapsed time.
+        T   output %s Client Tables.
+        q   stop %s and all registered iC apps.
+    The last two actions can also be triggered from the iClive Build
+    Menu. The easiest way to stop the iC system is to stop an iCbox
+    by clicking its (X) button, which shuts down %s and all
+    registered iC apps.
+Copyright (C) 2001  John E. Wulff    <immediateC@gmail.com>
 %q
-%q`, named, named, ID_goserver_go, tcpcomm.ID_tcpcomm_go))
+%q`, named, named, named, ID_goserver_go, tcpcomm.ID_tcpcomm_go))
 
     // The -f and -R option are handled directly in convertFlags(). Include here for help info
     _     = flag1.String("f", "", "include file containing options, equivalences and client calls")
@@ -1521,9 +1522,9 @@ separate process; -R ... must be last arguments`)
      *******************************************************************/
     reData  = regexp.MustCompile(`^(\d+):(.*)$`)
     reNname = regexp.MustCompile(`^N(.+)$`)
-    reSRiec = regexp.MustCompile(`^([SR])([\/\w]+(-\d*)?)(\((\d+)\))?$`)
+    reSRiec = regexp.MustCompile(`^([SR])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`)
     renName = regexp.MustCompile(`^n(.+)$`)
-    resrIec = regexp.MustCompile(`^([sr])([\/\w]+(-\d*)?)(\((\d+)\))?$`)
+    resrIec = regexp.MustCompile(`^([sr])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`)
     reEquiv = regexp.MustCompile(`^E(.+)$`)
     reXname = regexp.MustCompile(`^X(.*)$`)
     reQXBWL = regexp.MustCompile(`^Q[XBWL]\d+`)
@@ -1570,7 +1571,9 @@ separate process; -R ... must be last arguments`)
 	}
     }
     /********************************************************************
-     *  Start the 'autoVivBox()' goroutine
+     *  Start the 'autoVivBox()' goroutine, which waits to be triggered by
+     *  a name string on go channel 'autoBoxCh' from various instances of
+     *  'handleConnection()' to start an iCbox if option -a, else warning
      *******************************************************************/
     go autoVivBox(*opt_A)
     /********************************************************************
@@ -1607,7 +1610,7 @@ separate process; -R ... must be last arguments`)
 
 =head1 NAME
 
-iCserver - the central server for iC clients
+iCserver - the central server for iC clients (Go version)
 
 =head1 SYNOPSIS
 
@@ -1625,8 +1628,7 @@ iCserver - the central server for iC clients
             of iCbox's can be autovivified with -a as apps register)
     -d      autovivify I/O client 'iCbox -d' for missing I/O's, which is
             useful to monitor real I/O (only one 'iCbox -d' can be auto-
-            vivified to avoid recursive calls for missing senders to the
-            display only 'iCbox -d')
+            vivified to avoid recursive calls for missing senders)
     -A cmd  use <cmd> to autovivify I/O clients (eg -A 'iCbox -Q2 -C19')
     -f file read options, equivalences and client calls from this INI file
     -r      reset registered receivers when sender disconnects - ie reset
@@ -1645,10 +1647,10 @@ iCserver - the central server for iC clients
                  which do not need to be quoted.
              eg: -R iCbox X0-X3 X10 -R sorter
         KEYBOARD inputs
-        t   toggle -t option - trace messages for debugging
-        m   toggle -m option - display elapsed time
-        T   output iCserver Client Tables
-        q   stop iCserver and all registered iC apps
+        t   toggle -t option - trace messages for debugging.
+        m   toggle -m option - display elapsed time.
+        T   output iCserver Client Tables.
+        q   stop iCserver and all registered iC apps.
     The last two actions can also be triggered from the iClive Build
     Menu. The easiest way to stop the iC system is to stop an iCbox
     by clicking its (X) button, which shuts down iCserver and all
@@ -1690,11 +1692,14 @@ the whole byte is transmitted.
 
 Each client registers the I/O names it requires on connection to
 iCserver. Each unique name is stored in a Map variable in iCserver,
-whose key is the name and whose value is a channel number, which
-is used for all actual data transfers. The Map is only required for
-registration. Each channel allows the naming of one Sender for data
-on the channel (or I/O name) and one or more Receivers for the data. A
-detailed description follows in the SPECIFICATION below.
+whose key is the name and whose value is a channel number, which is
+used for all actual data transfers. These are not Go channels, but
+simple integers used for indexing iC variables in different iC apps.
+
+The Map is only required for registration. Each channel allows the
+identification of one Sender for data on the channel (or I/O name)
+and one or more Receivers for the data. A detailed description follows
+in the SPECIFICATION below.
 
 Additional functionality in B<iCserver>.
 
@@ -1836,7 +1841,7 @@ Additional functionality in B<iCserver>.
 
  d) -k option - if a sender registers with the same name as one already
     registered, iCserver kills the previously registerd sender, rather
-    than report an error. This allows a recompiled version of an iC
+    than report an error. This allows a re-compiled version of an iC
     application to be started, while an old version is still running -
     the old one will quitly be killed. This should not be done in a
     production system.
@@ -1859,7 +1864,7 @@ Additional functionality in B<iCserver>.
         -e <equivalence_line>
         ...                       # more equivalences
         <other_options>
-        -R <client call>
+        -R <client call>          # run a client in a Bernstein chain
         ...                       # only further -R calls
 
     Example same as Example 1, 2 and 3 above with extra options:
@@ -1871,9 +1876,8 @@ Additional functionality in B<iCserver>.
       -R sorter                      # plain client call
 
     Individual equivalences and client calls must be written without
-    spaces in the command.
-    In the INI file white spaces before and after an = or , may be
-    used in equivalences.
+    spaces in the command line.  In the INI file white spaces before
+    and after an = or , may be used in equivalences.
 
     Comments in the INI file are started with #
 
@@ -1883,8 +1887,8 @@ Additional functionality in B<iCserver>.
     Example 3:
         iCserver -R iCbox -n sorter-IO IX0 QX0 QX1 -R sorter
 
-B<iCserver -a -z> is started as a parallel process by the first I<iC
-program> started or by B<iClive> unless it is already running, which
+If B<iCserver> has not been started, the first I<iC program> or
+I<iClive> will start B<iCserver -a -z> as a parallel process, which
 means that for most cases B<iCserver> does not need to be started
 separately, unless special options are needed.  Equivalences can
 also be specified by I<iC programs> with the -e option as described
@@ -1935,15 +1939,16 @@ compact than JSON, particularly for bits, so it is being retained.
         r receiver unregisters from iCserver (used by iClive only)
 
         <address_code>
-        The <address_code> is made up either of an IEC-1131 base
-        name used in iC programs to identify (address) a particular
-        input or output or by a special address for communicating
-        with debugging and monitoring clients consisting of an
-        <address_code> starting with C,D or M are used. These are
-        followed by the name of the debugging or monitoring client.
+        The <address_code> is made up either of an IEC-1131 base name
+        used in iC programs to identify (address) a particular input
+        or output or by a special address for communicating with
+        the debugging client iClive consisting of an <address_code>
+        starting with C or D. These are followed by the name of the
+        debugging client.
 
         -<instance>
-        An optional instance number for a particulat input or output.
+        An optional instance number for a particulat input or output
+        or debugging client.
 
         (<bit_map>)
         An optional bit map, which defines the bits implemented for
@@ -1958,13 +1963,13 @@ compact than JSON, particularly for bits, so it is being retained.
 
     In summary: the registration string consists of a comma separated
     list beginning with 'Nname' followed by one or more individual
-    sender and receiver registration codes starting with 'S' or 'R'
-    and terminated with a single 'Z'. The whole is sent in one or
-    more transmissions. iCserver acknowledges each transmission by
-    sending a comma separated list of channel numbers used for each
-    sender or receiver for each partial registration string. These
-    acknowledge strings are always shorter than the registration
-    strings - hence there is no danger of buffer overflow.
+    sender and receiver registration codes starting with 'S', 'R',
+    'C' or 'D' and terminated with a single 'Z'. The whole is sent
+    in one or more TCP/IP transmissions. iCserver acknowledges each
+    transmission by sending a comma separated list of channel numbers
+    used for each sender or receiver for each partial registration
+    string. These acknowledge strings are always shorter than the
+    registration strings - hence there is no danger of buffer overflow.
 
         IEC-1131 base names are as follows:
 
@@ -1977,8 +1982,7 @@ compact than JSON, particularly for bits, so it is being retained.
                         - the following are for debugging clients only
             C debug data is output from an iC control client to iClive
             D debug data is input to an iC control client from iClive
-            M signifies a monitor device (none implemented so far).
-                        - more details for C, D and M in section 5.
+                        - more details for C and D in section 5.
 
             <size_op>
             X signifies 8 bits of single bit data.
@@ -1998,12 +2002,12 @@ compact than JSON, particularly for bits, so it is being retained.
             array.  The numbering of each of these address spaces is
             independent of the others and continuous.
 
-	    Some hardware I/O drivers may have a common address
-	    space which may also enforce word, long word and long
-	    long word baundaries.  Checking for such boundaries
-	    and overlap of I/Os with different word length has been
-	    implemented for iC apps but is normally not switched on.
-	    This does not affect iCserver either way.
+            Some hardware I/O drivers may have a common address
+            space which may also enforce word, long word and long
+            long word baundaries.  Checking for such boundaries
+            and overlap of I/Os with different word length has been
+            implemented for iC apps but is normally not switched on.
+            This does not affect iCserver either way.
 
         NOTE: the syntax of correct IEC-1131 base names is only checked
         by iCserver for equivalence declarations. All other IEC_1131
@@ -2016,20 +2020,25 @@ compact than JSON, particularly for bits, so it is being retained.
         SQX9(7) 3 single bits IX9.0 to IX9.2 sent from an iC controller
         RQX9(7) 3 single bits IX9.0 to IX9.2 received by an external sink
 
-        SIB10   single byte IB10 sent from an external source
-        RIB10   single byte IB10 received by an iC controller
-        SQB15   single byte QB15 sent from an iC controller
-        RQB15   single byte QB15 received by an external sink
+        SIB10   single 8 bit byte IB10 sent from an external source
+        RIB10   single 8 bit byte IB10 received by an iC controller
+        SQB15   single 8 bit byte QB15 sent from an iC controller
+        RQB15   single 8 bit byte QB15 received by an external sink
 
-        SIW10   single word IW10 sent from an external source
-        RIW10   single word IW10 received by an iC controller
-        SQW15   single word QW15 sent from an iC controller
-        RQW15   single word QW15 received by an external sink
+        SIW10   single 16 bit word IW10 sent from an external source
+        RIW10   single 16 bit word IW10 received by an iC controller
+        SQW15   single 16 bit word QW15 sent from an iC controller
+        RQW15   single 16 bit word QW15 received by an external sink
 
-        SIL10   single long IL10 sent from an external source
-        RIL10   single long IL10 received by an iC controller
-        SQL15   single long QL15 sent from an iC controller
-        RQL15   single long QL15 received by an external sink
+        SIL10   single 32 bit long IL10 sent from an external source
+        RIL10   single 32 bit long IL10 received by an iC controller
+        SQL15   single 32 bit long QL15 sent from an iC controller
+        RQL15   single 32 bit long QL15 received by an external sink
+
+        SIH10   single 64 bit long long IH10 sent from an external source
+        RIH10   single 64 bit long long IH10 received by an iC controller
+        SQH15   single 64 bit long long QH15 sent from an iC controller
+        RQH15   single 64 bit long long QH15 received by an external sink
 
  2) One client device has one two way TCP/IP connection to iCserver,
     but it can register for any number of send and/or receive
@@ -2054,11 +2063,11 @@ compact than JSON, particularly for bits, so it is being retained.
     input from a single source, iCserver supports the registration
     of the same receive I/O address from several clients.  iCserver
     will then send the same data to each of those clients, when it
-    is received from its sender source by iCserver for distribution.
+    is received from its sender source for distribution.
 
  4) On the other hand, only one client may register a particular I/O
     address as its sender. If iCserver did not catch this as an error,
-    serious malfunction would occur. Several clients coluld then send
+    serious malfunction would occur. Several clients could then send
     different data, which would be overwritten inconsistently at the
     destination receivers, thereby breaking the fundemental strategy
     of the single assignment rule of event driven systems.
@@ -2127,27 +2136,27 @@ compact than JSON, particularly for bits, so it is being retained.
         IEC-1131 I/O or a debug address. It is the identification or
         name of a communication send/receive pair and is unique. The
         associated channel number is an index in an array in each
-	client, which holds run-time details for the communication
-	pair or channel in each client app.
-	NOTE: iC channel indexes have nothing to do with GO channels.
+        client, which holds run-time details for the communication
+        pair or channel in each client app.
+        NOTE: iC channel indexes have nothing to do with GO channels.
 
-	iCserver uses the Map of I/O addresses during registration
-	to catch attempts to register an I/O address twice incrrectly.
+        iCserver uses the Map of I/O addresses during registration
+        to catch attempts to register an I/O address twice incorrectly.
 
     d)  iCserver acknowledges registration of a client by sending a
         comma separated list of channel numbers in the same order as
         the I/O registration codes. If a particular registration code
-        cannot be registered correctly, the comma separated list
-        contains a negative error number for that entry.
+        cannot be registered correctly, the acknowledge list contains
+        a negative error number for that entry.
 
  8) Registration from the view of clients
 
     a)  When a client starts it tries to connect to iCserver. If it
         fails it will start 'iCserver -a' and try to connect again
-        a number of times, which should succeed. Once connected
-        it sends a string of all the registration codes it uses,
-        which are all I/O names as well as debug names if it is an
-        iC program or iClive.
+        a number of times, which should succeed. Once connected it
+        sends one or more strings of all the registration codes it
+        uses, which are all I/O names if it is an iC program or debug
+        names if iClive.
 
     b)  iCserver responds by sending the acknowledge string of channel
         numbers. When the client receives this positive acknowledgement,
@@ -2185,13 +2194,13 @@ compact than JSON, particularly for bits, so it is being retained.
     <channel_number>:<data_value> in a comma separated list for a number
     of simultaneous values on different channels to the same client.
 
-    <channel_number> is always a simple decimal string identifying the
+    <channel_number> is an unsigned decimal string identifying the
     unique channel allocated by iCserver.
 
-    <data_value> is a decimal value with a - sign for negative values
-    in case of the numeric types X, B, W, L or H. iClive uses a more
-    complex data format consisting of a semi-colon separated list of
-    data pairs.
+    <data_value> is a decimal string with a - sign for negative
+    values in case of the numeric types B, W, L or H, unsigned for
+    type X. iClive uses a more complex data format consisting of a
+    semi-colon separated list of space separated data pairs.
 
     Examples:
         4:1,5:2         # set QX0.0 and QX1.1 in the example above
@@ -2231,4 +2240,4 @@ License or the Artistic License, as specified in the README file.
 For more information about this program, or for information on how
 to contact the author, see the README file.
 
- *********** End of man page POD ***********************************/
+=for ******* End of man page POD ***********************************/

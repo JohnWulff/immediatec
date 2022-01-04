@@ -355,7 +355,7 @@ Usage:
 
 Copyright (C) 2000-2021  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.95 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.96 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -545,6 +545,7 @@ my $fileName = '';	# name of currently loaded file (should be iC, iCa or derivat
 my $fileTime = 0;	# last modified time of currently loaded file
 my $readOnly = '';	# set ' (RO)' - true - if file in buffer is read-only
 my $processName = '';	# full name of runnable iC control program with path
+my $pathName = '';	# full path of runnable iC control program
 my $extnName = '';	# extension of current iC or iCa program or derivative
 my $procName = '';	# name of runnable iC control program without path
 my $instName = '';	# name of runnable iC control program with instance extension
@@ -1304,8 +1305,8 @@ $dbB       ->bind('<FocusOut>',			[ \&lowerMain, $dbB       ]); # Bit window has
 ########################################################################
 #	Connect to iCserver
 ########################################################################
-print "$named: initial register_at_server\n" if $opt_T;
-register_at_server();
+print "$named: initial connect_to_server\n" if $opt_T;
+connect_to_server();
 
 ########################################################################
 #	Optionally run -R option
@@ -1328,8 +1329,10 @@ if (@runArgs) {
 ########################################################################
 print "$named: initialise program\n" if $opt_T;
 ini_program();
-conn_send_now("$B_channel:$B_cont") if $B_channel and $B_cont;	# program running
-tagDeleteRestore_searchTag(1);		# configure initial 'searchTag'
+if ($fileName) {
+    conn_send_now("$B_channel:$B_cont") if $B_channel and $B_cont;	# program running
+    tagDeleteRestore_searchTag(1);		# configure initial 'searchTag'
+}
 
 ########################################################################
 #	Sit in an infinite loop dispatching incoming events.
@@ -2846,17 +2849,14 @@ sub conn_send_now {
 
 ########################################################################
 #
-#	Register at iCserver
+#	Connect to iCserver
 #	connection is maintained until iClive shuts down or iCserver disconnects
 #
 #	Inhibit Nagle's algorithm
 #
-#	Register read events
-#	Register I/O at iCserver and request Symbol Table if $scanFlag is set
-#
 ########################################################################
 
-sub register_at_server {
+sub connect_to_server {
     my $i = 0;
     if ($server >= 0) {
 	iCmsg->inhibit_nagle(1,		# inhibit Nagle's algorithm for real time response
@@ -2892,37 +2892,56 @@ sub register_at_server {
 	    }				# try to connect immediately
 	}
     }
+} # connect_to_server
+
+########################################################################
+#
+#	Register at iCserver
+#
+#	unless previously registered
+#	register iClive instance "-$regName" at iCserver now
+#
+########################################################################
+
+sub register_at_server {
+    my $i = 0;
+    if (not $conn) {
+	connect_to_server();
+    }
     if ($conn) {
-	$regName = $instName ne "" ? $instName : "iClive";
-	my $ret = '';
-	my $Registrations = "N-$regName,RC$regName,SD$regName";
-	$Registrations .= ",S$debugStop" if $debugStop;	# optional Debug Stop signal
-	$Registrations .= ",Z";	# register but may not connect to application
-	print "$named: Registrations: $Registrations\n" if $opt_T;
-	conn_send_now($Registrations);
-	info_display(2000, 'blue', "Register as '-$regName'");
-	my ($tmsg, $terr) = $conn->rcv_now();
+	if ($instName ne $regName) {
+	    unregister_from_server();
+	    $regName = $instName;
+	    my $ret = '';
+	    my $Registrations = "N-$regName,RC$regName,SD$regName";
+	    $Registrations .= ",S$debugStop" if $debugStop;	# optional Debug Stop signal
+	    $Registrations .= ",Z";	# register but may not connect to application
+	    print "$named: Registrations: $Registrations\n" if $opt_T;
+	    conn_send_now($Registrations);
+	    info_display(2000, 'blue', "Register as '-$regName'");
+	    my ($tmsg, $terr) = $conn->rcv_now();
 no warnings;
-	print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
-	$i = 1;
-	REPEAT:
-	if ($tmsg !~ /^(\d+),(\d+)(,(\d+))?$/) {	# analyse registration reply from iCserver now
-	    rcvd_msg_from_server($conn, $tmsg, $terr);	# not a registration reply - delayed data
-	    unless ($conn) {
-		print "$named: failed to register on attempt $i\n" if $opt_T;
-		goto FAILED_TO_REGISTER;	# stop trying if registered twice
+	    print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
+	    $i = 1;
+	    REPEAT:
+	    if ($tmsg !~ /^(\d+),(\d+)(,(\d+))?$/) {	# analyse registration reply from iCserver now
+		rcvd_msg_from_server($conn, $tmsg, $terr);	# not a registration reply - delayed data
+		unless ($conn) {
+		    print "$named: failed to register on attempt $i\n" if $opt_T;
+		    goto FAILED_TO_REGISTER;	# stop trying if registered twice
+		}
+		($tmsg, $terr) = $conn->rcv_now();
+		print "$named: Reply: '$tmsg' err = '$terr' ($i)\n" if $opt_T;
+		die "registration failed\n" if $i++ >= 100;	# ridiculous number of delayed data messages
+		goto REPEAT;	# cannot use while, because $1 $2 not in scope - if OK
 	    }
-	    ($tmsg, $terr) = $conn->rcv_now();
-	    print "$named: Reply: '$tmsg' err = '$terr' ($i)\n" if $opt_T;
-	    die "registration failed\n" if $i++ >= 100;	# ridiculous number of delayed data messages
-	    goto REPEAT;	# cannot use while, because $1 $2 not in scope - if OK
-	}
 use warnings;
-	$C_channel = $1;	# receiver channel from control program
-	$D_channel = $2;	# sender channel to control program
-	$B_channel = $4 if $3;	# sender channel for optional Debug Stop signal
-	print "$named: registered: C_channel = $C_channel D_channel = $D_channel B_channel = $B_channel\n" if $opt_T;
-	conn_send_now("$D_channel:2");			# poll application to see if it is live
+	    $C_channel = $1;	# receiver channel from control program
+	    $D_channel = $2;	# sender channel to control program
+	    $B_channel = $4 if $3;	# sender channel for optional Debug Stop signal
+	    print "$named: registered: C_channel = $C_channel D_channel = $D_channel B_channel = $B_channel\n" if $opt_T;
+	    conn_send_now("$D_channel:2");			# poll application to see if it is live
+	}
     } else {
 	FAILED_TO_REGISTER: info_display(2000, 'red',
 	    "Could not connect to '$host:$port' - no live listing - edit only");
@@ -2976,7 +2995,7 @@ sub rcvd_msg_from_server {
 	    conn_send_now("$D_channel:83,$D_channel:77");	# 'S' 'M' to stop Trace and MicroSec in app
 	    $debugMenu->entryconfigure(0, -state => 'disabled');	# Debug
 	    $debugMenu->entryconfigure(6, -state => 'disabled');	# Watch points
-	    $regName = $runName = '';
+	    $runName = '';
 	    $menuRun->configure(-text => 'Run ');
 	    $menuBuild->entryconfigure(5, -state => 'disabled');	# Symbol Table by name
 	    $menuBuild->entryconfigure(6, -state => 'disabled');	# Symbol Table by index
@@ -3049,6 +3068,7 @@ sub rcvd_msg_from_server {
 			    ## change text on run button to 'Stop'
 			    ####################################################
 			    $runName = shift @symbols;
+			    $runName = $pathName . $runName;
 			    $runNames{$runName} = 1;				# record as running iC program
 			    $mainWindow->title("$named$u: $fileName$readOnly $runName");
 			    info_display(2000, 'blue', "'$runName' is running");
@@ -3178,8 +3198,8 @@ use warnings;
 			    "'$runName' was stopped" :
 			    "application was stopped - not registered !?");
 			clear_all();
-			$runName = '';
 			$runNames{$runName} = undef;				# remove as running iC program
+			$runName = '';
 			$mainWindow->title("$named$u: $fileName$readOnly");
 			$makeName = '';
 			if ($restartFlag) {
@@ -4098,7 +4118,6 @@ sub do_scan {
     print "do_scan: instName = '$instName' regName = '$regName' makeName = '$makeName'\n" if $opt_T;
     if (defined $instName and $instName ne '') {
 	if ($instName ne $regName) {
-	    unregister_from_server();
 	    register_now();	# register at new process
 	    return;
 	}
@@ -4584,8 +4603,8 @@ sub open_file {
 		my $length = length $oldContents;
 		$fileName = $fName;	# alter global $fileName
 		$mainWindow->title("$named$u: $fileName$readOnly $runName");
-		my $m = $fileName =~ m/^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(\w+)$/;
-		($processName, $procName, $extnName) = ($1, $3, $4);	# used globally
+		my $m = $fileName =~ m/^((([\w\.\$]*[\\\/])*)([\w\.\$]+))\.(\w+)$/;
+		($processName, $pathName, $procName, $extnName) = ($1, $2, $4, $5);	# used globally
 		my $r;
 		if ($r = tagComments()) {
 		    info_display(2000, 'red', "WARNING: $r syntax errors in $fileName$readOnly - not registered");
@@ -4731,8 +4750,8 @@ sub saveAs_file {
 	    $mainWindow->title("$named$u: $fileName$readOnly $runName");
 	    $ret = 0;
 	} elsif ($fileName ne $oldName) {
-	    my $m = $fileName =~ m/^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(\w+)$/;
-	    ($processName, $procName, $extnName) = ($1, $3, $4);	# used globally
+	    my $m = $fileName =~ m/^((([\w\.\$]*[\\\/])*)([\w\.\$]+))\.(\w+)$/;
+	    ($processName, $pathName, $procName, $extnName) = ($1, $2, $4, $5);	# used globally
 	    if ($m and $extnName =~ m/^(ic|ica|lst6?|c|h|ini)$/) {
 		$instanceText = $instance = '';		# reset instance
 		$instName = $procName;
@@ -4996,6 +5015,7 @@ sub run_file {
     } elsif ($extnName ne 'ic' or check_save()) {
 	if ($processName eq $procName) {
 	    $processName = "./$procName";	# in case . is not in $PATH
+	    $pathName    = "";
 	}
 	deleteAllTags();		# also clears @activeSymbols
 	clear_scan(1);
@@ -5065,7 +5085,6 @@ sub change_instance {
 	    $liveButton->configure(-text => 'wait');
 	    print "$named: change_instance scan to 'wait'\n" if $opt_T;
 	}
-	unregister_from_server();
 	register_at_server();
 	####################################################
 	## change text on run button to 'Run '
