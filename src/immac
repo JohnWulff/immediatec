@@ -80,6 +80,61 @@
 #           print $FOR if $FOR;
 #   There are no other Perl variables used in the generated eval code.
 #
+#   This means that #define #if etc macros in C literal blocks will be
+#   written just like in C and passed unchanged to the generated C code.
+#
+#   Two constructs available in the PERL version of immac prior to Jan 2022
+#   have been dropped:
+#	ELSIF	// is very Perlish and can easily be replaced by ELSE IF.
+#	FOR S ("aa" .. "ad") {{ // very difficult to implement in GO and
+#				// was never used in thousands of my examples.
+#
+#   The only specifically PERL constructs being retained are:
+#	FOR S ("aa", "ab", "ac", "ad")	// list of parenthesised strings
+#	FOR S (aa, ab, ac, ad)		// list of bare word strings
+#	FOR I (1, 2, 3, 4)		// list of integers
+#	FOR I (1 .. 4)			// list of integers using .. operator
+#   They are very useful and easy to implement in GO.
+#   List elements in parentheses or bare words containing non-numeric
+#   characters or non-leading sign characters are strings of type char*.
+#   List elements containing only numeric characters or a leading sign are
+#   integers of type int.
+#   If all elements of a list are integers, the type of the control variable
+#   and the list elements are int, otherwise they are strings (type char*),
+#   unless the control variable is preceded by the keyword int or the newly
+#   introduced keyword char*, which have precedence. (Keeps C like syntax).
+#   The only case where a type specification for a FOR control variable is
+#   manditory is for a list of bare word integers to be used as strings:
+#	FOR char* S (1, 2, 3, 4)	// list of strings "1", "2", "3", "4"
+#	FOR char* S (1 .. 4)		// same list of strings (both deprecated)
+#   The simpler and clearer way to achieve this is to write:
+#	FOR S ("1", "2", "3", "4")	// list of strings "1", "2", "3", "4"
+#	FOR S ("1" .. "4")		// same list of strings (special case)
+#   This means the type specifiers 'int' and 'char*' are completely optional
+#   and only help as a comment in the iCa code for better understainging. This
+#   was also the case for 'int' in the pre Jan 2022 versions of immac.
+#   A control variable declared as int for a list containing strings is an error.
+#
+#   The standard C style FOR loop to generate integer lists is:
+#	FOR (int I = 1; I <= 4; I++)	// list of integers, equivalent to
+#	FOR (I = 1; I <= 4; I++)	// list of integers (default is int)
+#   The control variable in this construct may never be typed as char*, because
+#   it is used immediateley in the comparison and incrementing arithmetic
+#   expressions.
+#   Integer control variables may only be used in integer arithmetic expressions.
+#   String type char* control variables may only be used with the concatination
+#   operator '.' in expressions (borrowed from Perl).
+#   NOTE: String variables and concatenation are only used in the iCa language,
+#         never in iC.
+#
+#  Input and output filnames must be restricted to the following
+#  POSIX Portable Filename Character Set consisting of:
+#	A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+#	a b c d e f g h i j k l m n o p q r s t u v w x y z
+#	0 1 2 3 4 5 6 7 8 9 . _ -
+#  Directory seperators for Linux/Unix or Windows are:
+#	/ \
+#
 ########################################################################
 
 use strict;
@@ -131,7 +186,7 @@ Usage:
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac 1.32 $
+$Id: immac 1.33 $
 .
 
 use vars qw($opt_a $opt_S $opt_N $opt_L $opt_o $opt_l $opt_e);
@@ -234,6 +289,7 @@ my %keywords = (
     no		=>	0x004,	# turn off use
     use		=>	0x004,	# turn on use
     alias	=>	0x004,
+    list	=>	0x004,
     strict	=>	0x004,
     imm		=>	0x001,
     immC	=>	0x001,
@@ -284,7 +340,7 @@ my %defs = ();
 my %clDefs = ();
 my @stk = ();
 my $argv;
-my $argL;
+my $argL = "";			# TODO fix handling of $argL
 my @argInfo = ();
 my $argRef;
 my $in = 'IN';
@@ -357,7 +413,9 @@ if ($opt_t) {
 }
 
 my $opt_m_M_Y   = ($opt_m or $opt_M or $opt_Y);
+no warnings;
 print " opt_m = '$opt_m' opt_M = '$opt_M' opt_Y = '$opt_Y' opt_m_M_Y = '$opt_m_M_Y'\n" if $opt_T and not $opt_l;
+use warnings;
 my $CdirectiveRegex = $opt_m ?		# both %%directives and %#directives are excluded - #define and %define (warning)
     qr/^\s*%[%#]\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b/o    :
 		      $opt_M ?		# %%directives, #directives and %#directives are excluded - %define %if only
@@ -373,20 +431,20 @@ if (@opt_P) {
     foreach (@opt_P) {
 	s/^\s*'?//;			# delete leading blanks and "'" inserted by iCmake
 	s/'?\s*$//;			# delete trailing "'" inserted by iCmake and blanks
-	my ($identifier, $translate) = split /\s*=\s*/, $_, 2;
-	$translate = '1' unless defined $translate;		# when translation is missing (just #define X)
-	($df, $val) = scan_define(0, "-P", "$identifier $translate");	# scan and save -P macro in %defs
+	my ($macro, $translate) = split /\s*=\s*/, $_, 2;		# space separated macro is also accepted
+	$macro .= " $translate" if defined $translate;			# when translation is missing just #define X
+	($df, $val) = scan_define(0, "-P", $macro);			# scan and save -P macro in %defs
 	if (@lnErr) {
 	    output_error(0, "-P $_");
 	} else {
 	    if ($df eq $val) {
-		warn "//* Warning: '-P $identifier=$translate' does not change anything ???\n";
+		warn "//* Warning: '-P $_' does not change anything ???\n";
 		delete $defs{ $df };
 	    } else {
 		$clDefs{ $df } = $defs{ $df };
-		print LOG "### COMMAND LINE -P $identifier=$translate\n" if $opt_l;
+		print LOG "### COMMAND LINE -P $_\n" if $opt_l;
 		if ($opt_a) {
-		    print "//***** -P $identifier=$translate\n";
+		    print "//***** -P $_\n";
 		    $commandLineFlag = 1;
 		}
 	    }
@@ -403,20 +461,20 @@ if ($opt_m_M_Y) {			# -D -U only processed for <in>.ic iC files or if -m -M or -
 	foreach (@opt_D) {
 	    s/^\s*'?//;			# delete leading blanks and "'" inserted by iCmake
 	    s/'?\s*$//;			# delete trailing "'" inserted by iCmake and blanks
-	    my ($identifier, $translate) = split /\s*=\s*/, $_, 2;
-	    $translate = '1' unless defined $translate;		# when translation is missing (just #define X)
-	    ($df, $val) = scan_define(0, "-D", "$identifier $translate");	# scan and save -D macro in %defs
+	    my ($macro, $translate) = split /\s*=\s*/, $_, 2;		# space separated macro is also accepted
+	    $macro .= " $translate" if defined $translate;		# when translation is missing just #define X
+	    ($df, $val) = scan_define(0, "-D", $macro);			# scan and save -D macro in %defs
 	    if (@lnErr) {
 		output_error(0, "-D $_");
 	    } else {
 		if ($df eq $val) {
-		    warn "//* Warning: '-D $identifier=$translate' does not change anything ???\n";
+		    warn "//* Warning: '-D $_' does not change anything ???\n";
 		    delete $defs{ $df };
 		} else {
 		    $clDefs{ $df } = $defs{ $df };
-		    print LOG "### COMMAND LINE -D $identifier=$translate\n" if $opt_l;
+		    print LOG "### COMMAND LINE -D $_\n" if $opt_l;
 		    if ($opt_a) {
-			print "//***** -D $identifier=$translate\n";
+			print "//***** -D $_\n";
 			$commandLineFlag = 1;
 		    }
 		}
@@ -427,18 +485,21 @@ if ($opt_m_M_Y) {			# -D -U only processed for <in>.ic iC files or if -m -M or -
 	    }
 	}
     }
-    if (@opt_U) {			# for compatibility with cpp although there is not much point
-	my ($df, $val);
-	foreach (@opt_U) {
-	    s/^\s*'?//;			# delete leading blanks and "'" inserted by iCmake
-	    s/'?\s*$//;			# delete trailing "'" inserted by iCmake and blanks
-	    my ($identifier, $translate) = split /\s*=\s*/, $_, 2;
-	    undef $clDefs{ $df };
-	    undef $defs{ $df };
-	    print LOG "### COMMAND LINE -U $identifier\n" if $opt_l;
-	    if ($opt_a) {
-		print "//***** -U $identifier\n";
-		$commandLineFlag = 1;
+    if (@opt_U) {			# for compatibility with cpp for generated command lines
+	my ($df);
+	foreach $df (@opt_U) {
+	    $df =~ s/^\s*'?//;		# delete leading blanks and "'" inserted by iCmake
+	    $df =~ s/'?\s*$//;		# delete trailing "'" inserted by iCmake and blanks
+	    if ($df =~ m/^[A-Z_a-z]\w*$/) {
+		print LOG "### COMMAND LINE -U $df\n" if $opt_l;
+		if ($opt_a) {
+		    print "//***** -U $df\n";
+		    $commandLineFlag = 1;
+		}
+		delete $defs{ $df };	# safe to delete even if hash entry does not exist
+		delete $clDefs{ $df };
+	    } else {
+		warn "//* Warning: '-U '$df' has bad characters - ignored\n";
 	    }
 	}
     }
@@ -458,7 +519,7 @@ if ($opt_T) {
     print "%defs	{key}	[1]	[0]\n" if %defs;
     foreach $key (sort keys %defs) {
 	if (defined ($ref = $defs{ $key })) {
-	    print "%define	$key	($ref->[1])	'$ref->[0]'\n";
+	    print "%%define	$key	($ref->[1])	'$ref->[0]'\n";
 	}
     }
     print "***************\n" if %clDefs or %defs;
@@ -532,7 +593,7 @@ exit $ret;
 #	|= 8	after closing square bracket if sqNest != 0
 #	 = 0	after closing square bracket if sqNest == 0
 #
-#   The innermost square bracket pair is expanded to @{[expression]}.
+#   The innermost square bracket pair is expanded to @{[expression]}
 #   if $square == 1 when the closing square bracket is encountered.
 #   In other words this block may only contain numbers or translated loop
 #   variables or finishing strings. Perl evaluates 'expression' in an eval.
@@ -543,8 +604,8 @@ exit $ret;
 #   Save $state in $sqState on opening square bracket and set to "A".
 #   Restore $state with matching closing square bracket. This allows
 #   correct handling of strings in square brackets in comments and strings.
-#   iC Example: ["abc".$N] generates abc0 abc1 ... meaningless for C indices.
-#   This example is coded better as abc[$n], but string may be conditional,
+#   iC Example: ["abc".N] generates abc0 abc1 ... (meaningless for C indices).
+#   This example is coded better as abc[N], but string may be conditional,
 #   in which case it must be handled as an expression in square brackets.
 #
 #
@@ -686,6 +747,10 @@ sub process_file {
 	    #       qr/^\s*((%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)|%(define|undef|include))\b/o :
 	    #   Else if none of the above %directives, #directives and %# directives are excluded - only %%directives
 	    #       qr/^\s*(%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b/o ;
+	    #
+	    #   These regular expressions exclude directives which are not resolved for the chosen language
+	    #   Output these directives completely unchanged with possible trailing \
+	    #   except if blocked by #if #else or #elif
 	    ########################################################################
 	    if ($Cdirective or m/$CdirectiveRegex/) {
 		$Cdirective = m/\\$/ ? 1 : 0;	# #define or %define etc output as is up to line without trailing \
@@ -980,19 +1045,15 @@ sub process_file {
 		    }
 		    elsif ($def =~ m/^(%%|[%#])undef$/) {
 			if ($macro =~ m/^[A-Z_a-z]\w*$/) {
-			    if (exists $defs{ $macro }) {
-				print LOG "### $_" if $opt_l;
-				if ($opt_a) {
-				    if ($opt_m_M_Y and --$blankLines) {	# $blankLines is at least 1 because it is a directive
-					blanks();		# print blank lines now
-				    }
-				    print "//***** $_";
+			    print LOG "### $_" if $opt_l;
+			    if ($opt_a) {
+				if ($opt_m_M_Y and --$blankLines) {	# $blankLines is at least 1 because it is a directive
+				    blanks();		# print blank lines now
 				}
-				delete $defs{ $macro };
+				print "//***** $_";
 			    }
-			    if (exists $clDefs{ $macro }) {
-				delete $clDefs{ $macro };
-			    }
+			    delete $defs{ $macro };	# safe to delete even if hash entry does not exist
+			    delete $clDefs{ $macro };
 			} else {
 			    push(@lnErr, "//* Warning: $argv line $.: $def '$macro' has bad characters - ignored\n");
 			    $w++;			# warning found
@@ -1001,7 +1062,7 @@ sub process_file {
 		    elsif ($def =~ m/^(%%|[%#])include$/) {
 			my ($file, $f, $p);
 			$macro =~ s/\s+//;			# take out any white space - just in case
-			if ($macro =~ m!^"(([A-Za-z]:)?[/\\]?[A-Z_a-z.][\w/\\.]*)"$!) {
+			if ($macro =~ m!^["<](([A-Za-z]:)?[/\\]?[A-Z_a-z.][\w/\\.]*)[">]$!) {
 			  Include:
 			    while (1) {
 				$f = $1;			# a correct Linux, Unix or Windows path name
@@ -1030,7 +1091,7 @@ sub process_file {
 			    $in = 'IN'.++$inExt;
 			    $argv = $f;				# use original "file" for error messages
 no strict 'refs';
-			    if (open($in, $argv)) {
+			    if (open($in, $file)) {
 				print LOG "### $_" if $opt_l;
 				if ($opt_a) {
 				    if ($opt_m_M_Y and --$blankLines) {	# $blankLines is at least 1 because it is a directive
@@ -1053,9 +1114,9 @@ use strict 'refs';
 		    }
 		    elsif ($def =~ m/^(%%|[%#])(error|warning)$/) {
 			my $er_wa = $2;
-			if (not $opt_m_M_Y and $def eq "%$er_wa") {
+			if (not $opt_m_M_Y and $1 eq "%%") {
 			    push(@lnErr, "//* Error: $def $macro\n");
-			    $r++ if $er_wa eq "error";		# deliberate error
+			    $r++ if $er_wa eq "error";		# deliberate iCa error
 			    unless ($opt_t) {
 				if (@block or $finBlock or $opt_L) {
 				    $macro =~ s/"/\\"/g;
@@ -1174,7 +1235,7 @@ use strict 'refs';
 				\\t	|	#    char TAB
 				\S		#    any other non-space character
 			    )
-			/gx
+			/xg
 		) {
 		    push @atoms, [ length($`)+length($1), $3 ];	# [ $pos, $atom ]
 		}
@@ -2023,8 +2084,8 @@ sub resolve_line {
 #
 #	Object like macros which look like a C style word.
 #
-#	Function like macros where the word is followd by arguments
-#	in parentheses.
+#	Function like macros where the word is followd by comma separated
+#	arguments in parentheses.
 #
 #   Do not resolve macros, which have already been resolved once in a
 #   previous recursion to avoid infinite recursion. (see info cpp)
@@ -2307,6 +2368,8 @@ sub eval_if {
     my ($x);
     print "//1 $.: eval_if($macro)\n" if $opt_T;
     remove_comment(\$macro);			# take out individual C comments
+    print "//2 $.: eval_if($macro)\n" if $opt_T;
+    $macro = resolve($macro);
     print "//2 $.: eval_if($macro)\n" if $opt_T;
     $macro =~ s/(defined[\s(]+)?([a-z_A-Z]\w*)/@{[defined $1 ? "$1\$defs{$2}" : "(defined \$defs{$2} ? \$defs{$2}->[0] : 0)"]}/g;
     $x = eval($macro) ? 2 : -1;			# +2 if expr true

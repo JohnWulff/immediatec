@@ -24,43 +24,43 @@
 package main
 
 import (
-    "tcpcomm"			// own package handling Perl type messages
-    "net"
-    "os"
-    "os/exec"
-    "os/signal"
-    "bufio"
-    "syscall"
-    "sync"
-    "flag"
-    "io"
-    "strings"
-    "strconv"
-    "regexp"
-    "sort"
-    "time"
-    "fmt"
+	"bufio"
+	"flag"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"os/exec"
+	"os/signal"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"tcpcomm" // own package handling Perl type messages
+	"time"
 )
 
-const ID_goserver_go = "$Id: goserver.go 1.4 $"
-const TCP_PORT = "8778"			// default TCP port for iC system
+const ID_goserver_go = "$Id: goserver.go 1.5 $"
+const TCP_PORT = "8778" // default TCP port for iC system
 
 type eq struct {
-    channel	int
-    equivP	*map[string]string	// hashed by instance - equivalences for 1 channel
+	channel int
+	equivP  *map[string]string // hashed by instance - equivalences for 1 channel
 }
 type eqB struct {
-    base	string
-    primCh	int
-    secCh	int
+	base   string
+	primCh int
+	secCh  int
 }
 type altRecv struct {
-    altsecCh	int			// secondary channel for these alternate receivers
-    altCons	[]net.Conn		// slice of alternate receiver connections
+	altsecCh int        // secondary channel for these alternate receivers
+	altCons  []net.Conn // slice of alternate receiver connections
 }
 
-var muConn	sync.Mutex		// guard activity associated with one message in handleConnection()
-var muEquiv	sync.Mutex		// guard equivalences and equivBase modifications
+var muConn sync.Mutex  // guard activity associated with one message in handleConnection()
+var muEquiv sync.Mutex // guard equivalences and equivBase modifications
 
 /********************************************************************
  *  The following slice and map variables are common to all goroutines
@@ -69,11 +69,11 @@ var muEquiv	sync.Mutex		// guard equivalences and equivBase modifications
  *  when errors occur, which are then reported.
  *******************************************************************/
 
-var clientCons    = map[string]net.Conn{}  // hashed by name - client connection - existence of client
-var clientNames   = map[net.Conn]string{}  // hashed by conn - client name for a connection
-var channels      = map[string]int{}	   // hashed by name - channel of I/O S<name> and R<name>
-var equivalences  = map[string][]*eq{}	   // hashed by base - equivalent names with same or different channel as base
-var equivBase     = map[string]*eqB{}	   // hashed by name - base name of equivalenced names (even own name if base)
+var clientCons = map[string]net.Conn{}  // hashed by name - client connection - existence of client
+var clientNames = map[net.Conn]string{} // hashed by conn - client name for a connection
+var channels = map[string]int{}         // hashed by name - channel of I/O S<name> and R<name>
+var equivalences = map[string][]*eq{}   // hashed by base - equivalent names with same or different channel as base
+var equivBase = map[string]*eqB{}       // hashed by name - base name of equivalenced names (even own name if base)
 
 /********************************************************************
  *  The following 5 slices are all indexed by channel, which is
@@ -81,19 +81,19 @@ var equivBase     = map[string]*eqB{}	   // hashed by name - base name of equiva
  *  increased in allocateChannel() where len and cap of all
  *  5 slices is doubled when maxLen >= cap(senderCon)
  *******************************************************************/
-var senderCon     = make([]net.Conn, 16)   // indexed by channel ... sender connections      conn
-var senderName    = make([]string, 16)	   // indexed by channel ... sender names            name
-var senderValue   = make([]string, 16)	   // indexed by channel ... current sender values   value
-var receiverCons  = make([][]net.Conn, 16) // indexed by channel ... primary channel receiver connections
-					   // [conn1 conn2 conn3 ...]
-var receiverNames = make([][]string, 16)   // indexed by channel ... primary channel receiver names
-					   // [name1 name2 name3 ...]
+var senderCon = make([]net.Conn, 16)      // indexed by channel ... sender connections      conn
+var senderName = make([]string, 16)       // indexed by channel ... sender names            name
+var senderValue = make([]string, 16)      // indexed by channel ... current sender values   value
+var receiverCons = make([][]net.Conn, 16) // indexed by channel ... primary channel receiver connections
+// [conn1 conn2 conn3 ...]
+var receiverNames = make([][]string, 16) // indexed by channel ... primary channel receiver names
+// [name1 name2 name3 ...]
 
-var altRecvCons   = map[int][]altRecv{}    // hashed by channel  ... secondary channel and receiver connections
-					   //                        for an alternate channel
-					   // [{channel1 [conn4 conn5 ...]} {channel2 [conn6 conn7 ...]} ...]
-var altRecvNames  = map[int][][]string{}   // hashed by channel  ... receiver names for an alternate channel
-					   // [[name4 name5 ...] [name6 name7 ...] ...]
+var altRecvCons = map[int][]altRecv{} // hashed by channel  ... secondary channel and receiver connections
+//                        for an alternate channel
+// [{channel1 [conn4 conn5 ...]} {channel2 [conn6 conn7 ...]} ...]
+var altRecvNames = map[int][][]string{} // hashed by channel  ... receiver names for an alternate channel
+// [[name4 name5 ...] [name6 name7 ...] ...]
 
 var goCount, numberOfConnections, maxChannel int
 
@@ -109,31 +109,35 @@ var goCount, numberOfConnections, maxChannel int
  *******************************************************************/
 
 func allocateChannel(name string, channel int) int {
-    if ch, ok := channels[name]; ok {
-	if channel > 0 {
-	    warnD(fmt.Sprintf("attempting to allocate channel %d for %s:%d twice - ignore", channel, name, ch))
+	if ch, ok := channels[name]; ok {
+		if channel > 0 {
+			warnD(fmt.Sprintf("attempting to allocate channel %d for %s:%d twice - ignore", channel, name, ch))
+		}
+		channel = ch // previously allocated channel for this name
+	} else {
+		if channel == 0 {
+			maxChannel++
+			channel = maxChannel
+			if maxChannel >= cap(senderCon) {
+				/********************************************************************
+				 *  Double the capacity of al slices indexed randomly by 'channel'
+				 *******************************************************************/
+				senderCon = append(senderCon, make([]net.Conn, maxChannel)...)
+				senderName = append(senderName, make([]string, maxChannel)...)
+				senderValue = append(senderValue, make([]string, maxChannel)...)
+				receiverCons = append(receiverCons, make([][]net.Conn, maxChannel)...)
+				receiverNames = append(receiverNames, make([][]string, maxChannel)...)
+				if *opt_t {
+					fmt.Printf("/// len(senderCon) = %d cap(senderCon) = %d\n", len(senderCon), cap(senderCon))
+				}
+			}
+		}
+		channels[name] = channel
 	}
-	channel = ch			// previously allocated channel for this name
-    } else {
-	if channel == 0 {
-	    maxChannel++
-	    channel = maxChannel
-	    if maxChannel >= cap(senderCon) {
-		/********************************************************************
-		 *  Double the capacity of al slices indexed randomly by 'channel'
-		 *******************************************************************/
-		senderCon     = append(senderCon, make([]net.Conn, maxChannel)...)
-		senderName    = append(senderName, make([]string, maxChannel)...)
-		senderValue   = append(senderValue, make([]string, maxChannel)...)
-		receiverCons  = append(receiverCons, make([][]net.Conn, maxChannel)...)
-		receiverNames = append(receiverNames, make([][]string, maxChannel)...)
-		if *opt_t { fmt.Printf("/// len(senderCon) = %d cap(senderCon) = %d\n", len(senderCon), cap(senderCon)) }
-	    }
+	if *opt_t {
+		fmt.Printf("%s: allocateChannel %q, %d\n", named, name, channel)
 	}
-	channels[name] = channel
-    }
-    if *opt_t { fmt.Printf("%s: allocateChannel %q, %d\n", named, name, channel) }
-    return channel
+	return channel
 } // allocateChannel
 
 /********************************************************************
@@ -202,163 +206,195 @@ func allocateChannel(name string, channel int) int {
  *
  *******************************************************************/
 
-func allocateEquivalences (arg string) {
-    muEquiv.Lock()
-    defer muEquiv.Unlock()
-    errFlag := false
-    reCommaSpace := regexp.MustCompile(`[, ]`)
-    for _, equiv := range reCommaSpace.Split(string(arg), -1) {
-	if equiv == "" { continue }			// ignore extra commas and spaces
-	if ! *opt_q { fmt.Printf("Equivalence %q\n", equiv) }
-	var equivSet = make([][2]string, 0, 16)
-	var dupFlag bool
-	var outName, xbwlh, base string
-	var primCh, secCh, ch int
-	/********************************************************************
-	 *  The following are all part of a set of equivalence groups belonging to
-	 *  one base IEC name. Scan once to see of this set extends a previous set
-	 *  by checking in equivBase[].
-	 *******************************************************************/
-	for _, nn := range strings.Split(equiv, "=") {
-	    if *opt_t { fmt.Printf("--- nn = %q\n", nn) }
-	    reIQ_XBWLH := regexp.MustCompile(`^([IQ])([XBWLH])\d+((-\d{1,3})?)$`)
-	    if m := reIQ_XBWLH.FindStringSubmatch(nn); len(m) != 5 {	// `^([IQ])([XBWLH])\d+((-\d{1,3})?)$`
-		fmt.Fprintf(os.Stderr, "ERROR %s: %q in %q is not an IEC name - will not work!\n", named, nn, equiv)
-		errFlag = true
-	    } else {
-		iq := m[1]
-		if iq == "Q" {
-		    if outName != "" {
-			if outName != nn {
-			    fmt.Fprintf(os.Stderr, "ERROR %s: %q in %q is 2nd output IEC name after outName - will not work!\n", named, nn, equiv)
-			    errFlag = true
+func allocateEquivalences(arg string) {
+	muEquiv.Lock()
+	defer muEquiv.Unlock()
+	errFlag := false
+	reCommaSpace := regexp.MustCompile(`[, ]`)
+	for _, equiv := range reCommaSpace.Split(string(arg), -1) {
+		if equiv == "" {
+			continue
+		} // ignore extra commas and spaces
+		if !*opt_q {
+			fmt.Printf("Equivalence %q\n", equiv)
+		}
+		var equivSet = make([][2]string, 0, 16)
+		var dupFlag bool
+		var outName, xbwlh, base string
+		var primCh, secCh, ch int
+		/********************************************************************
+		 *  The following are all part of a set of equivalence groups belonging to
+		 *  one base IEC name. Scan once to see of this set extends a previous set
+		 *  by checking in equivBase[].
+		 *******************************************************************/
+		for _, nn := range strings.Split(equiv, "=") {
+			if *opt_t {
+				fmt.Printf("--- nn = %q\n", nn)
 			}
-		    } else {
-			outName = nn
-		    }
-		}
-		if xbwlh != "" {
-		    if xbwlh != m[2] {
-			fmt.Fprintf(os.Stderr, "ERROR %s: %q in %q is not the same IEC type - will not work!\n", named, nn, equiv)
-			errFlag = true
-		    }
-		} else {
-		    xbwlh = m[2]			// IEC type of first equivalence entry
-		}
-		inst := m[3]				// instance (may be null string)
-		if sl, ok := equivBase[nn]; ok {
-		    base   = sl.base
-		    primCh = sl.primCh
-		    secCh  = sl.secCh
-		} else {
-		    ch = channels[nn]
-		    if *opt_t { fmt.Printf("%%%%%% N nn = %q inst = %q base = %q primCh = %d secCh = %d ch = %d\n", nn, inst, base, primCh, secCh, ch) }
-		    if base == "" || iq == "Q" || ch > 0 {
-			if ch > 0 && primCh > 0 {
-			    /********************************************************************
-			     *  Encountered a pre-registered input, whose channel has been allocated
-			     *   1) ignore 2nd and further pre-registered inputs per equivalence
-			     *   2) move the equivalence set from the previous base to this input name
-			     *   3) re-assign the new name and channel as base and primary channel in equivBase[]
-			     *   4) rebase map altRecvCons entries already registered to new primary
-			     *      channel before any more registrations take place
-			     *   5) rebase []receiverCons entries already registered as secondary channel
-			     *      entries in map altRecvCons because channels have already been acked
-			     *   6) delete Autovivify entry for primary input already registered
-			     *******************************************************************/
-			    if dupFlag {				// 1)
-				fmt.Fprintf(os.Stderr, "Warning %s: cannot have more than 1 pre-registered input %q on ch '%d' in %q - ignore\n", named, nn, ch, equiv)
-				continue
-			    }
-			    dupFlag = true
-			    equivalences[nn] = equivalences[base]	// 2) move equivalence set to new base
-			    if *opt_t { fmt.Printf("--- nn = %q delete(equivalences, %q)\n", nn, base) }
-			    delete(equivalences, base)			//    delete old base entry
-			    for _, equivBp := range equivBase {
-				if equivBp.primCh == primCh {		// 3) find old primary channel
-				    equivBp.base   = nn			//    re-assign base
-				    equivBp.primCh = ch			//    re-assign primary channel
-				}
-			    }
-			    if _, ok := altRecvCons[primCh]; ok {	// 4) exists
-				altRecvCons[ch] = altRecvCons[primCh]	// TODO make sure altRecvCons[ch] is empty
-				delete(altRecvCons, primCh)
-				altRecvNames[ch] = altRecvNames[primCh]
-				delete(altRecvNames, primCh)
-			    }
-			    if len(receiverCons[primCh]) > 0 {		// 5)
-				altRecvCons[ch] = append([]altRecv{ altRecv{ primCh, receiverCons[primCh] } }, altRecvCons[ch]...)	// unshift
-				receiverCons[primCh] = []net.Conn{}
-				altRecvNames[ch] = append([][]string{ receiverNames[primCh] }, altRecvNames[ch]...)	// unshift
-				receiverNames[primCh] = []string{}
-			    }
-			    if boxName != "" {				// make sure AutoVivify is started
-				autoBoxCh<- "-" + base			// 6) delete AutoVivify entry
-				if *opt_t { fmt.Printf("delete Autovivify entry 'AutoVivify[%s]'\n", base) }
-			    }
+			reIQ_XBWLH := regexp.MustCompile(`^([IQ])([XBWLH])\d+((-\d{1,3})?)$`)
+			if m := reIQ_XBWLH.FindStringSubmatch(nn); len(m) != 5 { // `^([IQ])([XBWLH])\d+((-\d{1,3})?)$`
+				fmt.Fprintf(os.Stderr, "ERROR %s: %q in %q is not an IEC name - will not work!\n", named, nn, equiv)
+				errFlag = true
 			} else {
-			    ch = 0					// no primary channel (or no channel)
+				iq := m[1]
+				if iq == "Q" {
+					if outName != "" {
+						if outName != nn {
+							fmt.Fprintf(os.Stderr, "ERROR %s: %q in %q is 2nd output IEC name after outName - will not work!\n", named, nn, equiv)
+							errFlag = true
+						}
+					} else {
+						outName = nn
+					}
+				}
+				if xbwlh != "" {
+					if xbwlh != m[2] {
+						fmt.Fprintf(os.Stderr, "ERROR %s: %q in %q is not the same IEC type - will not work!\n", named, nn, equiv)
+						errFlag = true
+					}
+				} else {
+					xbwlh = m[2] // IEC type of first equivalence entry
+				}
+				inst := m[3] // instance (may be null string)
+				if sl, ok := equivBase[nn]; ok {
+					base = sl.base
+					primCh = sl.primCh
+					secCh = sl.secCh
+				} else {
+					ch = channels[nn]
+					if *opt_t {
+						fmt.Printf("%%%%%% N nn = %q inst = %q base = %q primCh = %d secCh = %d ch = %d\n", nn, inst, base, primCh, secCh, ch)
+					}
+					if base == "" || iq == "Q" || ch > 0 {
+						if ch > 0 && primCh > 0 {
+							/********************************************************************
+							 *  Encountered a pre-registered input, whose channel has been allocated
+							 *   1) ignore 2nd and further pre-registered inputs per equivalence
+							 *   2) move the equivalence set from the previous base to this input name
+							 *   3) re-assign the new name and channel as base and primary channel in equivBase[]
+							 *   4) rebase map altRecvCons entries already registered to new primary
+							 *      channel before any more registrations take place
+							 *   5) rebase []receiverCons entries already registered as secondary channel
+							 *      entries in map altRecvCons because channels have already been acked
+							 *   6) delete Autovivify entry for primary input already registered
+							 *******************************************************************/
+							if dupFlag { // 1)
+								fmt.Fprintf(os.Stderr, "Warning %s: cannot have more than 1 pre-registered input %q on ch '%d' in %q - ignore\n", named, nn, ch, equiv)
+								continue
+							}
+							dupFlag = true
+							equivalences[nn] = equivalences[base] // 2) move equivalence set to new base
+							if *opt_t {
+								fmt.Printf("--- nn = %q delete(equivalences, %q)\n", nn, base)
+							}
+							delete(equivalences, base) //    delete old base entry
+							for _, equivBp := range equivBase {
+								if equivBp.primCh == primCh { // 3) find old primary channel
+									equivBp.base = nn   //    re-assign base
+									equivBp.primCh = ch //    re-assign primary channel
+								}
+							}
+							if _, ok := altRecvCons[primCh]; ok { // 4) exists
+								altRecvCons[ch] = altRecvCons[primCh] // TODO make sure altRecvCons[ch] is empty
+								delete(altRecvCons, primCh)
+								altRecvNames[ch] = altRecvNames[primCh]
+								delete(altRecvNames, primCh)
+							}
+							if len(receiverCons[primCh]) > 0 { // 5)
+								altRecvCons[ch] = append([]altRecv{altRecv{primCh, receiverCons[primCh]}}, altRecvCons[ch]...) // unshift
+								receiverCons[primCh] = []net.Conn{}
+								altRecvNames[ch] = append([][]string{receiverNames[primCh]}, altRecvNames[ch]...) // unshift
+								receiverNames[primCh] = []string{}
+							}
+							if boxName != "" { // make sure AutoVivify is started
+								autoBoxCh <- "-" + base // 6) delete AutoVivify entry
+								if *opt_t {
+									fmt.Printf("delete Autovivify entry 'AutoVivify[%s]'\n", base)
+								}
+							}
+						} else {
+							ch = 0 // no primary channel (or no channel)
+						}
+						base = nn
+						equivSet = append([][2]string{{nn, inst}}, equivSet...) // unshift output or first input name
+					} else {
+						equivSet = append(equivSet, [2]string{nn, inst}) // push later inputs in equivalence set
+					}
+					if *opt_t {
+						fmt.Printf("--- equivSet = %v\n", equivSet)
+					}
+				}
 			}
-			base = nn
-			equivSet = append([][2]string{{nn, inst}}, equivSet...)	// unshift output or first input name
-		    } else {
-			equivSet = append(equivSet, [2]string{nn, inst})	// push later inputs in equivalence set
-		    }
-		    if *opt_t { fmt.Printf("--- equivSet = %v\n", equivSet) }
 		}
-	    }
-	}
-	/********************************************************************
-	 *  Now a base IEC name has been determined distribute equivalences
-	 *  in equivalences[] - also update equivBase[].
-	 *******************************************************************/
-	if *opt_t { fmt.Printf("--- base = %q\n", base) }
-	for _, ref := range equivSet {
-	    if *opt_t { fmt.Printf("--- ref = %v\n", ref) }
-	    var refEq *eq
-	    ref1 := map[string]string{}
-	    nn   := ref[0]
-	    inst := ref[1]
-	    if *opt_t { fmt.Printf("--- nn = %q inst = %q primCh = %d ch = %d\n", nn, inst, primCh, ch) }
-	    if ch > 0 {
-		primCh = ch
-		secCh  = ch
-	    } else {
-		for _, refEq0 := range equivalences[base] {
-		    if *opt_t { fmt.Printf("--- refEq0 = %v\n", refEq0) }
-		    if refEq0 != nil {
-			secCh = refEq0.channel
-			ref0 := *refEq0.equivP
-			if _, ok := ref0[inst]; ! ok {	// not exists
-			    ref0[inst] = nn		// extend equivalence group with different instances
-			    allocateChannel(nn, secCh)	// allocate same channel for next IEC instance
-			    equivBase[nn] = &eqB{ base, primCh, 0 }
-			    if *opt_t { fmt.Printf("--- ext secCh = %d nn = %q\n", secCh, nn) }
-			    goto EquivStored
+		/********************************************************************
+		 *  Now a base IEC name has been determined distribute equivalences
+		 *  in equivalences[] - also update equivBase[].
+		 *******************************************************************/
+		if *opt_t {
+			fmt.Printf("--- base = %q\n", base)
+		}
+		for _, ref := range equivSet {
+			if *opt_t {
+				fmt.Printf("--- ref = %v\n", ref)
 			}
-		    }
+			var refEq *eq
+			ref1 := map[string]string{}
+			nn := ref[0]
+			inst := ref[1]
+			if *opt_t {
+				fmt.Printf("--- nn = %q inst = %q primCh = %d ch = %d\n", nn, inst, primCh, ch)
+			}
+			if ch > 0 {
+				primCh = ch
+				secCh = ch
+			} else {
+				for _, refEq0 := range equivalences[base] {
+					if *opt_t {
+						fmt.Printf("--- refEq0 = %v\n", refEq0)
+					}
+					if refEq0 != nil {
+						secCh = refEq0.channel
+						ref0 := *refEq0.equivP
+						if _, ok := ref0[inst]; !ok { // not exists
+							ref0[inst] = nn            // extend equivalence group with different instances
+							allocateChannel(nn, secCh) // allocate same channel for next IEC instance
+							equivBase[nn] = &eqB{base, primCh, 0}
+							if *opt_t {
+								fmt.Printf("--- ext secCh = %d nn = %q\n", secCh, nn)
+							}
+							goto EquivStored
+						}
+					}
+				}
+				secCh = allocateChannel(nn, 0) // allocate new channel for first IEC name in group
+			}
+			ref1[inst] = nn // new equivalence with instance used in previous group
+			if primCh == 0 {
+				primCh = secCh
+			}
+			if *opt_t {
+				fmt.Printf("--- new secCh = %d nn = %q\n", secCh, nn)
+			}
+			refEq = &eq{secCh, &ref1} // secondary channel for equivalence group and first IEC
+			if ch > 0 {               // new equivalence group for pre-registered input
+				equivalences[base] = append([]*eq{refEq}, equivalences[base]...) // unshift
+				ch = 0
+			} else { // new equivalence group on a different channel
+				equivalences[base] = append(equivalences[base], refEq) // push
+			}
+			equivBase[nn] = &eqB{base, primCh, 0}
+		EquivStored:
+			if *opt_t {
+				fmt.Printf("--- equivalences = %v\n", equivalences)
+			}
+			if *opt_t {
+				fmt.Printf("--- equivBase    = %v\n", equivBase)
+			}
 		}
-		secCh = allocateChannel(nn, 0)		// allocate new channel for first IEC name in group
-	    }
-	    ref1[inst] = nn				// new equivalence with instance used in previous group
-	    if primCh == 0 {
-		primCh = secCh
-	    }
-	    if *opt_t { fmt.Printf("--- new secCh = %d nn = %q\n", secCh, nn) }
-	    refEq = &eq{ secCh, &ref1 }			// secondary channel for equivalence group and first IEC
-	    if ch > 0 {					// new equivalence group for pre-registered input
-		equivalences[base] = append([]*eq{refEq}, equivalences[base]...)	// unshift
-		ch = 0
-	    } else {					// new equivalence group on a different channel
-		equivalences[base] = append(equivalences[base], refEq)			// push
-	    }
-	    equivBase[nn] = &eqB{ base, primCh, 0 }
-	  EquivStored:
-	    if *opt_t { fmt.Printf("--- equivalences = %v\n", equivalences) }
-	    if *opt_t { fmt.Printf("--- equivBase    = %v\n", equivBase) }
 	}
-    }
-    if errFlag { shutdownServer(9, "Hard error in equivalence specifications") }
+	if errFlag {
+		shutdownServer(9, "Hard error in equivalence specifications")
+	}
 } // allocateEquivalences
 
 /********************************************************************
@@ -369,22 +405,22 @@ func allocateEquivalences (arg string) {
  *******************************************************************/
 
 func printTail(aref []net.Conn, nref []string) {
-    var rName string
-    var rCons []string
-    for i, rcon := range aref {
-	if rcon != nil {
-	    if rName = clientNames[rcon]; rName == "" {
-		rName = "<undef>"
-	    }
-	    rCons = append(rCons, rName, nref[i])
+	var rName string
+	var rCons []string
+	for i, rcon := range aref {
+		if rcon != nil {
+			if rName = clientNames[rcon]; rName == "" {
+				rName = "<undef>"
+			}
+			rCons = append(rCons, rName, nref[i])
+		}
 	}
-    }
-    if len(rCons) == 0 {
-	rName = "<no receivers>"
-    } else {
-	rName = strings.Join(rCons, "\t")
-    }
-    fmt.Printf("%s\n", rName)
+	if len(rCons) == 0 {
+		rName = "<no receivers>"
+	} else {
+		rName = strings.Join(rCons, "\t")
+	}
+	fmt.Printf("%s\n", rName)
 } // printTail
 
 /********************************************************************
@@ -396,79 +432,79 @@ func printTail(aref []net.Conn, nref []string) {
  *******************************************************************/
 
 func printTables() {
-    muEquiv.Lock()
-    defer muEquiv.Unlock()
-    fmt.Printf("%s: Table of clientNames and registered Senders and Receivers\n", named)
-    names := make([]string, 0, len(clientNames))
-    for _, name := range clientNames {
-	names = append(names, name)
-    }
-    sort.Strings(names)
-    for _, name := range names {
-	fmt.Printf("%s\n", name)
-    }
-    if len(equivalences) > 0 {
-	fmt.Printf("\nequivalences = {\n")
-	bases := make([]string, 0, len(equivalences))
-	for base, _ := range equivalences {
-	    bases = append(bases, base)
+	muEquiv.Lock()
+	defer muEquiv.Unlock()
+	fmt.Printf("%s: Table of clientNames and registered Senders and Receivers\n", named)
+	names := make([]string, 0, len(clientNames))
+	for _, name := range clientNames {
+		names = append(names, name)
 	}
-	sort.Sort(iCboxOrder(bases))
-	for _, base := range bases {
-	    fmt.Printf("%-6s => [\n", base)
-	    for _, refEq := range equivalences[base] {
-		if refEq != nil {
-		    secCh := refEq.channel
-		    fmt.Printf("    [ %d, {", secCh)
-		    ref1 := *refEq.equivP
-		    instances := make([]string, 0, len(ref1))
-		    for inst, _ := range ref1 {
-			instances = append(instances, inst)
-		    }
-		    sort.Strings(instances)
-		    for _, inst := range instances {
-			fmt.Printf(" %q => %s,", inst, ref1[inst])
-		    }
-		    fmt.Printf(" } ],\n")
-		}
-	    }
-	    fmt.Printf("],\n")
-	}
-	fmt.Printf("}\n")
-    }
-    if len(equivBase) > 0 {
-	fmt.Printf("\nequivBase	channels\nname	base	primCh	secCh	ch\n")
-	names := make([]string, 0, len(equivBase))
-	for name, _ := range equivBase {
-	    names = append(names, name)
-	}
-	sort.Sort(iCboxOrder(names))
+	sort.Strings(names)
 	for _, name := range names {
-	    fmt.Printf("%s	%s	%d	%d	%d\n",
-		name, equivBase[name].base, equivBase[name].primCh, equivBase[name].secCh, channels[name])
+		fmt.Printf("%s\n", name)
 	}
-    }
-    fmt.Printf("\nch  Sender          name            value       Recv[0]	name[0]	Recv[1]	name[1]	...\n")
-    for channel := 0; channel <= maxChannel; channel++ {
-	var chName string
-	aref := receiverCons[channel]
-	con := senderCon[channel]
-	if con != nil || len(aref) > 0 {
-	    if chName = clientNames[con]; chName == "" {
-		chName = "<no sender>"
-	    }
-	    fmt.Printf("%-3d %-15s %-15s %-11s ", channel, chName, senderName[channel], senderValue[channel])
-	    nref := receiverNames[channel]
-	    printTail(aref, nref)
+	if len(equivalences) > 0 {
+		fmt.Printf("\nequivalences = {\n")
+		bases := make([]string, 0, len(equivalences))
+		for base, _ := range equivalences {
+			bases = append(bases, base)
+		}
+		sort.Sort(iCboxOrder(bases))
+		for _, base := range bases {
+			fmt.Printf("%-6s => [\n", base)
+			for _, refEq := range equivalences[base] {
+				if refEq != nil {
+					secCh := refEq.channel
+					fmt.Printf("    [ %d, {", secCh)
+					ref1 := *refEq.equivP
+					instances := make([]string, 0, len(ref1))
+					for inst, _ := range ref1 {
+						instances = append(instances, inst)
+					}
+					sort.Strings(instances)
+					for _, inst := range instances {
+						fmt.Printf(" %q => %s,", inst, ref1[inst])
+					}
+					fmt.Printf(" } ],\n")
+				}
+			}
+			fmt.Printf("],\n")
+		}
+		fmt.Printf("}\n")
 	}
-	if _, ok := altRecvCons[channel]; ok {		// exists
-	    for i, aref := range altRecvCons[channel] {
-		fmt.Printf("    %-43d ", aref.altsecCh)	// secondary channel
-		nref := altRecvNames[channel][i]
-		printTail(aref.altCons, nref)
-	    }
+	if len(equivBase) > 0 {
+		fmt.Printf("\nequivBase	channels\nname	base	primCh	secCh	ch\n")
+		names := make([]string, 0, len(equivBase))
+		for name, _ := range equivBase {
+			names = append(names, name)
+		}
+		sort.Sort(iCboxOrder(names))
+		for _, name := range names {
+			fmt.Printf("%s	%s	%d	%d	%d\n",
+				name, equivBase[name].base, equivBase[name].primCh, equivBase[name].secCh, channels[name])
+		}
 	}
-    }
+	fmt.Printf("\nch  Sender          name            value       Recv[0]	name[0]	Recv[1]	name[1]	...\n")
+	for channel := 0; channel <= maxChannel; channel++ {
+		var chName string
+		aref := receiverCons[channel]
+		con := senderCon[channel]
+		if con != nil || len(aref) > 0 {
+			if chName = clientNames[con]; chName == "" {
+				chName = "<no sender>"
+			}
+			fmt.Printf("%-3d %-15s %-15s %-11s ", channel, chName, senderName[channel], senderValue[channel])
+			nref := receiverNames[channel]
+			printTail(aref, nref)
+		}
+		if _, ok := altRecvCons[channel]; ok { // exists
+			for i, aref := range altRecvCons[channel] {
+				fmt.Printf("    %-43d ", aref.altsecCh) // secondary channel
+				nref := altRecvNames[channel][i]
+				printTail(aref.altCons, nref)
+			}
+		}
+	}
 } // printTables
 
 /********************************************************************
@@ -478,15 +514,17 @@ func printTables() {
  *******************************************************************/
 
 func writeReceiverData(receiverData map[net.Conn][]string, goId int) {
-    for con, msgSlice := range receiverData {
-	wbuf := append([]byte{ 0, 0, 0, 0 }, strings.Join(msgSlice, ",")...)	// build Perl type message
-	if *opt_t { fmt.Printf("%02d: (%d) %s > %q\n", goId, len(wbuf)-4, wbuf[4:], clientNames[con]) }
-	err := tcpcomm.Write(con, &wbuf)
-	if err != nil {
-	    fmt.Fprintf(os.Stderr, "%02d: msg = %q client = %q\n", goId, wbuf[4:], clientNames[con])
-	    shutdownServer(4, fmt.Sprint(err))
+	for con, msgSlice := range receiverData {
+		wbuf := append([]byte{0, 0, 0, 0}, strings.Join(msgSlice, ",")...) // build Perl type message
+		if *opt_t {
+			fmt.Printf("%02d: (%d) %s > %q\n", goId, len(wbuf)-4, wbuf[4:], clientNames[con])
+		}
+		err := tcpcomm.Write(con, &wbuf)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%02d: msg = %q client = %q\n", goId, wbuf[4:], clientNames[con])
+			shutdownServer(4, fmt.Sprint(err))
+		}
 	}
-    }
 } // writeReceiverData
 
 /********************************************************************
@@ -500,161 +538,177 @@ func writeReceiverData(receiverData map[net.Conn][]string, goId int) {
  *
  *******************************************************************/
 
-func disconnect (name string, goId int) {
-    if name != "" {
-	if ! *opt_q { fmt.Printf("%02d: %s: disconnecting now\n", goId, name) }
-	receiverData := map[net.Conn][]string{}	// clear all keys and entries
-	for channel := 0; channel <= maxChannel; channel++ {
-	    rflag := false
-	    con := senderCon[channel]
-	    nam := clientNames[con]
-	    if nam == name {
-		senderCon[channel] = nil	// no need to splice out only array entry
-		if *opt_r && senderValue[channel] != "0" {
-		    rflag = true
-		    senderValue[channel] = "0"	// reset sender value
+func disconnect(name string, goId int) {
+	if name != "" {
+		if !*opt_q {
+			fmt.Printf("%02d: %s: disconnecting now\n", goId, name)
 		}
-		if *opt_t { fmt.Printf("%02d: %s: S %s	%d nil\n", goId, name, senderName[channel], channel) }
-	    }
-	    if rflag {
-		// scan once, resetting receivers, before splicing out any array elements
-		for _, con := range receiverCons[channel] {
-		    if clientNames[con] != name {
-			msg := fmt.Sprintf("%d:0", channel)
-			receiverData[con] = append(receiverData[con], msg) // reset message to receiver channels
-		    }
-		}
-		if _, ok := altRecvCons[channel]; ok {			// exists
-		    for _, aref := range altRecvCons[channel] {
-			ch := aref.altsecCh				// alternate channel
-			for _, con := range aref.altCons {
-			    msg := fmt.Sprintf("%d:0", ch)
-			    receiverData[con] = append(receiverData[con], msg)	// reset message to alternate channels
+		receiverData := map[net.Conn][]string{} // clear all keys and entries
+		for channel := 0; channel <= maxChannel; channel++ {
+			rflag := false
+			con := senderCon[channel]
+			nam := clientNames[con]
+			if nam == name {
+				senderCon[channel] = nil // no need to splice out only array entry
+				if *opt_r && senderValue[channel] != "0" {
+					rflag = true
+					senderValue[channel] = "0" // reset sender value
+				}
+				if *opt_t {
+					fmt.Printf("%02d: %s: S %s	%d nil\n", goId, name, senderName[channel], channel)
+				}
 			}
-		    }
-		}
-	    }
-	    /********************************************************************
-	     *  Do not use 'range' when splicing out entries
-	     *******************************************************************/
-	    aref := &receiverCons[channel]
-	    if len(*aref) != 0 {
-		for i := 0; i < len(*aref); i++ {
-		    con := (*aref)[i]
-		    if clientNames[con] == name {
-			nref := &receiverNames[channel]
-			nam := (*nref)[i]
-			if equivBase[nam] != nil {
-			    equivBase[nam].secCh = 0		// clear secondary channel to flag no registration
+			if rflag {
+				// scan once, resetting receivers, before splicing out any array elements
+				for _, con := range receiverCons[channel] {
+					if clientNames[con] != name {
+						msg := fmt.Sprintf("%d:0", channel)
+						receiverData[con] = append(receiverData[con], msg) // reset message to receiver channels
+					}
+				}
+				if _, ok := altRecvCons[channel]; ok { // exists
+					for _, aref := range altRecvCons[channel] {
+						ch := aref.altsecCh // alternate channel
+						for _, con := range aref.altCons {
+							msg := fmt.Sprintf("%d:0", ch)
+							receiverData[con] = append(receiverData[con], msg) // reset message to alternate channels
+						}
+					}
+				}
 			}
-			if *opt_t { fmt.Printf("%02d: %s: R %s	%d spliced out\n", goId, name, nam, channel) }
-			// splice out connection and name
-			*aref = append((*aref)[:i], (*aref)[i+1:]...)
-			*nref = append((*nref)[:i], (*nref)[i+1:]...)
 			/********************************************************************
-			 *  Checked that there are no multiple Receiver entries with the same
-			 *  'Conn' when registering. Nevertheless scan to the end to keep 'i'
-			 *  correct for 'altRecvCons' and 'altRecvNames'
+			 *  Do not use 'range' when splicing out entries
 			 *******************************************************************/
-			i--				// adjust index of next entry and name to be spliced out
-		    }
-		}
-	    }
-	    if _, ok := altRecvCons[channel]; ok {		// exists
-		for j := 0; j < len(altRecvCons[channel]); j++ {
-		    aref  := &altRecvCons[channel][j]
-		    secCh := aref.altsecCh
-		    cref  := &aref.altCons
-		    for i := 0; i < len(*cref); i++ {
-			con := (*cref)[i]
-			if clientNames[con] == name {
-			    nref := &altRecvNames[channel][j]
-			    nam := (*nref)[i]
-			    if _, ok := equivBase[nam]; ok {	// exists
-				equivBase[nam].secCh = 0	// clear secondary channel to flag no registration
-			    }
-			    if *opt_t { fmt.Printf("%02d: %s: R %s	%d spliced out\n", goId, name, nam, secCh) }
-			    *cref = append((*cref)[:i], (*cref)[i+1:]...)	// skip extra channel entry
-			    *nref = append((*nref)[:i], (*nref)[i+1:]...)	// splice out name whose index starts at 0
-			    i--				// adjust index of next entry and name to be spliced out
+			aref := &receiverCons[channel]
+			if len(*aref) != 0 {
+				for i := 0; i < len(*aref); i++ {
+					con := (*aref)[i]
+					if clientNames[con] == name {
+						nref := &receiverNames[channel]
+						nam := (*nref)[i]
+						if equivBase[nam] != nil {
+							equivBase[nam].secCh = 0 // clear secondary channel to flag no registration
+						}
+						if *opt_t {
+							fmt.Printf("%02d: %s: R %s	%d spliced out\n", goId, name, nam, channel)
+						}
+						// splice out connection and name
+						*aref = append((*aref)[:i], (*aref)[i+1:]...)
+						*nref = append((*nref)[:i], (*nref)[i+1:]...)
+						/********************************************************************
+						 *  Checked that there are no multiple Receiver entries with the same
+						 *  'Conn' when registering. Nevertheless scan to the end to keep 'i'
+						 *  correct for 'altRecvCons' and 'altRecvNames'
+						 *******************************************************************/
+						i-- // adjust index of next entry and name to be spliced out
+					}
+				}
 			}
-		    }
-		    if len(*cref) == 0 {		// group has no connections left, only alternate channel
-			if *opt_t { fmt.Printf("%02d: altRecvCons[%d] group %d spliced out\n", goId, channel, j) }
-			altRecvCons[channel] =  append(altRecvCons[channel][:j],
-			    altRecvCons[channel][j+1:]...)		// whole group disconnected
-			altRecvNames[channel] = append(altRecvNames[channel][:j],
-			    altRecvNames[channel][j+1:]...)
-			j--				// adjust index of next group to be spliced out
-		    }
-		}
-		if len(altRecvCons[channel]) == 0 {
-		    delete(altRecvCons, channel)	// delete whole alternate channel set
-		    delete(altRecvNames, channel)
-		}
-	    }
-	}
-	writeReceiverData(receiverData, goId)		// write data collected for different receivers
-	delete(clientNames, clientCons[name])
-	delete(clientCons, name)
-	if boxName != "" {				// make sure AutoVivify is started
-	    autoBoxCh<- "-" + name			// delete AutoVivify entry (ignored if already done)
-	    if *opt_t { fmt.Printf("delete Autovivify entry 'AutoVivify[%s]'\n", name) }
-	}
-	if ! *opt_q { fmt.Printf("%02d: %s: disconnected\n", goId, name) }
-	numberOfConnections--
-	if numberOfConnections <= 0 {
-	    /********************************************************************
-	     *  This was last connection - clear all arrays and hashes
-	     *  this prevents channel numbers getting higher and higher
-	     *******************************************************************/
-	    clientCons    = map[string]net.Conn{}
-	    channels      = map[string]int{}
-	    clientNames   = map[net.Conn]string{}
-	    senderCon     = make([]net.Conn, 16)
-	    senderName    = make([]string, 16)
-	    senderValue   = make([]string, 16)
-	    receiverCons  = make([][]net.Conn, 16)
-	    receiverNames = make([][]string, 16)
-	    altRecvCons   = map[int][]altRecv{}
-	    altRecvNames  = map[int][][]string{}
-	    maxChannel = 0
-	    goCount = 0
-	    /********************************************************************
-	     *  Re-constitute channels of equivalence arguments.
-	     *  All secondary channels in equivBase[] have been set to 0
-	     *  so use equivalences[] to get secondary channels instead.
-	     *******************************************************************/
-	    if len(equivalences) > 0 {
-		bases := make([]string, 0, len(equivalences))
-		for base, _ := range equivalences {
-		    bases = append(bases, base)
-		}
-		sort.Sort(iCboxOrder(bases))
-		for _, base := range bases {
-		    for _, refEq := range equivalences[base] {
-			if refEq != nil {
-			    secCh := refEq.channel
-			    ref1 := *refEq.equivP
-			    instances := make([]string, 0, len(ref1))
-			    for inst, _ := range ref1 {
-				instances = append(instances, inst)
-			    }
-			    sort.Strings(instances)
-			    for _, inst := range instances {
-				nn := ref1[inst]		// extend equivalence group with different instances
-				allocateChannel(nn, secCh)	// allocate same channel for next IEC instance
-			    }
+			if _, ok := altRecvCons[channel]; ok { // exists
+				for j := 0; j < len(altRecvCons[channel]); j++ {
+					aref := &altRecvCons[channel][j]
+					secCh := aref.altsecCh
+					cref := &aref.altCons
+					for i := 0; i < len(*cref); i++ {
+						con := (*cref)[i]
+						if clientNames[con] == name {
+							nref := &altRecvNames[channel][j]
+							nam := (*nref)[i]
+							if _, ok := equivBase[nam]; ok { // exists
+								equivBase[nam].secCh = 0 // clear secondary channel to flag no registration
+							}
+							if *opt_t {
+								fmt.Printf("%02d: %s: R %s	%d spliced out\n", goId, name, nam, secCh)
+							}
+							*cref = append((*cref)[:i], (*cref)[i+1:]...) // skip extra channel entry
+							*nref = append((*nref)[:i], (*nref)[i+1:]...) // splice out name whose index starts at 0
+							i--                                           // adjust index of next entry and name to be spliced out
+						}
+					}
+					if len(*cref) == 0 { // group has no connections left, only alternate channel
+						if *opt_t {
+							fmt.Printf("%02d: altRecvCons[%d] group %d spliced out\n", goId, channel, j)
+						}
+						altRecvCons[channel] = append(altRecvCons[channel][:j],
+							altRecvCons[channel][j+1:]...) // whole group disconnected
+						altRecvNames[channel] = append(altRecvNames[channel][:j],
+							altRecvNames[channel][j+1:]...)
+						j-- // adjust index of next group to be spliced out
+					}
+				}
+				if len(altRecvCons[channel]) == 0 {
+					delete(altRecvCons, channel) // delete whole alternate channel set
+					delete(altRecvNames, channel)
+				}
 			}
-		    }
 		}
-	    }
-	    if ! *opt_q { fmt.Printf("%02d: last client has disconnected\n", goId) }
-	}
+		writeReceiverData(receiverData, goId) // write data collected for different receivers
+		delete(clientNames, clientCons[name])
+		delete(clientCons, name)
+		if boxName != "" { // make sure AutoVivify is started
+			autoBoxCh <- "-" + name // delete AutoVivify entry (ignored if already done)
+			if *opt_t {
+				fmt.Printf("delete Autovivify entry 'AutoVivify[%s]'\n", name)
+			}
+		}
+		if !*opt_q {
+			fmt.Printf("%02d: %s: disconnected\n", goId, name)
+		}
+		numberOfConnections--
+		if numberOfConnections <= 0 {
+			/********************************************************************
+			 *  This was last connection - clear all arrays and hashes
+			 *  this prevents channel numbers getting higher and higher
+			 *******************************************************************/
+			clientCons = map[string]net.Conn{}
+			channels = map[string]int{}
+			clientNames = map[net.Conn]string{}
+			senderCon = make([]net.Conn, 16)
+			senderName = make([]string, 16)
+			senderValue = make([]string, 16)
+			receiverCons = make([][]net.Conn, 16)
+			receiverNames = make([][]string, 16)
+			altRecvCons = map[int][]altRecv{}
+			altRecvNames = map[int][][]string{}
+			maxChannel = 0
+			goCount = 0
+			/********************************************************************
+			 *  Re-constitute channels of equivalence arguments.
+			 *  All secondary channels in equivBase[] have been set to 0
+			 *  so use equivalences[] to get secondary channels instead.
+			 *******************************************************************/
+			if len(equivalences) > 0 {
+				bases := make([]string, 0, len(equivalences))
+				for base, _ := range equivalences {
+					bases = append(bases, base)
+				}
+				sort.Sort(iCboxOrder(bases))
+				for _, base := range bases {
+					for _, refEq := range equivalences[base] {
+						if refEq != nil {
+							secCh := refEq.channel
+							ref1 := *refEq.equivP
+							instances := make([]string, 0, len(ref1))
+							for inst, _ := range ref1 {
+								instances = append(instances, inst)
+							}
+							sort.Strings(instances)
+							for _, inst := range instances {
+								nn := ref1[inst]           // extend equivalence group with different instances
+								allocateChannel(nn, secCh) // allocate same channel for next IEC instance
+							}
+						}
+					}
+				}
+			}
+			if !*opt_q {
+				fmt.Printf("%02d: last client has disconnected\n", goId)
+			}
+		}
 
-    } else {
-	warnD(fmt.Sprintf("the client %q is not currently registered - system error", name))
-    }
+	} else {
+		warnD(fmt.Sprintf("the client %q is not currently registered - system error", name))
+	}
 } // disconnect
 
 /********************************************************************
@@ -664,15 +718,17 @@ func disconnect (name string, goId int) {
  *******************************************************************/
 
 func warnD(warnMsg string) {
-    fmt.Fprintf(os.Stderr, "%s: WARNING: %s\n", named, warnMsg)
-    receiverData := map[net.Conn][]string{}	// clear all keys and entries
-    if aref := receiverCons[0]; aref != nil {	// channel 0 for error messages
-	for _, rconn := range aref {
-	    if *opt_t { fmt.Fprintf(os.Stderr, "%s: sent warning => %s\n", named, clientNames[rconn]) }
-	    receiverData[rconn] = append(receiverData[rconn], "0:1;" + warnMsg)	//  message to channel 0
-	    writeReceiverData(receiverData, 0)	// write data collected for different receivers
+	fmt.Fprintf(os.Stderr, "%s: WARNING: %s\n", named, warnMsg)
+	receiverData := map[net.Conn][]string{}   // clear all keys and entries
+	if aref := receiverCons[0]; aref != nil { // channel 0 for error messages
+		for _, rconn := range aref {
+			if *opt_t {
+				fmt.Fprintf(os.Stderr, "%s: sent warning => %s\n", named, clientNames[rconn])
+			}
+			receiverData[rconn] = append(receiverData[rconn], "0:1;"+warnMsg) //  message to channel 0
+			writeReceiverData(receiverData, 0)                                // write data collected for different receivers
+		}
 	}
-    }
 } // warnD
 
 /********************************************************************
@@ -685,461 +741,507 @@ func warnD(warnMsg string) {
  *******************************************************************/
 
 func handleConnection(conn net.Conn) {
-    muConn.Lock()
-    defer muConn.Unlock()			// unlock when client disconnects
-    goCount++
-    goId := goCount				// identify this goroutine
-    if ! *opt_q { fmt.Printf("%02d: Connection %s at %s\n", goId, conn.RemoteAddr().String(), named) }
-    defer conn.Close()
-    var regFlag bool				// initially false
-    /********************************************************************
-     *  Receive messages from clients
-     *
-     *  connection 'conn' identifies the sender
-     *  message 'rbuf' has the following characteristics:
-     *  . zero length		client has signalled shutdown
-     *  . comma separated list	break up into individual items 'msg'
-     *    each item 'msg' has the following characteristics:
-     *    . matches /^\d+:.+$/	  split into channel and value, send
-     *				  value to all receivers for the channel
-     *    . matches /^[NnSsRrZ]/  registration item
-     *    . matches /^E.*$/	  equivalance message from an app
-     *    . matches /^[XT]/	  special actions
-     *    . equals ''		  ignore empty message before leading comma 
-     *    . else eror
-     *******************************************************************/
-    for {
-	receiverData := map[net.Conn][]string{} // hashed by con
-					      // { con1-> "ch1:val1,ch2:val2", con2-> "ch3:val3,ch4:val4" ... }
-					      // sent at end of Read - must be local to this goroutine
-	wbuf := make([]byte, 4, tcpcomm.REPLY+4)	// Perl type length+message buffer 
-	iniString := ""
-	if *opt_m {
-	    t0 = time.Now()
-	}
-	muConn.Unlock()
-	rbuf, err := tcpcomm.Read(conn)		// Read message from client
 	muConn.Lock()
-	if err != nil {
-	    if err == io.EOF {
-		break
-	    }
-	    fmt.Fprintln(os.Stderr, "Error in tcpcomm.Read!", err)
-	    break
+	defer muConn.Unlock() // unlock when client disconnects
+	goCount++
+	goId := goCount // identify this goroutine
+	if !*opt_q {
+		fmt.Printf("%02d: Connection %s at %s\n", goId, conn.RemoteAddr().String(), named)
 	}
-	sender := clientNames[conn]			// set when name registered for this 'conn'
-	if *opt_m {
-	    t1 := time.Now()
-	    diff := t1.Sub(t0)
-	    if *opt_t {
-		fmt.Printf("S %f: ", diff.Seconds())
-	    } else {
-		fmt.Printf("S %f\n", diff.Seconds())
-	    }
-	}
-	if *opt_t { fmt.Printf("%02d: (%d) %s < %q\n", goId, len(rbuf), rbuf, sender) }
-	if len(rbuf) == 0 {
-	    /********************************************************************
-	     *  Client 'conn' has signalled shutdown - disconnect client
-	     *  clear all entries for 'conn' in 'senderCon' and 'receiverCons'
-	     *******************************************************************/
-	    disconnect(sender, goId)
-	    break
-	}
-	for _, msg := range strings.Split(string(rbuf), ",") {
-	    if m := reData.FindStringSubmatch(msg); len(m) != 0 {	// "^([0-9]+):(.*)$"
-		if ! regFlag {
-		    warnD(fmt.Sprintf("data %q during registration - app spec error", msg))
-		    continue
+	defer conn.Close()
+	var regFlag bool // initially false
+	/********************************************************************
+	 *  Receive messages from clients
+	 *
+	 *  connection 'conn' identifies the sender
+	 *  message 'rbuf' has the following characteristics:
+	 *  . zero length		client has signalled shutdown
+	 *  . comma separated list	break up into individual items 'msg'
+	 *    each item 'msg' has the following characteristics:
+	 *    . matches /^\d+:.+$/	  split into channel and value, send
+	 *				  value to all receivers for the channel
+	 *    . matches /^[NnSsRrZ]/  registration item
+	 *    . matches /^E.*$/	  equivalance message from an app
+	 *    . matches /^[XT]/	  special actions
+	 *    . equals ''		  ignore empty message before leading comma
+	 *    . else eror
+	 *******************************************************************/
+	for {
+		receiverData := map[net.Conn][]string{} // hashed by con
+		// { con1-> "ch1:val1,ch2:val2", con2-> "ch3:val3,ch4:val4" ... }
+		// sent at end of Read - must be local to this goroutine
+		wbuf := make([]byte, 4, tcpcomm.REPLY+4) // Perl type length+message buffer
+		iniString := ""
+		if *opt_m {
+			t0 = time.Now()
 		}
-		/********************************************************************
-		 *  Allow message to be received from any connection, not just
-		 *  from con = senderCon[channel]
-		 *  This allows apps to re-transmit received messages for debugging
-		 *******************************************************************/
-		channel, _ := strconv.Atoi(m[1])
-		senderValue[channel] = m[2]		// latest value in case lost connection
-		sendFlag := false
-		/********************************************************************
-		 *  Central function of server done at maximum speed.
-		 *  Transmit message from a sender for a particular channel
-		 *  to each receiver on that channel - most common case.
-		 *******************************************************************/
-		for _, rconn := range receiverCons[channel] {
-		    receiverData[rconn] = append(receiverData[rconn], msg) //  messages to receiver channels
-		    sendFlag = true
-		}
-		/********************************************************************
-		 *  Transmit message to each receiver on equivalenced alternate
-		 *  channels - this is very rare and only happens if several inputs
-		 *  on the same instance of an app are equivalenced. Only one statement
-		 *  is added to the execution of the common case.  Map altRecvCons
-		 *  is hashed by channel ... receive connections on alternate channel
-		 *  [ channel1, [ conn3, conn4 ... ],  channel2, [ conn5, conn6 ... ] ... ]
-		 *  NOTE: ReceiverCons[channel] may be empty and AltRecvCons[channel]
-		 *  may have entries for the case where an output from a connection is
-		 *  equivalenced with an input of the same connection.
-		 *******************************************************************/
-		if _, ok := altRecvCons[channel]; ok {			// exists
-		    for _, aref := range altRecvCons[channel] {
-			ch := aref.altsecCh				// alternate channel
-			for _, rconn := range aref.altCons {
-			    msg = fmt.Sprintf("%d:%s", ch, m[2])	// message value
-			    receiverData[rconn] = append(receiverData[rconn], msg) //  message to alternate channels
-			    sendFlag = true
+		muConn.Unlock()
+		rbuf, err := tcpcomm.Read(conn) // Read message from client
+		muConn.Lock()
+		if err != nil {
+			if err == io.EOF {
+				break
 			}
-		    }
-		}
-		if ! sendFlag {
-		    if *opt_t { fmt.Printf("%02d: %s %s => dummy\n", goId, sender, msg) }
-		}
-	    } else if m := reNname.FindStringSubmatch(msg); len(m) != 0 {	// "^N(.+)$"
-		name := m[1]
-		if name[0] == '-' {			// -bar is name of iClive session for program bar
-		    for i, con := range receiverCons[0] {
-			if con == conn {
-			    receiverNames[0][i] = name	// name has changed in old warning registration
-			    goto ALREADY_REGISTRERD
-			}
-		    }
-		    receiverCons[0]  = append(receiverCons[0], conn)	// new warning registration
-		    receiverNames[0] = append(receiverNames[0], name)
-		} else if con  := clientCons[name]; con != nil {
-		    /********************************************************************
-		     *  a client with the same name was previously registered
-		     *******************************************************************/
-		    if ! *opt_k {
-			/********************************************************************
-			 *  kill the new client and report error
-			 *******************************************************************/
-			warnD(fmt.Sprintf("trying to register client %q twice - aborted", name))
-			goCount--
-			return				// new client was not registered yet
-		    }
-		    /********************************************************************
-		     *  -k option: unregister and disconnect previous instance
-		     *  proceed with new registration
-		     *******************************************************************/
-		    disconnect(name, goId)	// kills old client process
-		    channel   := channels["D"+name]
-		    if channel != 0 {
-			iniString = fmt.Sprintf("%d:1", channel)	// get S.T. from new client
-		    }
-		}
-	      ALREADY_REGISTRERD:
-		clientCons[name]  = conn		// client by this name exists now
-		clientNames[conn] = name		// name may change for iClive connections
-		sender = name
-		numberOfConnections++
-		if ! *opt_q { fmt.Printf("%02d: %s: client registering now\n", goId, sender) }
-	    } else if m = reSRiec.FindStringSubmatch(msg); len(m) != 0 {	// `^([SR])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`
-		/********************************************************************
-		 *  regex is permissive allowing any number of instance digits
-		 *  clients have to stay in specification 1 to 3 digits
-		 *  if not, server still functions correctly
-		 *******************************************************************/
-		direction := m[1]
-		name      := m[2]
-		bits      := m[5]
-		muEquiv.Lock()				// allocateChannel() also called in allocateEquivalences()
-		channel := allocateChannel(name, 0)
-		muEquiv.Unlock()
-		var base string
-		var primCh, secCh int
-		if eqBase, ok := equivBase[name]; ok {
-		    base   = eqBase.base
-		    primCh = eqBase.primCh
-		    secCh  = eqBase.secCh
-		    if secCh == 0 {
-			eqBase.secCh = channel		// assign secondary channel now to flag registration
-		    } else if secCh != channel {
-			warnD(fmt.Sprintf("%q equivalenced channel %d not allocated channel %d ???", name, secCh, channel))
-			disconnect(sender, goId)
+			fmt.Fprintln(os.Stderr, "Error in tcpcomm.Read!", err)
 			break
-		    }					// secCh === channel
-		} else {
-		    base, primCh, secCh = name, channel, 0
 		}
-		ack := channel				// used to build acknowledge string
-		if *opt_t { fmt.Printf("%02d: register %s %q base = %q primCh = %d secCh = %d channel = %d ack = %d\n", goId, direction, name, base, primCh, secCh, channel, ack) }
-		if direction == "S" {
-		    if primCh != channel {
-			/********************************************************************
-			 *  A client is trying to register a sender on a channel for
-			 *  an alternate equivalence group TODO find a test case
-			 *******************************************************************/
-			if *opt_t { fmt.Printf("%02d: register S name = %q base = %q primCh = %d secCh = %d channel = %d\n", goId, name, base, primCh, secCh, channel) }
-			if equivBase[base].secCh != 0 {	// secondary channel of base name already registered
-			    ack = -channel
-			    warnD(fmt.Sprintf("%q trying to register S %q for alternative channel %d/%d - aborted", sender, name, primCh, channel))
-			    regFlag = true		// client registeration terminated
-			    disconnect(sender, goId)
-			    break
-			}
-			/********************************************************************
-			 *  Locate secondary group in map equivalences and move it
-			 *  to the primary position - adjust map equivBase
-			 *******************************************************************/
-			var i int
-			var aref *eq
-			for i, aref = range equivalences[base] {
-			    if aref.channel == channel {
-				goto Found
-			    }
-			}
-			goto NotFound
-		      Found:
-			equivalences[base] =  append(equivalences[base][:i],  equivalences[base][i+1:]...)
-			equivalences[base] =  append([]*eq{ aref },  equivalences[base][:]...)
-			if *opt_t { fmt.Printf("%02d: S delete equivalences[base = %s]\n", goId, base) }
-			delete(equivalences, base)			// delete old base entry
-			for _, equivBp := range equivBase {
-			    if equivBp.primCh == primCh {		// find old primary channel
-				equivBp.base   = name			//    re-assign base
-				equivBp.primCh = channel		//    re-assign primary channel
-			    }
-			}
-		      NotFound:
-		    }
-		    if senderCon[channel] != nil {
-			/********************************************************************
-			 *  A client is trying to register a sender twice on the same
-			 *  channel
-			 *******************************************************************/
-			ack = -channel
-			warnD(fmt.Sprintf("%q trying to register S %q for channel %d twice - aborted", sender, name, channel))
-			// has registered name and may already have registered some receivers
-			regFlag = true			// client registeration terminated
-			disconnect(sender, goId)
-			break
-		    }
-		    /********************************************************************
-		     *  Register a new Sender
-		     *  sends all registered receivers on the channel a 0 value
-		     *  (this also works for iClive - NOP)
-		     *******************************************************************/
-		    senderCon[channel]   = conn
-		    senderName[channel]  = name
-		    senderValue[channel] = "0"		// default initial value
-		    flag := false
-		    for _, rconn := range receiverCons[channel] {
-			receiverData[rconn] = append(receiverData[rconn], fmt.Sprintf("%d:0", channel))	//  reset receiver
-			flag = true			// sender has at least one receiver
-		    }
-		    if reQXBWL.FindString(name) != "" {	// `^Q[XBWL]\d+`
-			if ! flag {				// no iCbox for this sender if it has receivers
-			    iCboxParam := name
-			    if bits != "" {
-				iCboxParam += "," + bits
-			    }
-			    if boxName == "" {
-				boxName = sender + "-IO"
-				autoBoxCh<- boxName	// start AutoVivify iCbox
-			    }
-			    autoBoxCh<- iCboxParam
-			    if *opt_t { fmt.Printf("%02d: Autovivify %s: sender %s\n", goId, boxName, iCboxParam) }
-			}
-		    } else if boxName != "" && reIXBWL.FindString(name) != "" {	// `^I[XBWL]\d+`
-			autoBoxCh<- "-" + name	// delete AutoVivify entry (ignored if already done)
-			if *opt_t { fmt.Printf("%02d: Delete autovivify %s: sender %s\n", goId, boxName, name) }
-		    }
-		    if *opt_t { fmt.Printf("%02d: %q S %q	ack = %d\n", goId, sender, name, ack) }
-		} else if direction == "R" {
-		    /********************************************************************
-		     *  ignore duplicate Receiver entries for this conn
-		     *  TODO remove - this is no longer likely to happen with alternate groups
-		     *******************************************************************/
-		    if primCh == channel {
-			for _, rconn := range receiverCons[channel] {
-			    if rconn == conn {
-				// happens if receiver equivalences in the same client
-				ack = -channel		// not an error in iCbox
-				warnD(fmt.Sprintf("register R %q for channel %d at %q twice", name, channel, sender))
-			    }
-			}
-		    } else if _, ok := altRecvCons[primCh]; ok {		// exists
-			for _, aref := range altRecvCons[channel] {
-			    ch := aref.altsecCh					// alternate channel
-			    for _, rconn := range aref.altCons {
-				if rconn == conn {
-				    // happens if receiver equivalences in the same client
-				    ack = -ch		// not an error in iCbox
-				    warnD(fmt.Sprintf("register R %q for channel %d/%d at %q twice", name, primCh, ch, sender))
-				}
-			    }
-			}
-		    }
-		    ini:= senderValue[channel]					// current value
-		    if ack > 0 {
-			if primCh == channel {
-			    receiverCons[channel] = append(receiverCons[channel], conn)	// simple R registration
-			    receiverNames[channel] = append(receiverNames[channel], name)
+		sender := clientNames[conn] // set when name registered for this 'conn'
+		if *opt_m {
+			t1 := time.Now()
+			diff := t1.Sub(t0)
+			if *opt_t {
+				fmt.Printf("S %f: ", diff.Seconds())
 			} else {
-			    if _, ok := altRecvCons[primCh]; ok {		// exists
-				for i, aref := range altRecvCons[primCh] {
-				    secCh = aref.altsecCh			// alternate channel
-				    if *opt_t { fmt.Printf("%02d: scan   alternate R registration name = %q primCh = %d secCh = %d channel = %d\n    %v\n    %v\n",
-					goId, name, primCh, secCh, channel, altRecvCons[primCh], altRecvNames[primCh]) }
-				    if secCh == channel {
-					// extend alternate R registration group
-					altRecvCons[primCh][i].altCons = append(altRecvCons[primCh][i].altCons, conn)
-					// extend alternate R names
-					altRecvNames[primCh][i] = append(altRecvNames[primCh][i], name)
-					if *opt_t { fmt.Printf("%02d: extend alternate R registration name = %q primCh = %d secCh = %d channel = %d\n    %v\n    %v\n",
-					    goId, name, primCh, secCh, channel, altRecvCons[primCh], altRecvNames[primCh]) }
-					goto AltStored
-				    }
-				}
-			    }
-			    // new alternate R registration in group on a different channel
-			    altRecvCons[primCh] = append(altRecvCons[primCh], altRecv{ channel, []net.Conn{ conn } })
-			    altRecvNames[primCh] = append(altRecvNames[primCh], []string{ name })
-			    if *opt_t { fmt.Printf("%02d: new    alternate R registration name = %q primCh = %d channel = %d\n    %v\n    %v\n",
-				goId, name, primCh, channel, altRecvCons[primCh], altRecvNames[primCh]) }
-			  AltStored:
+				fmt.Printf("S %f\n", diff.Seconds())
 			}
-			if senderCon[primCh] != nil {	// is sender registered on primary channel ?
-			    if ini != "0" {					// yes - current value
+		}
+		if *opt_t {
+			fmt.Printf("%02d: (%d) %s < %q\n", goId, len(rbuf), rbuf, sender)
+		}
+		if len(rbuf) == 0 {
+			/********************************************************************
+			 *  Client 'conn' has signalled shutdown - disconnect client
+			 *  clear all entries for 'conn' in 'senderCon' and 'receiverCons'
+			 *******************************************************************/
+			disconnect(sender, goId)
+			break
+		}
+		for _, msg := range strings.Split(string(rbuf), ",") {
+			if m := reData.FindStringSubmatch(msg); len(m) != 0 { // "^([0-9]+):(.*)$"
+				if !regFlag {
+					warnD(fmt.Sprintf("data %q during registration - app spec error", msg))
+					continue
+				}
 				/********************************************************************
-				 *  sender is registered and has either initial value 0 or other
-				 *  current value - send new receiver value different to 0
-				 *  if sender is already registered
+				 *  Allow message to be received from any connection, not just
+				 *  from con = senderCon[channel]
+				 *  This allows apps to re-transmit received messages for debugging
 				 *******************************************************************/
-				iniSt := fmt.Sprintf("%d:%s", channel, ini)	// message to all secondary receivers
-				if iniString == "" {
-				    iniString = iniSt
-				} else {
-				    iniString += "," + iniSt
+				channel, _ := strconv.Atoi(m[1])
+				senderValue[channel] = m[2] // latest value in case lost connection
+				sendFlag := false
+				/********************************************************************
+				 *  Central function of server done at maximum speed.
+				 *  Transmit message from a sender for a particular channel
+				 *  to each receiver on that channel - most common case.
+				 *******************************************************************/
+				for _, rconn := range receiverCons[channel] {
+					receiverData[rconn] = append(receiverData[rconn], msg) //  messages to receiver channels
+					sendFlag = true
 				}
-			    }
-			} else if reIXBWL.FindString(base) != "" {	// `^I[XBWL]\d+`
-			    iCboxParam := base
-			    if bits != "" {
-				iCboxParam += "," + bits
-			    }
-			    if boxName == "" {
-				boxName = sender + "-IO"
-				autoBoxCh<- boxName		// start AutoVivify iCbox
-			    }
-			    autoBoxCh<- iCboxParam
-			    if *opt_t { fmt.Printf("%02d: Autovivify %s: receiver %s\n", goId, boxName, iCboxParam) }
+				/********************************************************************
+				 *  Transmit message to each receiver on equivalenced alternate
+				 *  channels - this is very rare and only happens if several inputs
+				 *  on the same instance of an app are equivalenced. Only one statement
+				 *  is added to the execution of the common case.  Map altRecvCons
+				 *  is hashed by channel ... receive connections on alternate channel
+				 *  [ channel1, [ conn3, conn4 ... ],  channel2, [ conn5, conn6 ... ] ... ]
+				 *  NOTE: ReceiverCons[channel] may be empty and AltRecvCons[channel]
+				 *  may have entries for the case where an output from a connection is
+				 *  equivalenced with an input of the same connection.
+				 *******************************************************************/
+				if _, ok := altRecvCons[channel]; ok { // exists
+					for _, aref := range altRecvCons[channel] {
+						ch := aref.altsecCh // alternate channel
+						for _, rconn := range aref.altCons {
+							msg = fmt.Sprintf("%d:%s", ch, m[2])                   // message value
+							receiverData[rconn] = append(receiverData[rconn], msg) //  message to alternate channels
+							sendFlag = true
+						}
+					}
+				}
+				if !sendFlag {
+					if *opt_t {
+						fmt.Printf("%02d: %s %s => dummy\n", goId, sender, msg)
+					}
+				}
+			} else if m := reNname.FindStringSubmatch(msg); len(m) != 0 { // "^N(.+)$"
+				name := m[1]
+				if name[0] == '-' { // -bar is name of iClive session for program bar
+					for i, con := range receiverCons[0] {
+						if con == conn {
+							receiverNames[0][i] = name // name has changed in old warning registration
+							goto ALREADY_REGISTRERD
+						}
+					}
+					receiverCons[0] = append(receiverCons[0], conn) // new warning registration
+					receiverNames[0] = append(receiverNames[0], name)
+				} else if con := clientCons[name]; con != nil {
+					/********************************************************************
+					 *  a client with the same name was previously registered
+					 *******************************************************************/
+					if !*opt_k {
+						/********************************************************************
+						 *  kill the new client and report error
+						 *******************************************************************/
+						warnD(fmt.Sprintf("trying to register client %q twice - aborted", name))
+						goCount--
+						return // new client was not registered yet
+					}
+					/********************************************************************
+					 *  -k option: unregister and disconnect previous instance
+					 *  proceed with new registration
+					 *******************************************************************/
+					disconnect(name, goId) // kills old client process
+					channel := channels["D"+name]
+					if channel != 0 {
+						iniString = fmt.Sprintf("%d:1", channel) // get S.T. from new client
+					}
+				}
+			ALREADY_REGISTRERD:
+				clientCons[name] = conn  // client by this name exists now
+				clientNames[conn] = name // name may change for iClive connections
+				sender = name
+				numberOfConnections++
+				if !*opt_q {
+					fmt.Printf("%02d: %s: client registering now\n", goId, sender)
+				}
+			} else if m = reSRiec.FindStringSubmatch(msg); len(m) != 0 { // `^([SR])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`
+				/********************************************************************
+				 *  regex is permissive allowing any number of instance digits
+				 *  clients have to stay in specification 1 to 3 digits
+				 *  if not, server still functions correctly
+				 *******************************************************************/
+				direction := m[1]
+				name := m[2]
+				bits := m[5]
+				muEquiv.Lock() // allocateChannel() also called in allocateEquivalences()
+				channel := allocateChannel(name, 0)
+				muEquiv.Unlock()
+				var base string
+				var primCh, secCh int
+				if eqBase, ok := equivBase[name]; ok {
+					base = eqBase.base
+					primCh = eqBase.primCh
+					secCh = eqBase.secCh
+					if secCh == 0 {
+						eqBase.secCh = channel // assign secondary channel now to flag registration
+					} else if secCh != channel {
+						warnD(fmt.Sprintf("%q equivalenced channel %d not allocated channel %d ???", name, secCh, channel))
+						disconnect(sender, goId)
+						break
+					} // secCh === channel
+				} else {
+					base, primCh, secCh = name, channel, 0
+				}
+				ack := channel // used to build acknowledge string
+				if *opt_t {
+					fmt.Printf("%02d: register %s %q base = %q primCh = %d secCh = %d channel = %d ack = %d\n", goId, direction, name, base, primCh, secCh, channel, ack)
+				}
+				if direction == "S" {
+					if primCh != channel {
+						/********************************************************************
+						 *  A client is trying to register a sender on a channel for
+						 *  an alternate equivalence group TODO find a test case
+						 *******************************************************************/
+						if *opt_t {
+							fmt.Printf("%02d: register S name = %q base = %q primCh = %d secCh = %d channel = %d\n", goId, name, base, primCh, secCh, channel)
+						}
+						if equivBase[base].secCh != 0 { // secondary channel of base name already registered
+							ack = -channel
+							warnD(fmt.Sprintf("%q trying to register S %q for alternative channel %d/%d - aborted", sender, name, primCh, channel))
+							regFlag = true // client registeration terminated
+							disconnect(sender, goId)
+							break
+						}
+						/********************************************************************
+						 *  Locate secondary group in map equivalences and move it
+						 *  to the primary position - adjust map equivBase
+						 *******************************************************************/
+						var i int
+						var aref *eq
+						for i, aref = range equivalences[base] {
+							if aref.channel == channel {
+								goto Found
+							}
+						}
+						goto NotFound
+					Found:
+						equivalences[base] = append(equivalences[base][:i], equivalences[base][i+1:]...)
+						equivalences[base] = append([]*eq{aref}, equivalences[base][:]...)
+						if *opt_t {
+							fmt.Printf("%02d: S delete equivalences[base = %s]\n", goId, base)
+						}
+						delete(equivalences, base) // delete old base entry
+						for _, equivBp := range equivBase {
+							if equivBp.primCh == primCh { // find old primary channel
+								equivBp.base = name      //    re-assign base
+								equivBp.primCh = channel //    re-assign primary channel
+							}
+						}
+					NotFound:
+					}
+					if senderCon[channel] != nil {
+						/********************************************************************
+						 *  A client is trying to register a sender twice on the same
+						 *  channel
+						 *******************************************************************/
+						ack = -channel
+						warnD(fmt.Sprintf("%q trying to register S %q for channel %d twice - aborted", sender, name, channel))
+						// has registered name and may already have registered some receivers
+						regFlag = true // client registeration terminated
+						disconnect(sender, goId)
+						break
+					}
+					/********************************************************************
+					 *  Register a new Sender
+					 *  sends all registered receivers on the channel a 0 value
+					 *  (this also works for iClive - NOP)
+					 *******************************************************************/
+					senderCon[channel] = conn
+					senderName[channel] = name
+					senderValue[channel] = "0" // default initial value
+					flag := false
+					for _, rconn := range receiverCons[channel] {
+						receiverData[rconn] = append(receiverData[rconn], fmt.Sprintf("%d:0", channel)) //  reset receiver
+						flag = true                                                                     // sender has at least one receiver
+					}
+					if reQXBWL.FindString(name) != "" { // `^Q[XBWL]\d+`
+						if !flag { // no iCbox for this sender if it has receivers
+							iCboxParam := name
+							if bits != "" {
+								iCboxParam += "," + bits
+							}
+							if boxName == "" {
+								boxName = sender + "-IO"
+								autoBoxCh <- boxName // start AutoVivify iCbox
+							}
+							autoBoxCh <- iCboxParam
+							if *opt_t {
+								fmt.Printf("%02d: Autovivify %s: sender %s\n", goId, boxName, iCboxParam)
+							}
+						}
+					} else if boxName != "" && reIXBWL.FindString(name) != "" { // `^I[XBWL]\d+`
+						autoBoxCh <- "-" + name // delete AutoVivify entry (ignored if already done)
+						if *opt_t {
+							fmt.Printf("%02d: Delete autovivify %s: sender %s\n", goId, boxName, name)
+						}
+					}
+					if *opt_t {
+						fmt.Printf("%02d: %q S %q	ack = %d\n", goId, sender, name, ack)
+					}
+				} else if direction == "R" {
+					/********************************************************************
+					 *  ignore duplicate Receiver entries for this conn
+					 *  TODO remove - this is no longer likely to happen with alternate groups
+					 *******************************************************************/
+					if primCh == channel {
+						for _, rconn := range receiverCons[channel] {
+							if rconn == conn {
+								// happens if receiver equivalences in the same client
+								ack = -channel // not an error in iCbox
+								warnD(fmt.Sprintf("register R %q for channel %d at %q twice", name, channel, sender))
+							}
+						}
+					} else if _, ok := altRecvCons[primCh]; ok { // exists
+						for _, aref := range altRecvCons[channel] {
+							ch := aref.altsecCh // alternate channel
+							for _, rconn := range aref.altCons {
+								if rconn == conn {
+									// happens if receiver equivalences in the same client
+									ack = -ch // not an error in iCbox
+									warnD(fmt.Sprintf("register R %q for channel %d/%d at %q twice", name, primCh, ch, sender))
+								}
+							}
+						}
+					}
+					ini := senderValue[channel] // current value
+					if ack > 0 {
+						if primCh == channel {
+							receiverCons[channel] = append(receiverCons[channel], conn) // simple R registration
+							receiverNames[channel] = append(receiverNames[channel], name)
+						} else {
+							if _, ok := altRecvCons[primCh]; ok { // exists
+								for i, aref := range altRecvCons[primCh] {
+									secCh = aref.altsecCh // alternate channel
+									if *opt_t {
+										fmt.Printf("%02d: scan   alternate R registration name = %q primCh = %d secCh = %d channel = %d\n    %v\n    %v\n",
+											goId, name, primCh, secCh, channel, altRecvCons[primCh], altRecvNames[primCh])
+									}
+									if secCh == channel {
+										// extend alternate R registration group
+										altRecvCons[primCh][i].altCons = append(altRecvCons[primCh][i].altCons, conn)
+										// extend alternate R names
+										altRecvNames[primCh][i] = append(altRecvNames[primCh][i], name)
+										if *opt_t {
+											fmt.Printf("%02d: extend alternate R registration name = %q primCh = %d secCh = %d channel = %d\n    %v\n    %v\n",
+												goId, name, primCh, secCh, channel, altRecvCons[primCh], altRecvNames[primCh])
+										}
+										goto AltStored
+									}
+								}
+							}
+							// new alternate R registration in group on a different channel
+							altRecvCons[primCh] = append(altRecvCons[primCh], altRecv{channel, []net.Conn{conn}})
+							altRecvNames[primCh] = append(altRecvNames[primCh], []string{name})
+							if *opt_t {
+								fmt.Printf("%02d: new    alternate R registration name = %q primCh = %d channel = %d\n    %v\n    %v\n",
+									goId, name, primCh, channel, altRecvCons[primCh], altRecvNames[primCh])
+							}
+						AltStored:
+						}
+						if senderCon[primCh] != nil { // is sender registered on primary channel ?
+							if ini != "0" { // yes - current value
+								/********************************************************************
+								 *  sender is registered and has either initial value 0 or other
+								 *  current value - send new receiver value different to 0
+								 *  if sender is already registered
+								 *******************************************************************/
+								iniSt := fmt.Sprintf("%d:%s", channel, ini) // message to all secondary receivers
+								if iniString == "" {
+									iniString = iniSt
+								} else {
+									iniString += "," + iniSt
+								}
+							}
+						} else if reIXBWL.FindString(base) != "" { // `^I[XBWL]\d+`
+							iCboxParam := base
+							if bits != "" {
+								iCboxParam += "," + bits
+							}
+							if boxName == "" {
+								boxName = sender + "-IO"
+								autoBoxCh <- boxName // start AutoVivify iCbox
+							}
+							autoBoxCh <- iCboxParam
+							if *opt_t {
+								fmt.Printf("%02d: Autovivify %s: receiver %s\n", goId, boxName, iCboxParam)
+							}
+						}
+						if boxName != "" && reQXBWL.FindString(base) != "" { // `^Q[XBWL]\d+`
+							autoBoxCh <- "-" + base // delete AutoVivify entry (ignored if already done)
+							if *opt_t {
+								fmt.Printf("%02d: Delete autovivify %s: receiver %s\n", goId, boxName, base)
+							}
+						}
+					}
+					if *opt_t {
+						fmt.Printf("%02d: %s R %s	ack = %d	ini = %q\n", goId, sender, name, ack, ini)
+					}
+				}
+				if len(wbuf) == 4 {
+					wbuf = append(wbuf, fmt.Sprintf("%d", ack)...)
+				} else {
+					wbuf = append(wbuf, fmt.Sprintf(",%d", ack)...)
+				}
+			} else if msg == "Z" {
+				if len(wbuf) <= 4 {
+					wbuf = append(wbuf, "-0"...) // send a null acknowledgment
+				}
+				regFlag = true // client has registered
+			} else if m := renName.FindStringSubmatch(msg); len(m) != 0 { // "^n(.+)$"
+				if name := m[1]; name != "" {
+					delete(clientNames, conn)
+					delete(clientCons, name)
+					numberOfConnections--
+					if !*opt_q {
+						fmt.Printf("%02d: %s: client unregistering now\n", goId, name)
+					}
+				} else {
+					/********************************************************************
+					 *  no client with this name was previously registered
+					 *******************************************************************/
+					warnD(fmt.Sprintf("no client with n %q was previously registered", name))
+				}
+				regFlag = false // client has deregistered (iClive only)
+			} else if m = resrIec.FindStringSubmatch(msg); len(m) != 0 { // `^([sr])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`
+				direction := m[1]
+				name := m[2] // ignore bits in m[5]
+				channel := channels[name]
+				if channel == 0 {
+					warnD(fmt.Sprintf("%q trying to unregister %q not previously registered - aborted", sender, name))
+				}
+				if direction == "s" {
+					var con net.Conn
+					if con = senderCon[channel]; con == nil {
+						warnD(fmt.Sprintf("%q trying to unregister s '%s; not registered as sender - aborted", sender, name))
+					} else
+					/********************************************************************
+					 *  Unregister a previously registered Sender
+					 *******************************************************************/
+					if con == conn {
+						senderCon[channel] = nil // no need to splice out only array entry
+						if *opt_t {
+							fmt.Printf("%02d: unregister sender   %s\n", goId, name)
+						}
+					} else {
+						warnD(fmt.Sprintf("%q trying to unregister s '%s; not registered as sender - aborted", sender, name))
+					}
+					// leave name
+					senderValue[channel] = "0" // reset initial value
+				} else if direction == "r" {
+					/********************************************************************
+					 *  check that there are no Receiver entries with this conn
+					 *******************************************************************/
+					for i, rconn := range receiverCons[channel] {
+						if rconn == conn {
+							if *opt_t {
+								fmt.Printf("%02d: unregister receiver %s\n", goId, name)
+							}
+							// splice out connection and name
+							receiverCons[channel] = append(receiverCons[channel][:i], receiverCons[channel][i+1:]...)
+							receiverNames[channel] = append(receiverNames[channel][:i], receiverNames[channel][i+1:]...)
+							/********************************************************************
+							 *  checked that there are no multiple Receiver entries
+							 *  with the same 'conn' when registering
+							 *  only used for iClive which only registers one receiver
+							 *  but use full algorithm just in case of future clients
+							 *******************************************************************/
+							break
+						}
+					}
+				}
+			} else if m := reEquiv.FindStringSubmatch(msg); len(m) != 0 { // "^E(.+)$"
+				if *opt_t {
+					fmt.Printf("%02d: Allocate equivs %q\n", goId, m[1])
+				}
+				allocateEquivalences(m[1])
+			} else if msg == "T" {
+				if *opt_t {
+					fmt.Printf("%02d: Print Tables\n", goId)
+				}
+				printTables()
+			} else if m := reXname.FindStringSubmatch(msg); len(m) != 0 { // "^X(.*)$"
+				if len(m[1]) == 0 {
+					shutdownServer(0, "Stop from parent")
+				} else {
+					shutdownServer(0, fmt.Sprintf("Stop from %q - stop %s", m[1], named))
+				}
+			} else if msg != "" {
+				fmt.Printf("%02d: Warning strange message %s in %s ???\n", goId, msg, rbuf) // ignore null msg
 			}
-			if boxName != "" && reQXBWL.FindString(base) != "" {	// `^Q[XBWL]\d+`
-			    autoBoxCh<- "-" + base	// delete AutoVivify entry (ignored if already done)
-			    if *opt_t { fmt.Printf("%02d: Delete autovivify %s: receiver %s\n", goId, boxName, base) }
+		}
+		if len(wbuf) > 4 {
+			/********************************************************************
+			 *  Send partial or final registration acknowledge string
+			 *  Must be sent before any initialization data generated during
+			 *  registration
+			 *******************************************************************/
+			if *opt_t {
+				fmt.Printf("%02d: ACK: %s => %s\n", goId, wbuf[4:], sender)
 			}
-		    }
-		    if *opt_t { fmt.Printf("%02d: %s R %s	ack = %d	ini = %q\n", goId, sender, name, ack, ini) }
-		}
-		if len(wbuf) == 4 {
-		    wbuf = append(wbuf, fmt.Sprintf("%d", ack)...)
-		} else {
-		    wbuf = append(wbuf, fmt.Sprintf(",%d", ack)...)
-		}
-	    } else if msg == "Z" {
-		if len(wbuf) <= 4 {
-		    wbuf = append(wbuf, "-0"...)	// send a null acknowledgment
-		}
-		regFlag = true			// client has registered
-	    } else if m := renName.FindStringSubmatch(msg); len(m) != 0 {	// "^n(.+)$"
-		if name := m[1]; name != "" {
-		    delete(clientNames, conn)
-		    delete(clientCons, name)
-		    numberOfConnections--
-		    if ! *opt_q { fmt.Printf("%02d: %s: client unregistering now\n", goId, name) }
-		} else {
-		    /********************************************************************
-		     *  no client with this name was previously registered
-		     *******************************************************************/
-		    warnD(fmt.Sprintf("no client with n %q was previously registered", name))
-		}
-		regFlag = false			// client has deregistered (iClive only)
-	    } else if m = resrIec.FindStringSubmatch(msg); len(m) != 0 {	// `^([sr])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`
-		direction := m[1]
-		name      := m[2]		// ignore bits in m[5]
-		channel   := channels[name]
-		if channel == 0 {
-		    warnD(fmt.Sprintf("%q trying to unregister %q not previously registered - aborted", sender, name))
-		}
-		if direction == "s" {
-		    var con net.Conn
-		    if con = senderCon[channel]; con == nil {
-			warnD(fmt.Sprintf("%q trying to unregister s '%s; not registered as sender - aborted", sender, name))
-		    } else
-		    /********************************************************************
-		     *  Unregister a previously registered Sender
-		     *******************************************************************/
-		    if con == conn {
-			senderCon[channel] = nil	// no need to splice out only array entry
-			if *opt_t { fmt.Printf("%02d: unregister sender   %s\n", goId, name) }
-		    } else {
-			warnD(fmt.Sprintf("%q trying to unregister s '%s; not registered as sender - aborted", sender, name))
-		    }
-		    // leave name
-		    senderValue[channel] = "0"		// reset initial value
-		} else if direction == "r" {
-		    /********************************************************************
-		     *  check that there are no Receiver entries with this conn
-		     *******************************************************************/
-		    for i, rconn := range receiverCons[channel] {
-			if rconn == conn {
-			    if *opt_t { fmt.Printf("%02d: unregister receiver %s\n", goId, name) }
-			    // splice out connection and name
-			    receiverCons[channel]  = append(receiverCons[channel][:i],  receiverCons[channel][i+1:]...)
-			    receiverNames[channel] = append(receiverNames[channel][:i], receiverNames[channel][i+1:]...)
-			    /********************************************************************
-			     *  checked that there are no multiple Receiver entries
-			     *  with the same 'conn' when registering
-			     *  only used for iClive which only registers one receiver
-			     *  but use full algorithm just in case of future clients
-			     *******************************************************************/
-			    break
+			err = tcpcomm.Write(conn, &wbuf) // registration acknowledgement
+			if err != nil {
+				shutdownServer(5, fmt.Sprint(err))
 			}
-		    }
+			if regFlag { // defer ini and autoVivBox until registration terminated
+				if iniString != "" {
+					// must be independent xmission, because different rcv call in client
+					if *opt_t {
+						fmt.Printf("%02d: INI: %s => %s\n", goId, iniString, sender)
+					} // registration initialization
+					wbuf = []byte{0, 0, 0, 0}                 // clear wbuf for this iteration
+					wbuf = append(wbuf, []byte(iniString)...) // build Perl type message
+					err = tcpcomm.Write(conn, &wbuf)
+					if err != nil {
+						shutdownServer(6, fmt.Sprint(err))
+					}
+				}
+			}
+		} else if regFlag {
+			writeReceiverData(receiverData, goId) // write data collected for different receivers
 		}
-	    } else if m := reEquiv.FindStringSubmatch(msg); len(m) != 0 {	// "^E(.+)$"
-		if *opt_t { fmt.Printf("%02d: Allocate equivs %q\n", goId, m[1]) }
-		allocateEquivalences(m[1])
-	    } else if msg == "T" {
-		if *opt_t { fmt.Printf("%02d: Print Tables\n", goId) }
-		printTables()
-	    } else if m := reXname.FindStringSubmatch(msg); len(m) != 0 {	// "^X(.*)$"
-		if len(m[1]) == 0 {
-		    shutdownServer(0, "Stop from parent")
-		} else {
-		    shutdownServer(0, fmt.Sprintf("Stop from %q - stop %s", m[1], named))
-		}
-	    } else if msg != "" {
-		fmt.Printf("%02d: Warning strange message %s in %s ???\n", goId, msg, rbuf)	// ignore null msg
-	    }
 	}
-	if len(wbuf) > 4 {
-	    /********************************************************************
-	     *  Send partial or final registration acknowledge string
-	     *  Must be sent before any initialization data generated during
-	     *  registration
-	     *******************************************************************/
-	    if *opt_t { fmt.Printf("%02d: ACK: %s => %s\n", goId, wbuf[4:], sender) }
-	    err = tcpcomm.Write(conn, &wbuf)	// registration acknowledgement
-	    if err != nil {
-		shutdownServer(5, fmt.Sprint(err))
-	    }
-	    if regFlag {			// defer ini and autoVivBox until registration terminated
-		if iniString != "" {
-		    // must be independent xmission, because different rcv call in client
-		    if *opt_t { fmt.Printf("%02d: INI: %s => %s\n", goId, iniString, sender) }	// registration initialization
-		    wbuf = []byte{ 0, 0, 0, 0 }			// clear wbuf for this iteration
-		    wbuf = append(wbuf, []byte(iniString)...)	// build Perl type message
-		    err = tcpcomm.Write(conn, &wbuf)
-		    if err != nil {
-			shutdownServer(6, fmt.Sprint(err))
-		    }
-		}
-	    }
-	} else if regFlag {
-	    writeReceiverData(receiverData, goId)		// write data collected for different receivers
-	}
-    }
 } // handleConnection
 
 /********************************************************************
@@ -1150,36 +1252,49 @@ func handleConnection(conn net.Conn) {
  *  IX IB IW IL IH QX QB QW QL QH .. finally number
  *   0  1  2  .. 10 11 12 .. 9999 .. correct for numerical compare
  *******************************************************************/
-var sortOrder = map[string]int {	// determines in which order iCboxes ar autovivified
-    "IX": 0, "QX": 5,
-    "IB": 1, "QB": 6,
-    "IW": 2, "QW": 7,
-    "IL": 3, "QL": 8,
-    "IH": 4, "QH": 9,
+var sortOrder = map[string]int{ // determines in which order iCboxes ar autovivified
+	"IX": 0, "QX": 5,
+	"IB": 1, "QB": 6,
+	"IW": 2, "QW": 7,
+	"IL": 3, "QL": 8,
+	"IH": 4, "QH": 9,
 }
 
 type iCboxOrder []string
+
 func (p iCboxOrder) Len() int { return len(p) }
 func (p iCboxOrder) Less(i, j int) bool {
-    var ci, cj int
-    mi := make([]string, 5)
-    mj := make([]string, 5)
-    // "^([A-Z]+)(\d+)(-(\d+))?" to parse "IX0", "IB1-0", "QH99-999" etc 
-    if mi = reSort.FindStringSubmatch(p[i]); len(mi) != 5 { panic("illformed IEC string to sort") }
-    if mj = reSort.FindStringSubmatch(p[j]); len(mj) != 5 { panic("illformed IEC string to sort") }
-    if mi[4] == "" { ci = -1 } else { ci, _ = strconv.Atoi(mi[4]) }
-    if mj[4] == "" { cj = -1 } else { cj, _ = strconv.Atoi(mj[4]) }
-    if ci != cj {
-	return ci < cj			// instance "" => -1, "-0" => 0, ... "-999" => 999
-    }
-    ci    = sortOrder[mi[1]]
-    cj    = sortOrder[mj[1]]
-    if ci != cj {
-	return ci < cj			// IEC header "IX" => 0, "IB" => 1, ... "QH" => 9
-    }
-    ci, _ = strconv.Atoi(mi[2])
-    cj, _ = strconv.Atoi(mj[2])
-    return ci < cj			// IEC number "0" => 0, "1" => 1, ... "99" => 99
+	var ci, cj int
+	mi := make([]string, 5)
+	mj := make([]string, 5)
+	// "^([A-Z]+)(\d+)(-(\d+))?" to parse "IX0", "IB1-0", "QH99-999" etc
+	if mi = reSort.FindStringSubmatch(p[i]); len(mi) != 5 {
+		panic("illformed IEC string to sort")
+	}
+	if mj = reSort.FindStringSubmatch(p[j]); len(mj) != 5 {
+		panic("illformed IEC string to sort")
+	}
+	if mi[4] == "" {
+		ci = -1
+	} else {
+		ci, _ = strconv.Atoi(mi[4])
+	}
+	if mj[4] == "" {
+		cj = -1
+	} else {
+		cj, _ = strconv.Atoi(mj[4])
+	}
+	if ci != cj {
+		return ci < cj // instance "" => -1, "-0" => 0, ... "-999" => 999
+	}
+	ci = sortOrder[mi[1]]
+	cj = sortOrder[mj[1]]
+	if ci != cj {
+		return ci < cj // IEC header "IX" => 0, "IB" => 1, ... "QH" => 9
+	}
+	ci, _ = strconv.Atoi(mi[2])
+	cj, _ = strconv.Atoi(mj[2])
+	return ci < cj // IEC number "0" => 0, "1" => 1, ... "99" => 99
 }
 func (p iCboxOrder) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
 
@@ -1189,77 +1304,91 @@ func (p iCboxOrder) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
  *
  *******************************************************************/
 
-var boxName  string			// global variable - reset after 1 iCbox is autovivified
-var autoBoxCh  = make(chan string)	// AutoVivify iCbox go channel
+var boxName string                // global variable - reset after 1 iCbox is autovivified
+var autoBoxCh = make(chan string) // AutoVivify iCbox go channel
 
 func autoVivBox(avArg string) {
-    iCboxCmd := strings.Split(avArg, " ")
-    if *opt_t { fmt.Printf("=b= iCboxCmd   = %s\n", iCboxCmd[0]) }
-    for {
-	var ioName, autoMsg string
-	var iCboxFlags = make([]string, 0, 20)
-	iCboxMap  := map[string]string{}
-	var iCboxArgs  = make([]string, 0, 16)
-	if len(iCboxCmd) > 1 {
-	    if iCboxCmd[1] == "-d" {
-		flag1.Set("d", "true")		// *opt_d = true - may be set with *opt_A
-	    }
-	    iCboxFlags = append(iCboxFlags, iCboxCmd[1:]...)
+	iCboxCmd := strings.Split(avArg, " ")
+	if *opt_t {
+		fmt.Printf("=b= iCboxCmd   = %s\n", iCboxCmd[0])
 	}
-	if *opt_p != TCP_PORT { iCboxFlags = append(iCboxFlags, "-p", *opt_p) }
-	if *opt_t { iCboxFlags = append(iCboxFlags, "-t") }
-	if *opt_m { iCboxFlags = append(iCboxFlags, "-m") }
-	if *opt_q { iCboxFlags = append(iCboxFlags, "-q") }
-	boxName = ""				// global first name of an autovivified iCbox
-	ioName   = <-autoBoxCh			// ioName triggers building of iCboxArgs
-      loop:
 	for {
-	    select {
-	    case autoMsg = <-autoBoxCh:		// waits for next message string
-		if *opt_t { fmt.Println("=b= autoMsg    =", autoMsg) }
-		if autoMsg[0] != '-' {
-		    iec := strings.SplitN(autoMsg, ",", 2)
-		    iCboxMap[iec[0]] = autoMsg	// remove ,bits in key to allow delete
-		} else {
-		    iec := autoMsg[1:]
-		    delete(iCboxMap, iec)
-		    if eqb, ok := equivBase[iec]; ok {
-			if eqb.base != iec {
-			    delete(iCboxMap, eqb.base)
+		var ioName, autoMsg string
+		var iCboxFlags = make([]string, 0, 20)
+		iCboxMap := map[string]string{}
+		var iCboxArgs = make([]string, 0, 16)
+		if len(iCboxCmd) > 1 {
+			if iCboxCmd[1] == "-d" {
+				flag1.Set("d", "true") // *opt_d = true - may be set with *opt_A
 			}
-		    }
+			iCboxFlags = append(iCboxFlags, iCboxCmd[1:]...)
 		}
-	    case <-time.After(time.Second):	// delay for other apps to register
-		break loop			// out of select and 2nd for
-	    }
+		if *opt_p != TCP_PORT {
+			iCboxFlags = append(iCboxFlags, "-p", *opt_p)
+		}
+		if *opt_t {
+			iCboxFlags = append(iCboxFlags, "-t")
+		}
+		if *opt_m {
+			iCboxFlags = append(iCboxFlags, "-m")
+		}
+		if *opt_q {
+			iCboxFlags = append(iCboxFlags, "-q")
+		}
+		boxName = ""         // global first name of an autovivified iCbox
+		ioName = <-autoBoxCh // ioName triggers building of iCboxArgs
+	loop:
+		for {
+			select {
+			case autoMsg = <-autoBoxCh: // waits for next message string
+				if *opt_t {
+					fmt.Println("=b= autoMsg    =", autoMsg)
+				}
+				if autoMsg[0] != '-' {
+					iec := strings.SplitN(autoMsg, ",", 2)
+					iCboxMap[iec[0]] = autoMsg // remove ,bits in key to allow delete
+				} else {
+					iec := autoMsg[1:]
+					delete(iCboxMap, iec)
+					if eqb, ok := equivBase[iec]; ok {
+						if eqb.base != iec {
+							delete(iCboxMap, eqb.base)
+						}
+					}
+				}
+			case <-time.After(time.Second): // delay for other apps to register
+				break loop // out of select and 2nd for
+			}
+		}
+		if len(iCboxMap) > 0 {
+			for _, am := range iCboxMap {
+				iCboxArgs = append(iCboxArgs, am)
+			}
+			sort.Sort(iCboxOrder(iCboxArgs))
+			if *opt_a {
+				for clientCons[ioName] != nil {
+					ioName += "x"
+				}
+				iCboxFlags = append(iCboxFlags, "-n", ioName)
+				iCboxFlags = append(iCboxFlags, iCboxArgs...)
+				if !*opt_q {
+					fmt.Printf("$ %s %v\n", iCboxCmd[0], strings.Join(iCboxFlags, " "))
+				}
+				cmd := exec.Command(iCboxCmd[0], iCboxFlags...)
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				err := cmd.Start() // execute iCbox in another process
+				if err != nil {
+					shutdownServer(7, fmt.Sprint(err))
+				}
+				if *opt_d {
+					flag1.Set("a", "false") // autovivify iCbox -d only once to stop recursion
+				}
+			} else {
+				warnD(fmt.Sprintf("%q I/Os are missing", strings.Join(iCboxArgs, " ")))
+			}
+		}
 	}
-	if len(iCboxMap) > 0 {
-	    for _, am := range iCboxMap {
-		iCboxArgs = append(iCboxArgs, am)
-	    }
-	    sort.Sort(iCboxOrder(iCboxArgs))
-	    if *opt_a {
-		for clientCons[ioName] != nil {
-		    ioName += "x"
-		}
-		iCboxFlags = append(iCboxFlags, "-n", ioName)
-		iCboxFlags = append(iCboxFlags, iCboxArgs...)
-		if ! *opt_q { fmt.Printf("$ %s %v\n", iCboxCmd[0], strings.Join(iCboxFlags, " ")) }
-		cmd := exec.Command(iCboxCmd[0], iCboxFlags...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		err := cmd.Start()			// execute iCbox in another process
-		if err != nil {
-		    shutdownServer(7, fmt.Sprint(err))
-		}
-		if *opt_d {
-		    flag1.Set("a", "false")	// autovivify iCbox -d only once to stop recursion
-		}
-	    } else {
-		warnD(fmt.Sprintf("%q I/Os are missing", strings.Join(iCboxArgs, " ")))
-	    }
-	}
-    }
 } // autoVivBox
 
 /********************************************************************
@@ -1269,25 +1398,25 @@ func autoVivBox(avArg string) {
  *******************************************************************/
 
 func keyboardIn() {
-    in := bufio.NewReader(os.Stdin)
-  kbLoop:
-    for {
-	r, _, err := in.ReadRune()
-	if err == io.EOF {
-	    break kbLoop
+	in := bufio.NewReader(os.Stdin)
+kbLoop:
+	for {
+		r, _, err := in.ReadRune()
+		if err == io.EOF {
+			break kbLoop
+		}
+		switch r {
+		case 'T':
+			printTables()
+		case 'm':
+			*opt_m = !*opt_m // toggle -m option
+		case 't':
+			*opt_t = !*opt_t // toggle -t option
+		case 'q':
+			break kbLoop
+		}
 	}
-	switch r {
-	case 'T':
-	    printTables()
-	case 'm':
-	    *opt_m = ! *opt_m			// toggle -m option
-	case 't':
-	    *opt_t = ! *opt_t			// toggle -t option
-	case 'q':
-	    break kbLoop
-	}
-    }
-    shutdownServer(0, "Stop from keyboard")	// gracefull shutdown
+	shutdownServer(0, "Stop from keyboard") // gracefull shutdown
 } // keyboarIn
 
 /********************************************************************
@@ -1297,12 +1426,12 @@ func keyboardIn() {
  *******************************************************************/
 
 func shutdownServer(ret int, message string) {
-    if ret != 0 {
-	fmt.Fprintln(os.Stderr, message)
-    } else if ! *opt_q {
-	fmt.Println(message)
-    }
-    os.Exit(ret)
+	if ret != 0 {
+		fmt.Fprintln(os.Stderr, message)
+	} else if !*opt_q {
+		fmt.Println(message)
+	}
+	os.Exit(ret)
 } // shutdownServer
 
 /********************************************************************
@@ -1343,90 +1472,92 @@ func shutdownServer(ret int, message string) {
  *
  *******************************************************************/
 
-var args    = make([]string, 0, len(os.Args))
+var args = make([]string, 0, len(os.Args))
 var runArgs = make([]string, 0, len(os.Args))
 var argsP *[]string
 var Rflag int
-var commandLineFlags = map[string]int {
-    "a":0,					// Bool flag
-    "d":0,
-    "t":0,
-    "m":0,
-    "q":0,
-    "r":0,
-    "k":0,
-    "z":0,
-    "h":0,
-    "s":1,					// value flag
-    "p":1,
-    "e":1,
-    "A":1,
-    "f":1,
-    "R":1,
+var commandLineFlags = map[string]int{
+	"a": 0, // Bool flag
+	"d": 0,
+	"t": 0,
+	"m": 0,
+	"q": 0,
+	"r": 0,
+	"k": 0,
+	"z": 0,
+	"h": 0,
+	"s": 1, // value flag
+	"p": 1,
+	"e": 1,
+	"A": 1,
+	"f": 1,
+	"R": 1,
 }
 
 func convertFlags(argp *[]string, offset int) {
-    Fflag := false
-    for _, arg := range (*argp)[offset:] {
-	if len(arg) == 0 { continue}
-	Sflag := true
-	if arg != "-" && arg[0] == '-' && arg[1] != '-' && (Rflag == 0 || arg[1] == 'R') {
-	    Sflag = false
-	    for i, sf := range strings.Split(arg[1:], "") {
-		clf, ok := 0, false
-		if clf, ok = commandLineFlags[sf]; !ok {
-		    arg = "-" + arg[i+1:]	// not our flag - nevertheless retain '-'
-		    Sflag = true
-		    break
+	Fflag := false
+	for _, arg := range (*argp)[offset:] {
+		if len(arg) == 0 {
+			continue
 		}
-		if sf == "R" && Rflag == 0 {
-		    Rflag = 1			// first -R not appended to args or runArgs
-		    argsP = &runArgs		// now fill arguments for -R option in runArgs
-		} else if sf == "f" && Rflag == 0 {
-		    Fflag = true
-		} else {
-		    *argsP = append(*argsP, "-" + sf)
+		Sflag := true
+		if arg != "-" && arg[0] == '-' && arg[1] != '-' && (Rflag == 0 || arg[1] == 'R') {
+			Sflag = false
+			for i, sf := range strings.Split(arg[1:], "") {
+				clf, ok := 0, false
+				if clf, ok = commandLineFlags[sf]; !ok {
+					arg = "-" + arg[i+1:] // not our flag - nevertheless retain '-'
+					Sflag = true
+					break
+				}
+				if sf == "R" && Rflag == 0 {
+					Rflag = 1        // first -R not appended to args or runArgs
+					argsP = &runArgs // now fill arguments for -R option in runArgs
+				} else if sf == "f" && Rflag == 0 {
+					Fflag = true
+				} else {
+					*argsP = append(*argsP, "-"+sf)
+				}
+				if clf == 1 && i+2 < len(arg) {
+					arg = arg[i+2:] // value flag followed directly by value
+					Sflag = true
+					break
+				}
+			}
 		}
-		if clf == 1 && i+2 < len(arg) {
-		    arg = arg[i+2:]		// value flag followed directly by value
-		    Sflag = true
-		    break
+		if Sflag {
+			if !Fflag {
+				*argsP = append(*argsP, arg) // append a value after a value flag
+				if Rflag == 1 {
+					*argsP = append(*argsP, "-z") // insert -z after first -R <app>
+					Rflag = 2
+				}
+			} else {
+				var incArgs []string // process options in an include file
+				reComment := regexp.MustCompile(`(^\s+)|(\s*(#.*)?$)`)
+				reSpaces := regexp.MustCompile(`\s*([=:,;.])\s*`)
+				Fflag = false
+				includeFile, err := os.Open(arg)
+				if err != nil {
+					shutdownServer(8, fmt.Sprint(err))
+				}
+				defer includeFile.Close()
+				scanner := bufio.NewScanner(includeFile)
+				scanner.Split(bufio.ScanLines)
+				for scanner.Scan() {
+					text := scanner.Text()
+					text = reComment.ReplaceAllLiteralString(text, "") // strip leading space and trailing comment
+					text = reSpaces.ReplaceAllString(text, "$1")       // remove spaces around separators
+					if len(text) > 0 {
+						incArgs = append(incArgs, strings.Split(text, " ")...)
+					}
+				}
+				if len(incArgs) > 0 {
+					convertFlags(&incArgs, 0) // recursive call to add options in include file
+				}
+			}
 		}
-	    }
 	}
-	if Sflag {
-	    if ! Fflag {
-		*argsP = append(*argsP, arg)	// append a value after a value flag
-		if Rflag == 1 {
-		    *argsP = append(*argsP, "-z")	// insert -z after first -R <app>
-		    Rflag = 2
-		}
-	    } else {
-		var incArgs []string		// process options in an include file
-		reComment := regexp.MustCompile(`(^\s+)|(\s*(#.*)?$)`)
-		reSpaces  := regexp.MustCompile(`\s*([=:,;.])\s*`)
-		Fflag = false
-		includeFile, err := os.Open(arg)
-		if err != nil {
-		    shutdownServer(8, fmt.Sprint(err))
-		}
-		defer includeFile.Close()
-		scanner := bufio.NewScanner(includeFile)
-		scanner.Split(bufio.ScanLines)
-		for scanner.Scan() {
-		    text := scanner.Text()
-		    text = reComment.ReplaceAllLiteralString(text, "")	// strip leading space and trailing comment
-		    text = reSpaces.ReplaceAllString(text, "$1")	// remove spaces around separators
-		    if len(text) > 0 {
-			incArgs = append(incArgs, strings.Split(text, " ")...)
-		    }
-		}
-		if len(incArgs) > 0 {
-		    convertFlags(&incArgs, 0)	// recursive call to add options in include file
-		}
-	    }
-	}
-    }
 } // convertFlags
 
 /********************************************************************
@@ -1440,15 +1571,15 @@ func convertFlags(argp *[]string, offset int) {
  *
  *******************************************************************/
 
-type multStringFlag []string			// flag can be used multiple times returning []string
+type multStringFlag []string // flag can be used multiple times returning []string
 
 func (m *multStringFlag) String() string {
-    return ""					// satisfies interface - not used ??
+	return "" // satisfies interface - not used ??
 }
 
 func (m *multStringFlag) Set(value string) error {
-    *m = append(*m, strings.TrimSpace(value))
-    return nil
+	*m = append(*m, strings.TrimSpace(value))
+	return nil
 }
 
 var opt_e multStringFlag
@@ -1462,21 +1593,21 @@ var flag1 *flag.FlagSet
 var t0 time.Time
 
 func main() {
-    re := regexp.MustCompile(`.*[/\\]`)
-    named = re.ReplaceAllLiteralString(os.Args[0], "")
-    flag1 = flag.NewFlagSet(named, flag.ExitOnError)
-    opt_s = flag1.String("s", "0.0.0.0", "host address that clients must specify unless")
-    opt_p = flag1.String("p", TCP_PORT, "specify TCP port")
-    opt_a = flag1.Bool("a", false, "autovivify \"iCbox\" - provides virtual I/O")
-    opt_d = flag1.Bool("d", false, "autovivify \"iCbox -d\" - useful for monitoring real I/O")
-    opt_A = flag1.String("A", "", "autovivify alternate iCbox call (default \"iCbox\")")
-    flag1.Var(&opt_e, "e", "define equivalences eg 'IX0=IX0-1=IX0-2'\nmay be used multiple times")
-    opt_t = flag1.Bool("t", false, "trace messages for debugging")
-    opt_m = flag1.Bool("m", false, "display elapsed time in seconds and microseconds")
-    opt_q = flag1.Bool("q", false, "quit - do not report clients connecting and disconnecting")
-    opt_r = flag1.Bool("r", false, "reset registered receivers when sender disconnects - ie reset\noutputs of an app when it shuts down (default no change)")
-    opt_k = flag1.Bool("k", false, "kill previous client when a new client with the same name registers\n(default: do not accept the new client)")
-    opt_z = flag1.Bool("z", false, fmt.Sprintf(`block keyboard input - must be used when running in background
+	re := regexp.MustCompile(`.*[/\\]`)
+	named = re.ReplaceAllLiteralString(os.Args[0], "")
+	flag1 = flag.NewFlagSet(named, flag.ExitOnError)
+	opt_s = flag1.String("s", "0.0.0.0", "host address that clients must specify unless")
+	opt_p = flag1.String("p", TCP_PORT, "specify TCP port")
+	opt_a = flag1.Bool("a", false, "autovivify \"iCbox\" - provides virtual I/O")
+	opt_d = flag1.Bool("d", false, "autovivify \"iCbox -d\" - useful for monitoring real I/O")
+	opt_A = flag1.String("A", "", "autovivify alternate iCbox call (default \"iCbox\")")
+	flag1.Var(&opt_e, "e", "define equivalences eg 'IX0=IX0-1=IX0-2'\nmay be used multiple times")
+	opt_t = flag1.Bool("t", false, "trace messages for debugging")
+	opt_m = flag1.Bool("m", false, "display elapsed time in seconds and microseconds")
+	opt_q = flag1.Bool("q", false, "quit - do not report clients connecting and disconnecting")
+	opt_r = flag1.Bool("r", false, "reset registered receivers when sender disconnects - ie reset\noutputs of an app when it shuts down (default no change)")
+	opt_k = flag1.Bool("k", false, "kill previous client when a new client with the same name registers\n(default: do not accept the new client)")
+	opt_z = flag1.Bool("z", false, fmt.Sprintf(`block keyboard input - must be used when running in background
 
         KEYBOARD inputs
         t   toggle -t option - trace messages for debugging.
@@ -1491,117 +1622,133 @@ Copyright (C) 2001  John E. Wulff    <immediateC@gmail.com>
 %q
 %q`, named, named, named, ID_goserver_go, tcpcomm.ID_tcpcomm_go))
 
-    // The -f and -R option are handled directly in convertFlags(). Include here for help info
-    _     = flag1.String("f", "", "include file containing options, equivalences and client calls")
-    _     = flag1.String("R", "", `run one app followed by -z and its arguments as a
+	// The -f and -R option are handled directly in convertFlags(). Include here for help info
+	_ = flag1.String("f", "", "include file containing options, equivalences and client calls")
+	_ = flag1.String("R", "", `run one app followed by -z and its arguments as a
 separate process; -R ... must be last arguments`)
 
-    argsP = &args				// intially fill []args
-    convertFlags(&os.Args, 1)			// convert POSIX flags to individual flags - process -f -R flags
-    flag1.Parse(args)
-    if *opt_t { fmt.Printf("args    = %v\nrunArgs = %v\n", args, runArgs) }
-    if len(flag1.Args()) > 0 {
-	shutdownServer(0, fmt.Sprintf("ERROR: unknown command line arguments %v", flag1.Args()))
-    }
-    ipAdress := *opt_s + ":" + *opt_p
-    if *opt_A != "" {
-	flag1.Set("a", "true")
-	if *opt_d {
-	    rd := regexp.MustCompile(`iCbox`)
-	    *opt_A = rd.ReplaceAllLiteralString(os.Args[0], "iCbox -d")
+	argsP = &args             // intially fill []args
+	convertFlags(&os.Args, 1) // convert POSIX flags to individual flags - process -f -R flags
+	flag1.Parse(args)
+	if *opt_t {
+		fmt.Printf("args    = %v\nrunArgs = %v\n", args, runArgs)
 	}
-    } else if *opt_d {
-	flag1.Set("a", "true")
-	flag1.Set("A", "iCbox -d")
-    } else {
-	flag1.Set("A", "iCbox")
-    }
-    /********************************************************************
-     *  Compile all global regular expressions here only once.
-     *  A Regexp is safe for concurrent use by multiple goroutines.
-     *******************************************************************/
-    reData  = regexp.MustCompile(`^(\d+):(.*)$`)
-    reNname = regexp.MustCompile(`^N(.+)$`)
-    reSRiec = regexp.MustCompile(`^([SR])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`)
-    renName = regexp.MustCompile(`^n(.+)$`)
-    resrIec = regexp.MustCompile(`^([sr])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`)
-    reEquiv = regexp.MustCompile(`^E(.+)$`)
-    reXname = regexp.MustCompile(`^X(.*)$`)
-    reQXBWL = regexp.MustCompile(`^Q[XBWL]\d+`)
-    reIXBWL = regexp.MustCompile(`^I[XBWL]\d+`)
-    reSort  = regexp.MustCompile(`^([A-Z]+)(\d+)(-(\d+))?`)
-    /********************************************************************
-     *  Prime ctrl-C interrupt and terminate signals
-     *******************************************************************/
-    sigs := make(chan os.Signal, 1)
-    signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-    go func() {
-	sig := <-sigs
-	shutdownServer(0, fmt.Sprintf("\nStopped by %v signal", sig))
-    }()
-    /********************************************************************
-     *  Optionally allocate equivalences
-     *******************************************************************/
-    if len(opt_e) != 0 {
-	equivs := strings.Join(opt_e, ",")
-	if *opt_t { fmt.Printf("Allocate equivs '%v'\n", equivs) }
-	allocateEquivalences(equivs)
-    }
-    /********************************************************************
-     *  Optionally start Bernstein chain of iC apps with -R option
-     *******************************************************************/
-    if len(runArgs) > 0 {
-	var runFlags = make([]string, 0, 5)
-	if *opt_p != TCP_PORT { runFlags = append(runFlags, "-p", *opt_p) }
-	if *opt_t { runFlags = append(runFlags, "-t") }
-	if *opt_m { runFlags = append(runFlags, "-m") }
-	if *opt_q { runFlags = append(runFlags, "-q") }
+	if len(flag1.Args()) > 0 {
+		shutdownServer(0, fmt.Sprintf("ERROR: unknown command line arguments %v", flag1.Args()))
+	}
+	ipAdress := *opt_s + ":" + *opt_p
+	if *opt_A != "" {
+		flag1.Set("a", "true")
+		if *opt_d {
+			rd := regexp.MustCompile(`iCbox`)
+			*opt_A = rd.ReplaceAllLiteralString(os.Args[0], "iCbox -d")
+		}
+	} else if *opt_d {
+		flag1.Set("a", "true")
+		flag1.Set("A", "iCbox -d")
+	} else {
+		flag1.Set("A", "iCbox")
+	}
+	/********************************************************************
+	 *  Compile all global regular expressions here only once.
+	 *  A Regexp is safe for concurrent use by multiple goroutines.
+	 *******************************************************************/
+	reData = regexp.MustCompile(`^(\d+):(.*)$`)
+	reNname = regexp.MustCompile(`^N(.+)$`)
+	reSRiec = regexp.MustCompile(`^([SR])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`)
+	renName = regexp.MustCompile(`^n(.+)$`)
+	resrIec = regexp.MustCompile(`^([sr])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`)
+	reEquiv = regexp.MustCompile(`^E(.+)$`)
+	reXname = regexp.MustCompile(`^X(.*)$`)
+	reQXBWL = regexp.MustCompile(`^Q[XBWL]\d+`)
+	reIXBWL = regexp.MustCompile(`^I[XBWL]\d+`)
+	reSort = regexp.MustCompile(`^([A-Z]+)(\d+)(-(\d+))?`)
+	/********************************************************************
+	 *  Prime ctrl-C interrupt and terminate signals
+	 *******************************************************************/
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigs
+		shutdownServer(0, fmt.Sprintf("\nStopped by %v signal", sig))
+	}()
+	/********************************************************************
+	 *  Optionally allocate equivalences
+	 *******************************************************************/
+	if len(opt_e) != 0 {
+		equivs := strings.Join(opt_e, ",")
+		if *opt_t {
+			fmt.Printf("Allocate equivs '%v'\n", equivs)
+		}
+		allocateEquivalences(equivs)
+	}
+	/********************************************************************
+	 *  Optionally start Bernstein chain of iC apps with -R option
+	 *******************************************************************/
+	if len(runArgs) > 0 {
+		var runFlags = make([]string, 0, 5)
+		if *opt_p != TCP_PORT {
+			runFlags = append(runFlags, "-p", *opt_p)
+		}
+		if *opt_t {
+			runFlags = append(runFlags, "-t")
+		}
+		if *opt_m {
+			runFlags = append(runFlags, "-m")
+		}
+		if *opt_q {
+			runFlags = append(runFlags, "-q")
+		}
 
-	if len(runFlags) > 0 {
-	    runArgs = append(runArgs[:1], append(runFlags, runArgs[1:]...)...)	// insert -p <port> etc
+		if len(runFlags) > 0 {
+			runArgs = append(runArgs[:1], append(runFlags, runArgs[1:]...)...) // insert -p <port> etc
+		}
+		if !*opt_q {
+			fmt.Printf("$ %s %v\n", runArgs[0], strings.Join(runArgs[1:], " "))
+		}
+		cmd := exec.Command(runArgs[0], runArgs[1:]...)
+		cmd.Stdin = os.Stdin   // lets 'stty size' work correctly in iClive
+		cmd.Stdout = os.Stdout // show output of apps in Bernstein chain on terminal
+		cmd.Stderr = os.Stderr
+		err := cmd.Start() // execute first iC app of Bernstein chain
+		if err != nil {
+			shutdownServer(7, fmt.Sprint(err))
+		}
 	}
-	if ! *opt_q { fmt.Printf("$ %s %v\n", runArgs[0], strings.Join(runArgs[1:], " ")) }
-	cmd := exec.Command(runArgs[0], runArgs[1:]...)
-	cmd.Stdin  = os.Stdin			// lets 'stty size' work correctly in iClive
-	cmd.Stdout = os.Stdout			// show output of apps in Bernstein chain on terminal
-	cmd.Stderr = os.Stderr
-	err := cmd.Start()			// execute first iC app of Bernstein chain
+	/********************************************************************
+	 *  Start the 'autoVivBox()' goroutine, which waits to be triggered by
+	 *  a name string on go channel 'autoBoxCh' from various instances of
+	 *  'handleConnection()' to start an iCbox if option -a, else warning
+	 *******************************************************************/
+	go autoVivBox(*opt_A)
+	/********************************************************************
+	 *  Start the 'keyboardIn()' goroutine unless -z option
+	 *******************************************************************/
+	if !*opt_z {
+		go keyboardIn()
+	}
+	/********************************************************************
+	 *  Launch server
+	 *******************************************************************/
+	if !*opt_q {
+		fmt.Printf("%s created. Waiting for events\n", named)
+	}
+	listen, err := net.Listen("tcp4", ipAdress)
 	if err != nil {
-	    shutdownServer(7, fmt.Sprint(err))
+		shutdownServer(2, fmt.Sprint(err))
 	}
-    }
-    /********************************************************************
-     *  Start the 'autoVivBox()' goroutine, which waits to be triggered by
-     *  a name string on go channel 'autoBoxCh' from various instances of
-     *  'handleConnection()' to start an iCbox if option -a, else warning
-     *******************************************************************/
-    go autoVivBox(*opt_A)
-    /********************************************************************
-     *  Start the 'keyboardIn()' goroutine unless -z option
-     *******************************************************************/
-    if ! *opt_z {
-	go keyboardIn()
-    }
-    /********************************************************************
-     *  Launch server
-     *******************************************************************/
-    if ! *opt_q { fmt.Printf("%s created. Waiting for events\n", named) }
-    listen, err := net.Listen("tcp4", ipAdress)
-    if err != nil {
-	shutdownServer(2, fmt.Sprint(err))
-    }
-    defer listen.Close()
-    /********************************************************************
-     *  Accept TCP connections forever and handle communication in
-     *  dedicated goroutine 'handleConnection()' when connection accepted.
-     *******************************************************************/
-    for {
-	conn, err := listen.Accept()	// Accept a TCP connection
-	if err != nil {
-	    shutdownServer(3, fmt.Sprint(err))
+	defer listen.Close()
+	/********************************************************************
+	 *  Accept TCP connections forever and handle communication in
+	 *  dedicated goroutine 'handleConnection()' when connection accepted.
+	 *******************************************************************/
+	for {
+		conn, err := listen.Accept() // Accept a TCP connection
+		if err != nil {
+			shutdownServer(3, fmt.Sprint(err))
+		}
+		go handleConnection(conn) // Handle communication on one TCP connection
 	}
-	go handleConnection(conn)	// Handle communication on one TCP connection
-    }
 } // main
 
 /*********** POD to generate man page *******************************
