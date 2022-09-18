@@ -85,7 +85,7 @@ imm int belt(
     imm clock clk = CLOCK(strobe);
 
     lock   = feeder(p_cell, car[0], code, 12, 11, clk);
-  FOR (int I = 0; I < GATES; I++) {{	# Perl comment - depricated but works by default
+  FOR (int I = 0; I < GATES; I++) {{
     gate[I] = segment(car[I], car[I+1],    [I], 12,  7, clk);
   }}
     this = car[GATES];		/* allows concatenation of "belts" */

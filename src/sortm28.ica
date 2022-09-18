@@ -1,14 +1,15 @@
 /********************************************************************
  *
  *	Parcel sorter control - using analog memory for destinations
- *	$Id: sortm28.ica 1.1 $
+ *	$Id: sortm28.ica 1.2 $
  *
  *******************************************************************/
 
 use strict;
 %%define GATES		8		// number of gate destinations per belt
+%%define GATES_2		((GATES-1)/2)
 %%define GATE_OFFSET	12
-%%define GATE_FACTOR	["34 / 3"]	// 11.333 no parentheses
+%%define GATE_FACTOR	"34 / 3"	// 11.333 no parentheses
 %%define GATE_OPEN	10
 
 /********************************************************************
@@ -46,12 +47,12 @@ imm int dest = [GATES > 1 ? "inp0" : "0"]\
  *	This delay value changes every time one of the destination
  *	selection inputs 'IX0.0 - IX[(GATES-1)/8].[(GATES-1)%8]' is activated.
  *	This delay is used to set a delay timer immediately.
- *	NOTE: ["GATE_FACTOR"] can be a fractional factor by making it a
+ *	NOTE: GATE_FACTOR can be a fractional factor by making it a
  *	macro in double quotes in square brackets, which makes the
- *	fraction expression a text insertion producing dest * GATE_FACTOR.
+ *	fraction expression a text insertion producing dest * 34 / 3.
  *******************************************************************/
 
-imm int del = GATE_OFFSET + dest * GATE_FACTOR;	// del =
+imm int del = GATE_OFFSET + dest * [GATE_FACTOR];	// del =
 
 /********************************************************************
  *	As parcels travel along the sorting belt there have to be a

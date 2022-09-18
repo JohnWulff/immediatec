@@ -18,6 +18,6 @@ FOR (I = 0; I < 4; I++) {{	// C++ comment
     }}
 }}
 
-FOR (J = 0; J < 4; J++) {{	# Perl comment (only in control lines)
+FOR (J = 0; J < 4; J++) {{
     QB[J] = IB[J];
 }}

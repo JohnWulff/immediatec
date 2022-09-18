@@ -2475,6 +2475,6 @@ TOTAL	     322 blocks
 	    1278 links
 
 compiled by:
-$Revision: icc_2.6-6-ge1cef2e-dirty $ -O7
+$Revision: icc_3.7-dirty $ -O7
 
 C OUTPUT: ./Test0/sort32u.c  (769 lines)

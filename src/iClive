@@ -355,7 +355,7 @@ Usage:
 
 Copyright (C) 2000-2021  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.96 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.97 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1438,7 +1438,7 @@ sub tagComments {
     my $sqbStart = '';
     my $endFlag = 0;
     my $listLine = 0;
-    my ($l);
+    my ($l, $el);
     if ($extn & 030) {
 	$state = "C";		# .c or .h file
 	$CbraceCount = 1;
@@ -1577,7 +1577,7 @@ sub tagComments {
 	    } elsif ($atom =~ m/^(\d*\s*)%\}\s*$/) {
 		$l = length $1; $l = 0 unless $l;
 		$CbraceCount--;		# "%}" end of C literal block found
-	  EndC:	$text->tagAdd('CTag', $CStart, $currEnd);
+	  EndC:	$text->tagAdd('CTag', $CStart, "$current + $l chars");
 		$state = "P";		# end of C code found
 		$CStart = '';		# back to iC background without CTag
 		if ($CbraceCount != 0 or $braceCount != 0) {
@@ -1929,6 +1929,7 @@ sub tagComments {
 	    }
 	} elsif ($atom =~ m/^(\d*\s*)%\{\s*$/) {
 	    $l = length $1; $l = 0 unless $l;
+	    $el = $l + 2;
     StartC: $state = "C";		# "%{" start of C literal block found (may be in function block definition)
 	    if ($braceCount != 0) {
 		warn "$fileName$readOnly:$current1: { single braces do not match in iC code ($braceCount)\n";
@@ -1938,7 +1939,7 @@ sub tagComments {
 	    }
 	    $CbraceCount = 1;
 	    $text->tagAdd('bd', "$current + $l chars", $currEnd);	# bold brace at start of C code (optional)
-	    $CStart = $current;
+	    $CStart = "$current + $el chars";
 	} elsif ($atom =~ m/^(\d*\s*)%\}\s*$/) {
 	    $l = length $1; $l = 0 unless $l;
 	    warn "$fileName$readOnly:$current1: '$atom' found outside of literal block\n";
@@ -1947,6 +1948,7 @@ sub tagComments {
 	} elsif ($atom eq "{") {
 	    if ($condFlag) {
 		$condFlag = $l = 0;	# start of C code after if else or switch
+		$el = 1;
 		goto StartC;
 	    }
 	    if ($prevAtom ne "---" or $space ne "") {

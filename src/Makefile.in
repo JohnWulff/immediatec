@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.80 $
+# @(#)$Id: Makefile.in 1.81 $
 
 #######################################################################
 #
@@ -145,14 +145,19 @@ icr:	$(srcdir)/Makefile icc.$(O) misc.$(O) scid.$(O) icr.$(O) cexe.$(O) $(COBJ) 
 ict:	$(srcdir)/Makefile icc.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(LOBJ) icbegin.a pplstfix
 	$(CC) $(LDFLAGS) -o ict icc.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(LOBJ) icbegin.a $(EL)
 
-goserver:	$(srcdir)/Makefile $(srcdir)/../pkg/*/tcpcomm.a goserver.go
+goserver:	$(srcdir)/Makefile $(srcdir)/../pkg/*/tcpcomm.a $(srcdir)/goserver.go
     ifneq ($(GO),)
-	$(GO) build goserver.go
+	$(GO) build $(srcdir)/goserver.go
     endif
 
 ../pkg/*/tcpcomm.a:	$(srcdir)/Makefile $(srcdir)/tcpcomm/tcpcomm.go
     ifneq ($(GO),)
-	$(GO) install tcpcomm
+	$(GO) install $(srcdir)/tcpcomm
+    endif
+
+immag:	$(srcdir)/Makefile $(srcdir)/immag.go
+    ifneq ($(GO),)
+	$(GO) build $(srcdir)/immag.go
     endif
 
 #### Aux library for icr and ict ######################################
@@ -258,6 +263,14 @@ $(srcdir)/goserver.1.gz:	$(srcdir)/goserver.go $(srcdir)/scid.c
     endif
 	@gzip -f $(srcdir)/goserver.1
 
+$(srcdir)/immag.1.gz:	$(srcdir)/immag.go $(srcdir)/scid.c
+    ifeq ($(TKGE803),true)
+	@pod2man -u -n iCserver -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immag.1
+    else
+	@pod2man -n iCserver -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immag.1
+    endif
+	@gzip -f $(srcdir)/immag.1
+
 $(srcdir)/iCbox.1.gz:	$(srcdir)/iCbox $(srcdir)/scid.c
 
 $(srcdir)/iClift.1.gz:	$(srcdir)/iClift $(srcdir)/scid.c
@@ -318,13 +331,12 @@ strict:
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
 	@if ${srcdir}/AuxTools/Mdiff -kLel -I'(eval' ${srcdir}/Test0/STRICT/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
 
-install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/goserver.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
+install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/goserver.1.gz $(srcdir)/immag.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
 	@$(srcdir)/perlinstall -t $(srcdir)
 	@${INSTALL} -d ${bindir} ${libdir} ${includedir} ${mandir}/man1
 	@${INSTALL_PROGRAM} $(srcdir)/iCmsg.pm  `$(srcdir)/perlinstall`/iCmsg.pm
 	@${INSTALL_PROGRAM} $(srcdir)/immcc      ${bindir}/${binprefix}immcc
 	@${INSTALL_PROGRAM} $(srcdir)/pplstfix   ${bindir}/${binprefix}pplstfix
-	@${INSTALL_PROGRAM} $(srcdir)/immac      ${bindir}/${binprefix}immac
 	@${INSTALL_PROGRAM} $(srcdir)/immax      ${bindir}/${binprefix}immax
 	@${INSTALL_PROGRAM} $(srcdir)/iCbox      ${bindir}/${binprefix}iCbox
 	@${INSTALL_PROGRAM} $(srcdir)/iClift     ${bindir}/${binprefix}iClift
@@ -333,8 +345,10 @@ install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir
 	@${INSTALL_PROGRAM} $(srcdir)/iCman      ${bindir}/${binprefix}iCman
 ifeq ($(GO),go)
 	@${INSTALL_PROGRAM} $(srcdir)/goserver   ${bindir}/${binprefix}iCserver
+	@${INSTALL_PROGRAM} $(srcdir)/immag      ${bindir}/${binprefix}immac
 else
 	@${INSTALL_PROGRAM} $(srcdir)/iCserver   ${bindir}/${binprefix}iCserver
+	@${INSTALL_PROGRAM} $(srcdir)/immac      ${bindir}/${binprefix}immac
 endif
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
 	@${INSTALL_PROGRAM} $(srcdir)/iCpiFace          ${bindir}/${binprefix}iCpiFace
@@ -353,7 +367,6 @@ endif
 	@if [ -f $(srcdir)/libict.so ]; then ${INSTALL_PROGRAM} $(srcdir)/libict.so ${libdir}/${libprefix}libict.so.1.$(REV); sudo /sbin/ldconfig ${libdir}; cd ${libdir}/; sudo ln -sf ${libprefix}libict.so.1.$(REV) ${libprefix}libict.so; cd -; fi
 	@${INSTALL_DATA} $(srcdir)/icg.h         ${includedir}/${includeprefix}icg.h
 	@${INSTALL_DATA} $(srcdir)/immcc.1.gz    ${mandir}/man1/${manprefix}immcc.1.gz
-	@${INSTALL_DATA} $(srcdir)/immac.1.gz    ${mandir}/man1/${manprefix}immac.1.gz
 	@${INSTALL_DATA} $(srcdir)/immax.1.gz    ${mandir}/man1/${manprefix}immax.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCbox.1.gz    ${mandir}/man1/${manprefix}iCbox.1.gz
 	@${INSTALL_DATA} $(srcdir)/iClift.1.gz   ${mandir}/man1/${manprefix}iClift.1.gz
@@ -362,8 +375,10 @@ endif
 	@${INSTALL_DATA} $(srcdir)/iCman.1.gz    ${mandir}/man1/${manprefix}iCman.1.gz
 ifeq ($(GO),go)
 	@${INSTALL_DATA} $(srcdir)/goserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz
+	@${INSTALL_DATA} $(srcdir)/immag.1.gz    ${mandir}/man1/${manprefix}immac.1.gz
 else
 	@${INSTALL_DATA} $(srcdir)/iCserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz
+	@${INSTALL_DATA} $(srcdir)/immac.1.gz    ${mandir}/man1/${manprefix}immac.1.gz
 endif
 	@${INSTALL_DATA} $(srcdir)/iCpiFace.1.gz ${mandir}/man1/${manprefix}iCpiFace.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCpiPWM.1.gz  ${mandir}/man1/${manprefix}iCpiPWM.1.gz
@@ -428,7 +443,7 @@ uninstall:
 	sudo rm -f ${mandir}/man3/${manprefix}pigpiod_if.3.gz
 
 clean:
-	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/ConstObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/PiPWMObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/const $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/iCpiPWM $(srcdir)/goserver $(srcdir)/../pkg/*/tcpcomm.a $(srcdir)/*.1.gz
+	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/ConstObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/PiPWMObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/const $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/iCpiPWM $(srcdir)/goserver $(srcdir)/../pkg/*/tcpcomm.a $(srcdir)/immag $(srcdir)/*.1.gz
 
 distclean: clean
 	rm -f $(srcdir)/Makefile $(srcdir)/comp.tab.c $(srcdir)/comp.tab.h $(srcdir)/comp.output $(srcdir)/gram.tab.c $(srcdir)/gram.tab.h $(srcdir)/gram.output $(srcdir)/lex.yy.c $(srcdir)/cons.tab.c $(srcdir)/cons.tab.h $(srcdir)/cons.output $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/pplstfix.log

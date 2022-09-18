@@ -1,83 +1,94 @@
 /***********************************************************************
  *
- *		Copyright (C) 2000-2020 John E. Wulff
+ *      Copyright (C) 2020-2022 John E. Wulff
  *
- *	You may distribute under the terms of either the GNU General Public
- *	License or the Artistic License, as specified in the README file.
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
  *
- *	For more information about this program, or for information on how
- *	to contact the author, see the README file
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file
  *
- *		immag.go ==> immag; copied to /usr/local/bin/immac for execution
+ ***********************************************************************
  *
- *	Pre-compiler to convert "immediate C with arrays" (iCa) source files.
- *	Based on the PERL version of immac, which has beem migrated to GO.
+ *  This program uses the 'govaluate' library available from
+	"github.com/Knetic/govaluate" under the following license:
+ *  The MIT License (MIT)
+ *  Copyright (c) 2014-2016 George Lester
+ *  The use of this library is gratefully acknowledged.
  *
- *	Expands FOR loops and handles IF ELSE statements as well as object
- *	like or function like macros with pre-compile prefix %% into straight
- *	"immediate C" (iC).
- *		"immac" handles %%define %%if etc for a file with .ica extension
- *		"immac" handles %define %if etc for a file with .ic extension
- *		without FOR expansion etc, which is the same as calling "immac -M"
+ ***********************************************************************
  *
- *	Also several options to handle macros only (no FOR expansion etc):
- *		"immac -M" handles %define %if etc only for straight iC code
- *		"immac -m" handles #define #if etc only to replace cpp for C code
- *		"immac -Y" handles %if etc only (no %define) for conditionals in
- *		yacc code (yacc and/or bison use %define themselves).
+ *      immag.go ==> immag; copied to /usr/local/bin/immac for execution
  *
- *	This version of immac is for the iC language version 3 and up.
+ *  Pre-compiler to convert "immediate C with arrays" (iCa) source files.
+ *  Based on the PERL version of immac, which has beem migrated to GO.
  *
- *	The following prefixes have been changed from iC version 2:
- *		"pre-compiler prefix in"	vers 2		  vers 3
- *		 iC code in .ic and .ica	   #			 %
- *		 iCa code in .ica			   %			 %%
- *		 C code in literal blocks	   %#			 #
- *	These are the only changes in the iC language version 3.
+ *  Expands FOR loops and handles IF ELSE statements as well as object
+ *  like or function like macros with pre-compile prefix %% into straight
+ *  "immediate C" (iC).
+ *      "immac" handles %%define %%if etc for a file with .ica extension
+ *      "immac" handles %define %if etc for a file with .ic extension
+ *      without FOR expansion etc, which is the same as calling "immac -M"
  *
- *	This means that #define #if etc macros in C literal blocks will be
- *	written just like in C and passed unchanged to the generated C code.
+ *  Also several options to handle macros only (no FOR expansion etc):
+ *      "immac -M" handles %define %if etc only for straight iC code
+ *      "immac -m" handles #define #if etc only to replace cpp for C code
+ *      "immac -Y" handles %if etc only (no %define) for conditionals in
+ *                 yacc code (yacc and/or bison use %define themselves).
  *
- *	Several constructs available in the PERL version of immac prior to Jan 2022
- *	have been dropped:
- *		use strict; no strict; as well as its command line counterparts
- *		-S and -N flags. immac is now always strict requiring twin braces.
- *		-L option. All lines go to the generated GO file, which is log file.
- *		ELSIF	// is very Perlish and can easily be replaced by ELSE IF.
- *		FOR S ("aa" .. "ad") {{ // is very difficult to implement in GO and
- *								// was never used in thousands of my examples.
+ *  This version of immac is for the iC language version 3 and up.
  *
- *	The only specifically PERL constructs being retained are:
- *		FOR S ("aa", "ab", "12", "-3")	// list of parenthesised strings
- *		FOR S (aa, ab, ac, ad)			// list of bare word strings
- *		FOR I (1, -2, 3, +4)			// list of integers
- *		FOR I (1 .. 4)					// list of integers using .. operator
- *	They are very useful and easy to implement in GO.
- *	List elements in parentheses or bare words containing non-numeric
- *	characters or non-leading sign characters are strings of type char*.
- *	List elements containing only numeric characters or a leading sign are
- *	integers of type int.
+ *  The following prefixes have been changed from iC version 2:
+ *      "pre-compiler prefix in"    vers 2        vers 3
+ *       iC code in .ic and .ica       #             %
+ *       iCa code in .ica              %             %%
+ *       C code in literal blocks      %#            #
+ *  These are the only changes in the iC language version 3 (Feb 2017).
  *
- *	The type specifier int (or char*) are no longer allowed before the
- *	FOR loop control variable. Type is always derived:
- *		If all elements of a list are integers, the type of the control variable
- *		and all list elements are int, otherwise they are strings (type char*),
+ *  This means that #define #if etc macros in C literal blocks will be
+ *  written just like in C and passed unchanged to the generated C code.
  *
- *	The standard C style FOR loop to generate integer lists is:
- *		FOR (I = 1; I <= 4; I++)		// list of integers (type of I is int)
- *	Integer control variables may only be used in integer arithmetic expressions.
- *	String type char* control variables may only be used with the concatination
- *	operator '.' in expressions (borrowed from Perl).
- *	NOTE: String variables and concatenation are only used in the iCa language,
- *		  never in iC.
+ *  Several constructs available in the PERL version of immac prior to Jan 2022
+ *  have been dropped:
+ *      -S and -N flags. immac is now always strict requiring twin braces.
+ *      'use strict' and 'no strict' were a mistake in the PERL version because
+ *      they are part of the iC language and must be copied to the iC file.
+ *      -L option. All lines go to the generated GO file, which is log file.
+ *      ELSIF   // is very Perlish and can easily be replaced by ELSE IF.
+ *      FOR S ("aa" .. "ad") {{ // is very difficult to implement in GO and
+ *                              // was never used in thousands of my examples.
+ *      End of line Perl comment started with '#' is no longer supported.
  *
- *	Input and output filnames must be restricted to the following
- *	POSIX Portable Filename Character Set consisting of:
- *		A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
- *		a b c d e f g h i j k l m n o p q r s t u v w x y z
- *		0 1 2 3 4 5 6 7 8 9 . _ -
- *	Directory seperators for Linux/Unix or Windows are:
- *		/ \
+ *  The standard C style FOR loop to generate integer lists is:
+ *      FOR (I = 0; I < 8; I++) {{      // list of integers (type of I is int)
+ *  The only specifically PERL constructs being retained are:
+ *      FOR S ("aa", "ab", "12", -3) {{ // list of parenthesised strings
+ *      FOR I (1, 2, -3, +4) {{         // list of integers with optional sign
+ *      FOR I (1 .. 4) {{               // list of integers using .. operator
+
+ *  These are very useful and easy to implement in GO. List elements in
+ *  double quotes are type 'string'. List elements containing only numeric
+ *  characters with or without a leading sign are type 'int' unless part of
+ *  a list also containing strings.
+ *  List of bareword strings is no longer supported.
+ *
+ *  The optional type-specifier 'int' before a FOR loop control variable
+ *  is ignored. This usage is deprecated because the contol variable may
+ *  also be type 'string'. A Warning is now issued.
+ *
+ *  Integer control variables may only be used in integer arithmetic expressions.
+ *  Type 'string' control variables may only be used with the concatination
+ *  operator '.' in expressions (borrowed from Perl - not '+' as in GO).
+ *  NOTE: String variables and concatenation are only used in the iCa language,
+ *        never in iC.
+ *
+ *  Input and output filnames must be restricted to the following
+ *  POSIX Portable Filename Character Set consisting of:
+ *      A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+ *      a b c d e f g h i j k l m n o p q r s t u v w x y z
+ *      0 1 2 3 4 5 6 7 8 9 . _ -
+ *  Directory separator for Linux/Unix is:  /
+ *  Directory separator for Windows is:     \
  *
  ***********************************************************************/
 
@@ -90,54 +101,40 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"errors"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"github.com/Knetic/govaluate"
 )
 
-const ID_immag_go = "$Id: immag.go 1.1 $"
+const ID_immag_go = "$Id: immag.go 1.2 $"
+const DEF  = true
+const EVAL = true
 
 /***********************************************************************
  *
- *	iCa keywords with their translation to GO code (and length and control)
+ *  Coding of iC, iCa and C keyword map values for possible future use
+ *              track with BuiltIn b[] in init.c
+ *      0x001   imm or immC iC type modifier
+ *      0x002   iC type
+ *      0x004   iC pragma
+ *      0x008   iC keyword
+ *      0x010   iC clocked built-in function
+ *      0x020   iC unclocked built-in bit function
+ *      0x030   iC clocked built-in bit function
+ *      0x050   iC clocked built-in arithmetic function
+ *      0x070   iC clocked built-in bit or arithmetic function
+ *      0x090   iC clocked built-in clock function
+ *      0x0b0   iC clocked built-in timer function
+ *      0x100   iCa keyword FOR IF ELSE	(value used)
+ *      0x200   C keyword
+ *      0x400   iC keyword if else switch - to enter C code (value used)
  *
  ***********************************************************************/
 
-type for_if struct {
-	tran    string
-	length  int
-	control int
-}
-
-var iCaKey = map[string]for_if{
-	"FOR":  {"for", 3, 1},  // iCa FOR loop
-	"IF":   {"if", 2, 1},   // iCa IF statement
-	"ELSE": {"else", 4, 3}, // iCa ELSE statement
-}
-
-/***********************************************************************
- *
- *	Coding of iC, iCa and C keyword map values for possible future use
- *				track with builtins[] in init.c
- *		0x001	imm or immC iC type modifier
- *		0x002	iC type
- *		0x004	iC pragma
- *		0x008	iC keyword
- *		0x010	iC clocked built-in function
- *		0x020	iC unclocked built-in bit function
- *		0x030	iC clocked built-in bit function
- *		0x050	iC clocked built-in arithmetic function
- *		0x070	iC clocked built-in bit or arithmetic function
- *		0x090	iC clocked built-in clock function
- *		0x0b0	iC clocked built-in timer function
- *		0x100	iCa keyword
- *		0x200	C keyword
- *	currently only the fact that the map entry is defined is used
- *
- ***********************************************************************/
-
-var keywords = map[string]int{
+var keywords = map[string]int {
 	"FORCE":    0x020,
 	"D":        0x030, // D flip-flop
 	"DR":       0x030, // D flip-flop with reset
@@ -153,24 +150,24 @@ var keywords = map[string]int{
 	"ST":       0x030, // monoflop with timed reset
 	"SRT":      0x030, // monoflop with reset and timed reset
 	"SH":       0x050, // sample and hold
-	"SHR":      0x030, // sample and hold with reset
-	"SHR_":     0x050, // sample and hold with simple reset
-	"SHSR":     0x030, // sample and hold with set/reset
-	"SHSR_":    0x050, // sample and hold with simple set/reset
+	"SHR":      0x070, // sample and hold with reset
+	"SHR_":     0x070, // sample and hold with simple reset
+	"SHSR":     0x070, // sample and hold with set/reset
+	"SHSR_":    0x070, // sample and hold with simple set/reset
 	"LATCH":    0x020,
-	"DLATCH":   0x020,
+	"DLATCH":   0x030,
 	"RISE":     0x030, // pulse on digital rising edge
 	"CHANGE":   0x070, // pulse on anlog or digital change
-	"CHANGE2":  0x070, // alternate CHANGE on anlog change
+	"CHANGE2":  0x050, // alternate CHANGE on anlog change
 	"CLOCK":    0x090, // CLOCK with 1 or 2 inputs
 	"CLOCK2":   0x090, // alternate CLOCK with 2 inputs
 	"TIMER":    0x0b0, // TIMER with preset off 0
 	"TIMER2":   0x0b0, // alternate TIMER with 2 inputs
 	"TIMER1":   0x0b0, // TIMER1 with preset off 1
 	"TIMER12":  0x0b0, // alternate TIMER1 with 2 inputs
-	"if":       0x208,
-	"else":     0x208,
-	"switch":   0x208,
+	"if":       0x608,
+	"else":     0x608,
+	"switch":   0x608,
 	"extern":   0x208,
 	"assign":   0x008,
 	"return":   0x208,
@@ -186,7 +183,7 @@ var keywords = map[string]int{
 	"int":      0x202,
 	"clock":    0x002,
 	"timer":    0x002,
-	"this":     0x208, // only used in function block definitions
+	"this":     0x008, // only used in function block definitions
 	"auto":     0x200, // C keywords to cause syntax errors if used in iC
 	"break":    0x200,
 	"case":     0x200,
@@ -250,70 +247,453 @@ type fileStk struct {
 	scan *bufio.Scanner
 }
 
-type selector uint
-
-const (
-	ifx selector = 1 << iota
-	elif
-	elsx
-	endif
-)
+type SrtQmkColEndFlg struct {
+	sta int
+	qmk int
+	col int
+	end int
+	flg bool
+}
 
 var named string
+var flag1 *flag.FlagSet
 var opt_I, opt_P, opt_D, opt_U multStringFlag
 var opt_o, opt_l, opt_e *string
-var opt_t, opt_m, opt_M, opt_Y, opt_a, opt_T *bool
-var defs   = map[string]*strNum{}
-var clDefs = map[string]*strNum{}
+var opt_t, opt_m, opt_M, opt_N, opt_Y, opt_a, opt_n, opt_S, opt_T, opt_X, opt_Z *bool
+var opt_m_M_Y, iCmode, litBlock bool
+var defs   = map[string]*strNum {}
+var clDefs = map[string]*strNum {}
 var siStk = make([]int, 0)
 var argIn string
 var genFile *os.File
 var lnErr = make([]string, 0)
 var lineNo  int
-var blockStart int
-var IF bool
-var IFs string
+var hashLineFlag bool
+var lineText string
+var FORline string
 var w int
 var ret int
 var blankLines int
-var devIn, inoIn, devOut, inoOut, lastAtom1, lastTranslate, off string
-var re string
-var used = map[string]string{}
+var Used = make(map[string]string)
+var FORctrlVar   = make(map[string]string)
+var FORctrlIndex = make(map[string]int)
 var path string
-var block = make([]string, 0)
-var reParenSlash *regexp.Regexp
+var iesBrace     = make([]bool, 5)
+var genSlice     = make([]string, 0, 5)
+var LFflag bool
+var SQdotSlice   = make([]SrtQmkColEndFlg, 5)
+var SQprCnt int
+var SQxFlag bool
+var genFlag bool
+var reCommEnd    *regexp.Regexp
+var reQuoteSlash *regexp.Regexp
 var reWord       *regexp.Regexp
 var reDefined    *regexp.Regexp
 var reNum        *regexp.Regexp
-var reWordNum    *regexp.Regexp
+var reSignNum    *regexp.Regexp
+var reConstExpr  *regexp.Regexp
 var reEvalIf     *regexp.Regexp
+var reLdTrSps    *regexp.Regexp
 var reTrSpaces   *regexp.Regexp
 var reSpaces     *regexp.Regexp
+var reTxSpaces   *regexp.Regexp
+var reAllSpaces  *regexp.Regexp
 var reCcomment   *regexp.Regexp
 var reCcomTail   *regexp.Regexp
 var reMacro      *regexp.Regexp
 var reComma      *regexp.Regexp
 var reHashHash   *regexp.Regexp
+var reHashSlash  *regexp.Regexp
 var reHash       *regexp.Regexp
 var reTranslate  *regexp.Regexp
+var reResolve    *regexp.Regexp
+var reTrue       *regexp.Regexp
+var reFalse      *regexp.Regexp
+var reFORin1     *regexp.Regexp
+var reFORin2     *regexp.Regexp
+var rePercent    *regexp.Regexp
+var reDivInt     *regexp.Regexp
 
 /********************************************************************
  *
- *		Main program
+ *	Convert from Posix bundled flag interpretation to Go type flags.
+ *
+ *	Modify command line bundled flags to interpret -abc as -a -b -c,
+ *	which is the way flag.Parse must be presented with Bool flags.
+ *	flag.Parse interprets -abc as the flag named "abc".
+ *
+ *	Mofify Value flags to interpret -xVal as -x Val. Can also have
+ *	-abcx Val or -abcxVal, which are both converted to -a -b -c -x Val.
+ *	Value flags could be identified by the flag initialisers above,
+ *	but it is simpler to define a map of Value flag identifiers.
+ *
+ *	Command line flags starting with -- are not touched, which is the
+ *	Posix way of mixed flags starting with - or --.
+ *	https://www.gnu.org/software/libc/manual/html_node/Argument-Syntax.html
+ *
+ *******************************************************************/
+
+var args = make([]string, 0, len(os.Args))
+var argsP *[]string
+var commandLineFlags = map[string]int{
+	"M": 0, // Bool flag
+	"N": 0,
+	"S": 0,
+	"T": 0,
+	"X": 0,
+	"Y": 0,
+	"Z": 0,
+	"a": 0,
+	"m": 0,
+	"n": 0,
+	"t": 0,
+	"h": 0,
+	"D": 1, // value flag
+	"I": 1,
+	"P": 1,
+	"U": 1,
+	"e": 1,
+	"l": 1,
+	"o": 1,
+}
+
+func convertFlags(argp *[]string, offset int) {
+	for _, arg := range (*argp)[offset:] {
+		if len(arg) == 0 {
+			continue
+		}
+		Sflag := true
+		if arg != "-" && arg[0] == '-' && arg[1] != '-' {
+			Sflag = false
+			for i, sf := range strings.Split(arg[1:], "") {
+				clf, ok := 0, false
+				if clf, ok = commandLineFlags[sf]; !ok {
+					arg = "-" + arg[i+1:]	// not our flag - nevertheless retain '-'
+					Sflag = true
+					break
+				}
+				*argsP = append(*argsP, "-"+sf)
+				if clf == 1 && i+2 < len(arg) {
+					arg = arg[i+2:]			// value flag followed directly by value
+					Sflag = true
+					break
+				}
+			}
+		}
+		if Sflag {
+			*argsP = append(*argsP, arg)	// append a value after a value flag
+		}
+	}
+} // convertFlags
+
+/***********************************************************************
+ *
+ *  Push FOR loop control variable and state2 on to the ctrlStateStack
+ *
+ ***********************************************************************/
+
+type ctrlState struct {
+	ctrl string				// name of FOR loopcontrol variable or "IF or "ELSE"
+	stat rune				// save state2
+	ifStat rune				// state2 of initial IF (not changed by ELSE IF)
+}
+
+var ctrlStateStack = make([]ctrlState, 5)
+var CtrlStateStkp int
+
+func PushCtrlState(Fctrl string, stat2 rune, ct string) {
+	if CtrlStateStkp >= cap(ctrlStateStack) {
+		ctrlStateStack = append(ctrlStateStack, make([]ctrlState, CtrlStateStkp)...)	// double capacity
+		if *opt_Z { fmt.Fprintf(genFile, "//#        cap(ctrlStateStack) = %d in PushCtrlState\n", cap(ctrlStateStack)) }
+	}
+	ctrlStateStack[CtrlStateStkp].ctrl = Fctrl
+	ctrlStateStack[CtrlStateStkp].stat = stat2
+	if *opt_Z { fmt.Fprintf(genFile, "//# Push %d %q '%c' %q\n", CtrlStateStkp, ctrlStateStack[CtrlStateStkp].ctrl, ctrlStateStack[CtrlStateStkp].stat, ct) }
+	CtrlStateStkp++
+} // PushCtrlState
+
+/***********************************************************************
+ *
+ *  Pop FOR loop control variable and state2 from the ctrlStateStack
+ *
+ ***********************************************************************/
+
+func PopCtrlState(ct string) (string, rune) {
+	CtrlStateStkp--
+	if CtrlStateStkp < 0 {
+		pushError(&ret, "//* Error: Too many Pop's from ctrlStateStack\n")
+		CtrlStateStkp = 0
+	}
+	if *opt_Z { fmt.Fprintf(genFile, "//# Pop  %d %q '%c' %q\n", CtrlStateStkp, ctrlStateStack[CtrlStateStkp].ctrl, ctrlStateStack[CtrlStateStkp].stat, ct) }
+	return ctrlStateStack[CtrlStateStkp].ctrl, ctrlStateStack[CtrlStateStkp].stat
+} // PopCtrlState
+
+/***********************************************************************
+ *
+ *  Save state2 for initial IF
+ *
+ ***********************************************************************/
+
+func Save_ifStat(stat2 rune, ct string) {
+	if CtrlStateStkp >= cap(ctrlStateStack) {
+		ctrlStateStack = append(ctrlStateStack, make([]ctrlState, CtrlStateStkp)...)	// double capacity
+		if *opt_Z { fmt.Fprintf(genFile, "//#        cap(ctrlStateStack) = %d in Save_ifStat\n", cap(ctrlStateStack)) }
+	}
+	ctrlStateStack[CtrlStateStkp].ifStat = stat2
+	if *opt_Z { fmt.Fprintf(genFile, "//# Save %d ifStat '%c' %q\n", CtrlStateStkp, ctrlStateStack[CtrlStateStkp].ifStat, ct) }
+} // Save_ifStat
+
+/***********************************************************************
+ *
+ *  Read save2 saved from initial IF
+ *
+ ***********************************************************************/
+
+func Read_ifStat(ct string) (rune) {
+	if *opt_Z { fmt.Fprintf(genFile, "//# Read %d ifStat '%c' %q\n", CtrlStateStkp, ctrlStateStack[CtrlStateStkp].ifStat, ct) }
+	return ctrlStateStack[CtrlStateStkp].ifStat
+} // Read_ifStat
+
+/***********************************************************************
+ *
+ *  Select FOR or IF atom in state2 machine
+ *
+ ***********************************************************************/
+
+func FORorIF(nextState rune, SQflag bool, atom string, pos, pose, prevPose int,
+			offsetP, iNextP, FORstartP, dBraceCntP, braceCntP, posNextP *int, state2P *rune,
+			textP, textResP, FORctrlP *string, ForIfFlgP, iesFlagP, SQvarP, SQcvarP *bool) bool {
+	var newStat rune
+	if atom == "}}" || atom == "FOR" || atom == "IF" {
+		if atom == "}}" {
+			if len(genSlice) > 0 {
+				if m := reTxSpaces.FindStringSubmatch(genSlice[0]); len(m) == 3 {
+					genSlice[0] = "\""+m[2]+"\""	// reduce leading spaces to 0 or 1
+					if *opt_S { fmt.Fprintf(genFile, "//*=a= %d: genSlice = %q m = %q\n", lineNo, genSlice, m) }
+					genLine(m[1], "")				// output extra spaces before for statement
+				}
+			}
+		}
+		p := prevPose
+		if atom == "FOR" && !reAllSpaces.MatchString((*textResP)[:pos]) {
+			p = pos
+		}
+		if p > 0 {
+			genText := (*textResP)[:p]
+			genText  = reQuoteSlash.ReplaceAllString(genText, "\\$1")	// precede " and \ by extra \
+			genSliceAppend("\""+genText+"\"")	// text string before FOR IF or closing braces
+			if *opt_S { fmt.Fprintf(genFile, "//*=4= %d: genSlice = %v atom = %q\n", lineNo, genSlice, atom) }
+			*textResP = substr(*textResP, 0, p, "")
+			*textP = *textResP			// remove text just processed
+			*offsetP = 0
+			*iNextP = 0;
+			return true
+		}
+		if len(genSlice) > 0 {
+			if *opt_Z { fmt.Fprintf(genFile, "//= genSliceOut(%q) '%c' in FORorIF\n", genSlice, *state2P) }
+			genSliceOut("")			// output text before "FOR" "IF" "}}"  "}} ELSE"
+		}
+		*FORstartP = pos
+		forLine := (*textResP)[*FORstartP:]
+		if *opt_S { fmt.Fprintf(genFile, "//*FOr* %d: '%c' %q ForIfFlg = %v FORctrlVar = %q\n", lineNo, *state2P, forLine, *ForIfFlgP, FORctrlVar) }
+		if atom == "}}" {			// not else if because of else below
+			if nextState != 'X' {
+				/********************************************************************
+				 *  Closing double braces "}}" after "FOR (...) {{"
+				 *  output directly
+				 *******************************************************************/
+				(*dBraceCntP)--
+				if *dBraceCntP < 0 {
+					pushError(&ret, "//* Error: too many closing double braces\n")
+					*dBraceCntP = 0
+					return false
+				} else {
+					var fc string
+					if FORline != "" {
+						fmt.Fprint(genFile, FORline)
+						FORline = ""
+					}
+					if *state2P != 'J' {
+						if *opt_a && genFlag && *state2P != 'F' {
+							genLine("", "\\n")
+						}
+						fmt.Fprint(genFile, "  }\n")
+						opt_aComment("}}", "")
+					}
+					fc, *state2P = PopCtrlState(fmt.Sprintf("FORorIF }} '%c'", *state2P))
+					if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", *state2P, atom) }
+					if *opt_S { fmt.Fprintf(genFile, "//*BrC* %d: '%c' L %v %q\n", lineNo, *state2P, LFflag, (*textResP)[prevPose:pose]) }
+					if *opt_X { fmt.Printf("}} dBraceCnt = %d %q\n", *dBraceCntP, *textResP) }
+					delete(FORctrlVar, fc)		// ok to delete non-existing "" map entry
+					if nextState == 'D' {
+						*state2P = 'D'		// only statement to enter state2 = 'D'
+						if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q in FORorIF\n", *state2P, atom) }
+					}
+					if *opt_S { fmt.Fprintf(genFile, "//*Bs2* %d: '%c' L %v %q atom = %q pose = %d\n", lineNo, *state2P, LFflag, *textResP, atom, pose) }
+					*textResP = substr(*textResP, 0, pose, "")	// pose must be > 0
+					if *opt_S { fmt.Fprintf(genFile, "//*Be2* %d: '%c' %q\n", lineNo, *state2P, *textResP) }
+					*textP = *textResP		// remove text just output
+					*offsetP = 0
+					*iNextP = 0;
+					return true
+				}
+			}
+			pushError(&ret, "//* Error: double closing braces }} not after FOR IF or ELSE\n")
+		} else {							// FOR or IF
+			if *state2P == 'D' {
+				if *opt_a && genFlag {
+					genLine("", "\\n")
+				}
+				fmt.Fprint(genFile, "  }\n")
+				opt_aComment("}}", "")
+				*state2P = Read_ifStat(fmt.Sprintf("FORorIF 'D' with atom = %s", atom))
+				if *state2P == 0 { panic("FORorIF 'D'") }
+			}
+			if atom == "FOR" {
+				/********************************************************************
+				 *  FOR start
+				 *  FORctrl is name of the FOR loop control variable discovered early,
+				 *  which is used in map FORctrlVar[FORctrl] to indicate the loop
+				 *  control variable is valid until the matching closing braces, when
+				 *  the map entry is deleted.
+				 *
+				 *  The word 'int' just before the FOR loop control variable is ignored.
+				 *  The optional usage of 'int' before the FOR loop control variable
+				 *  is deprecated and a Warning is issued unless -n.
+				 *
+				 *  The FORctrlVar[FORctrl] value is type "int" or "string" of the
+				 *  loop control variable for use in the loop (initially "int").
+				 *  FORctrl, which is set to control variable with FOR,
+				 *  to "IF" with IF and "ELSE" with ELSE is pushed to ctrlStateStack
+				 *  with previous state2.
+				 *
+				 *  reFORin1    `^FOR\s*\(\s*((int)\s+)?([a-zA-Z]\w*)\s*=`
+				 *  reFORin2    `^FOR\s+((int)\s+)?([a-zA-Z]\w*)\s*\(`
+				 *******************************************************************/
+				var m []string
+				*FORctrlP = ""
+				if m = reFORin1.FindStringSubmatch(forLine); len(m) == 4 && m[3] != "" {
+					*FORctrlP = m[3]		// FOR (N =
+				} else if m = reFORin2.FindStringSubmatch(forLine); len(m) == 4 && m[3] != "" {
+					*FORctrlP = m[3]		// FOR N (
+				} else {
+					pushError(&ret, "//* Error: FOR line syntax error\n")
+					return false
+				}
+				if !*opt_n && m[2] == "int" {
+					pushError(&w, fmt.Sprintf("//* Warning: type specifier 'int' before loop control variable '%s' is deprecated\n", *FORctrlP))
+				}
+				if _, ok := keywords[*FORctrlP]; ok {	// control variable exists as a keyword
+					pushError(&ret, "//* Error: FOR line control variable is a C/iC/iCa keyword - not allowed\n")
+					return false
+				}
+				if *FORctrlP != "" && !*ForIfFlgP {
+					if _, ok := FORctrlVar[*FORctrlP]; ok {	// exists
+						pushError(&ret, "//* Error: FOR control variable already set in another loop\n")
+						return false
+					}
+					FORctrlVar[*FORctrlP] = "int"	// must be set in ForIfFlg and SQflag variables
+					*ForIfFlgP = true				// allows Rescan2 without exists check
+				}
+				newStat = 'B'
+			} else if atom == "IF" {
+				/********************************************************************
+				 *  IF start
+				 *  FORctrl is set "IF", because it cannot be a control variable in
+				 *  the iCa language (is keyword)
+				 *******************************************************************/
+				*FORctrlP = "IF"
+				if *opt_S { fmt.Fprintf(genFile, "//*If** %d: '%c' %q\n", lineNo, *state2P, (*textResP)[*FORstartP:]) }
+				*ForIfFlgP = true
+				Save_ifStat(*state2P, "FORorIF IF")		// save state2 for initial IF - not modified by other atoms especially ELSE IF
+				newStat = 'G'
+			}
+			if *state2P == 'D' {
+				*state2P = 'A'		// previous IF has terminated with "}}" and not ELSE
+			}
+			PushCtrlState(*FORctrlP, *state2P, fmt.Sprintf("FORorIF %s", atom))
+			*state2P = newStat
+			if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", *state2P, atom) }
+		}
+	} else if atom == "ELSE" {
+		pushError(&ret, "//* Error: ELSE not after IF\n")
+	} else if atom == "{{" {
+		pushError(&ret, "//* Error: double opening braces \"{{\" not after FOR IF or ELSE\n")
+	} else if atom == "{" {
+		if *braceCntP >= cap(iesBrace) {
+			iesBrace = append(iesBrace, make([]bool, *braceCntP)...)	// double capacity
+		}
+		if *iesFlagP {
+			iCmode = false			// C code
+		}
+		iesBrace[*braceCntP] = *iesFlagP
+		if *opt_X { fmt.Printf("{{ braceCnt = %d iesBrace = %v %q\n", *braceCntP, iesBrace, *textResP) }
+		*iesFlagP = false
+		*braceCntP++
+	} else if atom == "}" {
+		*braceCntP--
+			if *braceCntP < 0 {
+				pushError(&ret, "//* Error: too many closing single braces\n")
+				*braceCntP = 0
+			} else if iesBrace[*braceCntP] {
+				iCmode   = true		// iC code
+			}
+	} else if reWord.MatchString(atom) {
+		if iCmode {
+			if (keywords[atom] & 0x400) != 0 {	// if else switch
+				*iesFlagP = true
+			} else if (keywords[atom] & 0x20f) == 0x200 {
+				pushError(&ret, fmt.Sprintf("//* Error: C keyword %q not valid in iC code\n", atom))
+			}
+		}
+		if SQflag {
+			if _, ok := FORctrlVar[atom]; ok {
+				*SQvarP = true		// square bracket contains at least one valid control variable - evaluate
+				*SQcvarP = true		// check for a valid control variable in C code
+			} else if iCmode {
+				pushError(&w, fmt.Sprintf("//* Warning: %q not a valid control variable in square brackets in iC code\n", atom))
+			}
+		}
+		*posNextP = 0
+	} else if reNum.MatchString(atom) {
+		if SQflag {
+			*SQvarP = true		// square bracket contains at least one number - evaluate
+		}
+	} else if atom == "%{" {
+		if iCmode {
+			litBlock = true
+			iCmode   = false		// C code
+		} else {
+			pushError(&ret, "//* Error: cannot open literal block while in C code\n")
+		}
+	} else if atom == "%}" {
+		if litBlock {
+			litBlock = false
+			iCmode   = true			// iC code
+		} else {
+			pushError(&ret, "//* Error: cannot close literal block when not opened\n")
+		}
+	}
+	return false
+} // FORorIF
+
+/********************************************************************
+ *
+ *      Main program
  *
  *******************************************************************/
 
 func main() {
 	rePath := regexp.MustCompile(fmt.Sprintf(".*%c", os.PathSeparator))
 	named = rePath.ReplaceAllLiteralString(os.Args[0], "")
+	flag1 = flag.NewFlagSet(named, flag.ExitOnError)
 	argIn = "stdin" // default for STDIN
 	var genName string
-	var argL string
 	log.SetFlags(log.Lshortfile)
-	opt_o = flag.String("o", "", "name of generated output file (default stdout)")
-	opt_l = flag.String("l", "", "name of generated intermediate GO log file (normally deleted)")
-	opt_e = flag.String("e", "", "name of generated error file (default stderr)")
-	opt_t = flag.Bool("t", false, fmt.Sprintf(`test if source is an iCa language file - return 1 if it is
+	opt_o = flag1.String("o", "", "name of generated output file (default stdout)")
+	opt_l = flag1.String("l", "", "name of generated intermediate GO log file (normally deleted)")
+	opt_e = flag1.String("e", "", "name of generated error file (default stderr)")
+	opt_t = flag1.Bool("t", false, fmt.Sprintf(`test if source is an iCa language file - return 1 if it is
 
 <in.ica>   iCa source file with array definitions (default: stdin)
 		   Only processes %%%%include %%%%define %%%%if etc directives when
@@ -325,29 +705,37 @@ func main() {
 Pre-compiler to convert "immediate C" source files containing arrays
 and object like or function like macros into straight "immediate C".
 
-Copyright (C) 2001	John E. Wulff	 <immediateC@gmail.com>
+Copyright (C) 2022	John E. Wulff	 <immediateC@gmail.com>
 %q`, ID_immag_go))
-	opt_m = flag.Bool("m", false, fmt.Sprintf(`process only #include #define #if etc directives for C files
+	opt_m = flag1.Bool("m", false, fmt.Sprintf(`process only #include #define #if etc directives for C files
 No iCa language translation (%s -m replaces cpp)
 Warning if %%include %%define %%if etc directives are used`, named))
-	opt_M = flag.Bool("M", false, `process only %include %define %if etc directives for iC files.
+	opt_M = flag1.Bool("M", false, `process only %include %define %if etc directives for iC files.
 No iCa language translation (#directives are left untouched)`)
-	opt_Y = flag.Bool("Y", false, `process only %if directives - enables conditional compiling
+	opt_Y = flag1.Bool("Y", false, `process only %if directives - enables conditional compiling
 for yacc, bison or flex; %define directives are left untouched`)
-	opt_a = flag.Bool("a", false, "output FOR IF ELSE and %%define etc lines as comments")
-	flag.Var(&opt_I, "I", `scan %include and #include "files" on another path
+	opt_a = flag1.Bool("a", false, "output FOR IF ELSE and %%define etc lines as comments")
+	opt_n = flag1.Bool("n", false, "no warnings")
+	opt_N = flag1.Bool("N", false, "allow 'int' before FOR loop control variable without Warning")
+	flag1.Var(&opt_I, "I", `scan %include and #include "files" on another path
 May be used multiple times`)
-	flag.Var(&opt_P, "P", `predefine a <macro> for iCa translation
+	flag1.Var(&opt_P, "P", `predefine a <macro> for iCa translation
 <macro> is usually defined with a numeric value eg. -P m=8
 NOTE: command line definitions have precedence over
 	 '%%define m 4' in the code (opposite to cpp)
 May be used multiple times`)
-	flag.Var(&opt_D, "D", `predefine a <macro> evaluated for C, iC or yacc/bison translation
+	flag1.Var(&opt_D, "D", `predefine a <macro> evaluated for C, iC or yacc/bison translation
 with -m, -M, -Y or <in.ic>. May be used multiple times`)
-	flag.Var(&opt_U, "U", `undefine <macro> evaluated only with -m, -M, -Y or <in.ic>
+	flag1.Var(&opt_U, "U", `undefine <macro> evaluated only with -m, -M, -Y or <in.ic>
 May be used multiple times`)
-	opt_T = flag.Bool("T", false, "extra Trace output")
-	flag.Parse()
+	opt_S = flag1.Bool("S", false, "trace iCa State Machine")
+	opt_T = flag1.Bool("T", false, "extra Trace output")
+	opt_X = flag1.Bool("X", false, "EXTRA Trace output")
+	opt_Z = flag1.Bool("Z", false, "EXTRA Trace output for pre-processor states")
+
+	argsP = &args             // intially fill []args
+	convertFlags(&os.Args, 1) // convert POSIX flags to individual flags
+	flag1.Parse(args)
 	path = os.Getenv("INCLUDE")
 	if path == "" {
 		path = "/usr/local/include"
@@ -356,32 +744,34 @@ May be used multiple times`)
 		path += ":" + p // include path options from -I option
 	}
 	path += ":." // finally add current directory
-	// fmt.Printf("path = %q\n", path)
+
+	var sFlag bool
+	if !*opt_N {
+		sFlag = true			// default is strict option - no longer any way to change that in iCa code
+	}
 
 	var inFile  *os.File
 	var inFileC *os.File
 	var scanner *bufio.Scanner
 	var inFileStk = make([]*fileStk, 0)
-	if len(flag.Args()) == 0 {
+	if len(flag1.Args()) == 0 {
 		inFile  = os.Stdin
-	} else if len(flag.Args()) == 1 {
+	} else if len(flag1.Args()) == 1 {
 		var err error
-		argIn = flag.Arg(0)
+		argIn = flag1.Arg(0)
 		if inFile , err = os.Open(argIn); err != nil {
-			log.Fatal(err)
+			log.Print(err); os.Exit(3)
 		}
 		defer inFile .Close()
 	} else {
-		log.Fatalln("Too many input file arguments (only one allowed)", flag.Args())
+		log.Println("Too many input file arguments (only one allowed)", flag1.Args()); os.Exit(3)
 	}
 	inFileC = inFile		// current input file
-	reFileName := regexp.MustCompile(fmt.Sprintf("^((([.A-Z_a-z][\\w-]*|\\.*)%c)*)([.A-Z_a-z][\\w-]*)(\\.(\\w*))?$", os.PathSeparator))
-	// fmt.Printf("argIn = %q flag.Args() %q\n", argIn, flag.Args())
+	reFileName := regexp.MustCompile(fmt.Sprintf("^((([.A-Z_a-z][\\w-]*|\\.*)%c)*)([.A-Z_a-z][\\w-]*)(\\.(\\w*))+$", os.PathSeparator))
 	m := reFileName.FindStringSubmatch(argIn)
 	if len(m) != 7 {
-		log.Fatalf("badly formed file name %q\n", argIn) // unlikely after succesful open
+		log.Printf("badly formed file name %q\n", argIn); os.Exit(3) // unlikely after succesful open
 	}
-	// fmt.Printf("len(m) == %d; argIn = %q; m = %q\n", len(m), argIn, m)
 	pathIn := m[1]
 	baseIn := m[4]
 	extnIn := m[6]
@@ -390,16 +780,11 @@ May be used multiple times`)
 	}
 	statIn, err := os.Stat(argIn)
 	if argIn != "stdin" && err != nil {
-		if err != nil {
-			log.Fatal(err) // does not apply to os.Stat("stdin")
-		}
-		if extnIn != "ica" && !*opt_m && !*opt_Y {
-			*opt_M = true
-			argL = argIn // TODO - looks fishy
-		} else if *opt_o != "" {
-			argL = *opt_o // name for 1st line of generated file
-		}
+		log.Print(err); os.Exit(3) // does not apply to os.Stat("stdin")
 	}
+	*opt_n = true			// temporarily block warnings
+	e := 3					// error exit for normal call
+	iCmode = true			// -M or none (iCa) iC mode
 
 	if *opt_t {
 		*opt_o = ""
@@ -408,32 +793,42 @@ May be used multiple times`)
 		*opt_m = false
 		*opt_M = false
 		*opt_Y = false
+		e      = 0			// error exit for -t call
 	} else {
 		if *opt_m {
 			*opt_M = false	// opt_m has precedence over opt_M and opt_Y
 			*opt_Y = false
+			iCmode = false	// -m C mode
 		} else if *opt_M {
 			*opt_Y = false	// opt_M has precedence over opt_Y
+		} else if *opt_Y {
+			iCmode = false	// -Y C mode
 		}
-		if *opt_l != "" {
-			genName = *opt_l // keep generated GO file as a log file
-		} else {
-			genName = fmt.Sprintf("%s.go", baseIn)
-		}
-// fmt.Printf("genName = %q\n", genName)
+		genName = fmt.Sprintf("%s.go", baseIn)
 		statGen, err := os.Stat(genName)
 		if err == nil {
-			// fmt.Printf("genName = %q exists\n", genName)
 			if os.SameFile(statIn, statGen) {
-				log.Fatalf("output file %q should not be the same as generated GO file %q\n", genName, argIn)
+				log.Printf("output file %q should not be the same as generated GO file %q\n", genName, argIn); os.Exit(3)
 			}
 			if err := os.Chmod(genName, 0644); err != nil {
-				log.Fatal(err)
+				log.Print(err); os.Exit(3)
 			}
 		}
 		genFile, err = os.Create(genName)
 		if err != nil {
-			log.Fatal(err)
+			log.Print(err); os.Exit(3)
+		}
+		if *opt_l != genName && *opt_l != "" {
+			if _, err := os.Stat(*opt_l); !errors.Is(err, os.ErrNotExist) {
+				err = os.Remove(*opt_l)		// remove existing log file (required by Link())
+				if err != nil {
+					log.Print(err); os.Exit(3)
+				}
+			}
+			err = os.Link(genName, *opt_l)	// hard link log file to generated GO file
+			if err != nil {					// log file remains when GO file is deleted
+				log.Print(err); os.Exit(3)
+			}
 		}
 		fmt.Fprint(genFile,
 `package main
@@ -443,25 +838,25 @@ var IFprev bool
 var IFblock int
 var IFstack = make([]bool, 0, 4)
 func main() {
-IF = true
-IFstack = append(IFstack, IF)
-IFprev = true
-if true {
+ IF = true
+ IFstack = append(IFstack, IF)
+ IFprev = true
+ if true {
+  _ = fmt.Sprint()
 `)						// balance } }
-		blockStart = 1
 		if *opt_o != "" { // keep iC output file if Log file is in error
 			statOut, err := os.Stat(*opt_o)
 			if err == nil {
 				if os.SameFile(statIn, statOut) {
-					log.Fatalf("output file %q should not be the same as input file %q\n", *opt_o, argIn)
+					log.Printf("output file %q should not be the same as input file %q\n", *opt_o, argIn); os.Exit(3)
 				}
 				if err := os.Chmod(*opt_o, 0644); err != nil {
-					log.Fatal(err)
+					log.Print(err); os.Exit(3)
 				}
 			}
 			outFile, err := os.Create(*opt_o)
 			if err != nil {
-				log.Fatal(err)
+				log.Print(err); os.Exit(3)
 			}
 			defer outFile.Close()
 			os.Stdout = outFile
@@ -470,30 +865,30 @@ if true {
 			statErr, err := os.Stat(*opt_e)
 			if err == nil {
 				if os.SameFile(statIn, statErr) {
-					log.Fatalf("error file %q should not be the same as input file %q\n", *opt_e, argIn)
+					log.Printf("error file %q should not be the same as input file %q\n", *opt_e, argIn); os.Exit(3)
 				}
 				if err := os.Chmod(*opt_e, 0644); err != nil {
-					log.Fatal(err)
+					log.Print(err); os.Exit(3)
 				}
 			}
 			errFile, err := os.Create(*opt_e)
 			if err != nil {
-				log.Fatal(err)
+				log.Print(err); os.Exit(3)
 			}
 			defer errFile.Close()
 			os.Stderr = errFile
 		}
 	}
-	opt_m_M_Y := *opt_m || *opt_M || *opt_Y
+	opt_m_M_Y = *opt_m || *opt_M || *opt_Y
 	if *opt_T && *opt_l == "" {
 		fmt.Println(" *opt_m =", *opt_m, "*opt_M =", *opt_M, "*opt_Y =", *opt_Y, "opt_m_M_Y =", opt_m_M_Y)
 	}
 
-	// balance { { { {
-	reState := regexp.MustCompile(`(%?#|%%?|/[/*]|\*/|[\w.]+|%?\{\{?|%?}}?|(\\\\)+|\\n|\\t|\\?"|\\?'|\\?\[|\\?\]|\S|.?$)`)
-//	reBackSlash := regexp.MustCompile(`^(.*)\\$`)
-	reCommaSemi := regexp.MustCompile(`,\s*;`)
-	reParenSlash = regexp.MustCompile(`(["\\])`)
+	// balance { {
+	reState     := regexp.MustCompile(`(%?\{\{?|%?}}?|%?#|%%?|/[/*]|\*+/?|\w+|(\\\\)+|\\n|\\t|\\?"|\\?'|\\?\[|\\?\]|\S)`)
+	reCommEnd    = regexp.MustCompile(`\*+/`)
+	reCommaSemi := regexp.MustCompile(`,(\s*);`)
+	reQuoteSlash = regexp.MustCompile(`(["\\])`)
 	var reCdirective *regexp.Regexp
 	if *opt_m { // both %%directives and %#directives are excluded - #define and %define (warning)
 		reCdirective = regexp.MustCompile(`^\s*%[%#]\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b`)
@@ -504,37 +899,62 @@ if true {
 	} else { // %directives, #directives and %# directives are excluded - only %%directives
 		reCdirective = regexp.MustCompile(`^\s*(%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b`)
 	}
-	reLdQuote := regexp.MustCompile(`^\s*'?`)
-	reTrQuote := regexp.MustCompile(`'?\s*$`)
-	reWord     = regexp.MustCompile(`^[A-Z_a-z]\w*$`)
-	reDefined  = regexp.MustCompile(`defined\s*`)
-	reNum      = regexp.MustCompile(`^\d+$`)
-	reWordNum  = regexp.MustCompile(`^\w+$`)
-	reEvalIf   = regexp.MustCompile(`(\w+|&&|\|\||[=!<>]=|<<?|>>?|~)`)
-//	reComment := regexp.MustCompile(`(\s*(/[/*].*)?$)`)
-//	reLdTrSps := regexp.MustCompile(`^\s+|\s+$`)
-	reTrSpaces = regexp.MustCompile(`\s+$`)
-	reSpaces   = regexp.MustCompile(`(\s+)`)
-	reCcomment = regexp.MustCompile(`\s*/\*.*`)
-	reCcomTail = regexp.MustCompile(`\*/\s*`)
-	reMacro    = regexp.MustCompile(`^([A-Z_a-z]\w*)(\(\s*(([A-Z_a-z]\w*)(\s*,\s*([A-Z_a-z]\w*))*)*\s*\))?(\s+(.+))?$`)
-	reComma    = regexp.MustCompile(`\s*,\s*`)
-	reHashHash = regexp.MustCompile(`\s*##\s*`)
-	reHash     = regexp.MustCompile(`#([^\d\\]|$)`)
-	reTranslate = regexp.MustCompile(`([A-Z_a-z]\w*|\/[*\/]|\*\/|\\?["'])`)
-	reInclude  := regexp.MustCompile(`^["<](([A-Za-z]:)?([/\\]?)[A-Z_a-z.][\w/\\.-]*)[">]$`)
-	reErrWarn  := regexp.MustCompile(`^(error|warning)$`)
-// detailed analysis code lines					m/((\\\\)*)(\\?("|'|\[|\]|\n)|%?(\{\{?|}}?)|\/\/|\/\*|\*\/|\w+|\\n|\\t|\S)/g	// {{ balance
-	Cdirective := false
-	state := 'A'		// starting state
-	si    := 1			// initial value of sense indicator; output	%else or %elif not allowed
+	reLdQuote   := regexp.MustCompile(`^\s*'?`)
+	reTrQuote   := regexp.MustCompile(`'?\s*$`)
+	reWord       = regexp.MustCompile(`^[A-Z_a-z]\w*$`)
+	reNumWord   := regexp.MustCompile(`^\w+$`)
+	reDefined    = regexp.MustCompile(`(!\s*)?defined\s*`)
+	reNum        = regexp.MustCompile(`^(0|[1-9]\d*)$`)
+	reSignNum    = regexp.MustCompile(`^[+-]?\s*(0|[1-9]\d*)$`)
+	reFmtSprint := regexp.MustCompile(`^fmt\.Sprint\(`)
+	reStrInd    := regexp.MustCompile(`\\"([^\\]*), "(\\")?`)
+	reConstExpr  = regexp.MustCompile(`(^\s*\d+\s*$|[^\s()\d*\/%+-])`)
+	reEvalIf     = regexp.MustCompile(`(!\s*defined|[a-z_A-Z]\w*|([+-]\s*)?\d+|&&|\|\||[\?:\(\)]|[=!<>]=|<<?|>>?)`)
+	reLdSpaces  := regexp.MustCompile(`^\s*`)
+	reLdTrSps    = regexp.MustCompile(`^\s+|\s+$`)
+	reTrSpaces   = regexp.MustCompile(`\s+$`)
+	reTrSpaceSl := regexp.MustCompile(`\s+\\$`)
+	reSpaces     = regexp.MustCompile(`(\s+)`)
+	reTxSpaces   = regexp.MustCompile(`^\"(\s+)(\s.*)\"$`)
+	reAllSpaces  = regexp.MustCompile(`^\s*$`)
+	reSpacexdot := regexp.MustCompile(`^\s*([x.])\s*$`)
+	reWordSpace := regexp.MustCompile(`([IQ]X\d\.|[A-Z_a-z]\w*|^)\s+$`)
+	reWordNum   := regexp.MustCompile(`([A-Z_a-z]\w*\d)\s*$`)
+	reCcomment   = regexp.MustCompile(`\s*/\*.*`)
+	reCcomTail   = regexp.MustCompile(`\*/\s*`)
+	reMacro      = regexp.MustCompile(`^([A-Z_a-z]\w*)(\(\s*(([A-Z_a-z]\w*)(\s*,\s*([A-Z_a-z]\w*))*)*\s*\))?(\s+(.+))?$`)
+	reTrComma   := regexp.MustCompile(`\s*,\s*$`)
+	reComma      = regexp.MustCompile(`\s*,\s*`)
+	reHashHash   = regexp.MustCompile(`\s*##\s*`)
+	reHashSlash  = regexp.MustCompile(`#\\`)
+	reHash       = regexp.MustCompile(`#([^\d\\]|$)`)
+	reTranslate  = regexp.MustCompile(`([A-Z_a-z]\w*|\/[*\/]|\*\/|\\?["'])`)
+	reResolve    = regexp.MustCompile(`(\(|[A-Z_a-z]\w*|,|\)|\\?["'])`)
+	reTrue       = regexp.MustCompile(`<< >>`)
+	reFalse      = regexp.MustCompile(`>> <<`)
+	reInclude   := regexp.MustCompile(`^["<](([A-Za-z]:)?([/\\]?)[A-Z_a-z.][\w/\\.-]*)[">]$`)
+	reErrWarn   := regexp.MustCompile(`^(error|warning)$`)
+	reLine      := regexp.MustCompile(`^\s*(\d+)\s+"([A-Z_a-z][\w.]*)"`)
+	reFORin1     = regexp.MustCompile(`^FOR\s*\(\s*((int)\s+)?([a-zA-Z]\w*)\s*=`)
+	reFORin2     = regexp.MustCompile(`^FOR\s+((int)\s+)?([a-zA-Z]\w*)\s*\(`)
+	reFORstd    := regexp.MustCompile(`^FOR\s*\(\s*((int)\s+)?([a-zA-Z]\w*)\s*=(.*)\)\s*{{$`)		// }}
+	reFORdot    := regexp.MustCompile(`^FOR\s+((int)\s+)?([a-zA-Z]\w*)\s*\(\s*(\w+(\s*([*%/&^|()+-]|<<|>>)\s*\w+)*)\s*\.\.\s*(\w+(\s*([*%/&^|()+-]|<<|>>)\s*\w+)*)\s*\)\s*{{$`)	// }}
+	reFORlist   := regexp.MustCompile(`^FOR\s+((int)\s+)?([a-zA-Z]\w*)\s*\(\s*(.*\S)\s*\)\s*{{$`)	// }}
+	reIFstd     := regexp.MustCompile(`^(ELSE\s+)?IF\s*\(\s*(.*\S)\s*\)\s*{{$`)			// }}
+	reString    := regexp.MustCompile(`^".*"$`)
+	reBareWd    := regexp.MustCompile(`^\S*$`)
+	rePercent    = regexp.MustCompile(`%`)
+	reDivInt     = regexp.MustCompile(`((\([^)]+\)|\d+)\s*/\s*(\([^)]+\)|\d+))`)
+	Cdirective  := false
+	state       := 'A'		// starting state
+	si          := 1		// initial value of sense indicator; output %else or %elif not allowed
 	prefixes := map[string]bool {
 		"%%":	true,
 		"%":	true,
 		"#":	true,
 		"%#":	true,
 	}
-	directives := map[string]bool {
+	direcves := map[string]bool {
 		"define":	true,
 		"undef":	true,
 		"include":	true,
@@ -548,22 +968,17 @@ if true {
 		"warning":	true,
 		"line":		true,
 	}
-	pragmas := map[string]int {
-		"no":		5,
-		"use":		5,
-		"strict":	6,
-	}
+	FORctrlVar["int"] = "int"
 	direcve    := ""
 	macro      := ""
 	macroStart := 0
 	mWarn      := false
 	clFlag     := false
 	comStart   := 0
-	FORline    := "X"
+	expFlag    := false
+	ternFlag   := false
 	if len(opt_P) > 0 {
-		// fmt.Fprintf(os.Stderr, "-P %q\n", opt_P)
 		for _, p := range opt_P {
-			// fmt.Fprintf(os.Stderr, " %q", p)
 			p = reLdQuote.ReplaceAllLiteralString(p, "")	// delete leading blanks and "'" inserted by iCmake
 			p = reTrQuote.ReplaceAllLiteralString(p, "")	// delete trailing "'" inserted by iCmake and blanks
 			s := regexp.MustCompile(`\s*=\s*`).Split(p, 2)	// space separated macro is also accepted
@@ -571,16 +986,13 @@ if true {
 			if len(s) > 1 {
 				macro += " " + s[1]							 // when translation is missing just %%define X
 			}
-			// fmt.Fprintf(os.Stderr, " %q\n", macro)
 			df, val := scan_define("-P", macro)				// scan and save -P macro in  map defs
-			// fmt.Fprintf(os.Stderr, " df = %q val = %q ret = %d\n", df, val, ret)
 			if len(lnErr) > 0 {
-				output_error("-P "+p+"\n")
+				outputError("-P "+p+"\n")
 			} else {
 				if df == val {
-					lnErr = append(lnErr, "//* Warning: '-P macro' does not change anything ???\n")
-					output_error("-P "+p+"\n")
-					w++ // warning found
+					pushError(&w, "//* Warning: '-P macro' does not change anything ???\n")
+					outputError("-P "+p+"\n")
 					delete(defs, df)
 				} else if _, ok := defs[df]; ok {			// should never fail if scan_define() correct
 					clDefs[df] = defs[df]
@@ -594,15 +1006,13 @@ if true {
 				}
 			}
 			if ret > 0 {
-				goto CloseFiles // found Error	# proceed with Warning
+				goto CloseFiles // found Error  # proceed with Warning
 			}
 		}
 	}
 	if opt_m_M_Y { // -D -U only processed for <in>.ic iC files or if -m -M or -Y
 		if len(opt_D) > 0 {
-			// fmt.Fprintf(os.Stderr, "-D %q\n", opt_D)
 			for _, p := range opt_D {
-				// fmt.Fprintf(os.Stderr, " %q", p)
 				p = reLdQuote.ReplaceAllLiteralString(p, "")	// delete leading blanks and "'" inserted by iCmake
 				p = reTrQuote.ReplaceAllLiteralString(p, "")	// delete trailing "'" inserted by iCmake and blanks
 				s := regexp.MustCompile(`\s*=\s*`).Split(p, 2)	// space separated macro is also accepted
@@ -610,16 +1020,13 @@ if true {
 				if len(s) > 1 {
 					macro += " " + s[1] // when translation is missing just %%define X
 				}
-				// fmt.Fprintf(os.Stderr, " %q\n", macro)
 				df, val := scan_define("-D", macro) // scan and save -D macro in  map defs
-				// fmt.Fprintf(os.Stderr, " df = %q val = %q ret = %d\n", df, val, ret)
 				if len(lnErr) > 0 {
-					output_error("-D "+p+"\n")
+					outputError("-D "+p+"\n")
 				} else {
 					if df == val {
-						lnErr = append(lnErr, "//* Warning: '-D macro' does not change anything ???\n")
-						output_error("-D "+p+"\n")
-						w++ // warning found
+						pushError(&w, "//* Warning: '-D macro' does not change anything ???\n")
+						outputError("-D "+p+"\n")
 						delete(defs, df)
 					} else if _, ok := defs[df]; ok {			// should never fail if scan_define() correct
 						clDefs[df] = defs[df]
@@ -633,14 +1040,12 @@ if true {
 					}
 				}
 				if ret > 0 {
-					goto CloseFiles // found Error	# proceed with Warning
+					goto CloseFiles // found Error  # proceed with Warning
 				}
 			}
 		}
 		if len(opt_U) > 0 { // for compatibility with cpp for generated command lines
-			// fmt.Fprintf(os.Stderr, "-U %q\n", opt_U)
 			for _, df := range opt_U {
-				// fmt.Fprintf(os.Stderr, " %q\n", df)
 				df = reLdQuote.ReplaceAllLiteralString(df, "")	// delete leading blanks and "'" inserted by iCmake
 				df = reTrQuote.ReplaceAllLiteralString(df, "")	// delete trailing "'" inserted by iCmake and blanks
 				//				$df =~ s/'?\s*$//;		// delete trailing "'" inserted by iCmake and blanks
@@ -655,20 +1060,19 @@ if true {
 					delete(defs, df)		// safe to delete even if hash entry does not exist
 					delete(clDefs, df)
 				} else {
-					lnErr = append(lnErr, "//* Warning: '-U macro' has bad characters - ignored\n")
-					output_error("-U "+df+"\n")
-					w++ // warning found
+					pushError(&w, "//* Warning: '-U macro' has bad characters - ignored\n")
+					outputError("-U "+df+"\n")
 				}
 			}
 		}
 	}
 	if clFlag {
-		fmt.Printf("# 1 %q\n", argL)
+		fmt.Printf("# 1 %q\n", argIn)
 	}
 
 	/***********************************************************************
 	 *
-	 *	Process the file
+	 *  Process the file
 	 *
 	 ***********************************************************************/
 
@@ -676,1396 +1080,1521 @@ if true {
 		fmt.Fprintln(genFile, "//###", named, argIn)
 	}
 	/***********************************************************************
-	 *	Read all lines in the input file
+	 *  Read all lines in the input file
 	 ***********************************************************************/
 	scanner = bufio.NewScanner(inFileC)
 	scanner.Split(bufio.ScanLines)
-Level:
+  Level:
 	for {
+		offset   := 0
+		iNext    := 0
+		comiNext := 0
+		ForIfFlg := false
+		FORcomm  := false
+		FORend   := 0
+		SQstSv   := make([]rune, 0, 5)
+		SQbrCnt  := 0
+		SQbrFlag := false
+		SQbrInr  := make([]int, 0, 5)
+		cat      := 0				// 0 no; 0x1 yes with offset 1; 0x2 yes with offset 0; 0x4 comment with offset 0
+		prefix   := ""
+		text     := ""
+		textRes  := ""
+		braceCnt := 0
+		iesFlag  := false
+		dBraceCnt := 0
+		state2   := 'A'				// start scan 2 with same state as scan 1
+		genTail  := ""
+		if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c'\n", state2) }
+	  Line:
 		for scanner.Scan() {
-			text := scanner.Text() // `\r?\n` is stripped from returned text
+			LFflag = false
+			if cat == 0 {
+				iNext = 0
+			}
+			if iNext == 0 && len(lnErr) > 0 && !*opt_t {
+				outputError(lineText)			// possible error in previous line
+			}
+			if hashLineFlag {
+				genLine(fmt.Sprintf("# %d %q 2", lineNo+1, argIn), "\\n")	// # 8 "file" 2
+				hashLineFlag = false
+			}
+			prevText := text
+			text = scanner.Text()								// `\r?\n` is stripped from returned text
 			text = reTrSpaces.ReplaceAllLiteralString(text, "")	// remove trailing white space
-			lineNo++ // first line is lineNo 1 - balance {{
- fmt.Printf("%d:\t%q\n", lineNo, text)
-// matches := reState.FindAllStringIndex(text, -1)
-// fmt.Println(matches)
+			lineNo++											// first line is lineNo 1
+			if cat != 0 {
+				ofs := cat & 0x01
+				tx := text[reLdSpaces.FindStringIndex(text)[1]:]	// loc[1] is 0 if no leading spaces in text
+				if !reTrSpaceSl.MatchString(textRes) {
+					tx = " "+tx					// 1 space between concatenated lines
+				}
+				textRes = textRes[:len(textRes)-ofs] + tx		// concatenate text to previous textRes less \ if 1
+				lineText = lineText[:len(lineText)-ofs] + tx	// insert one space
+				text = prevText[:len(prevText)-ofs] + tx		// concatenate text to previous textRes less \ if 1
+				if ofs != 0 {
+					cat &^= 0x1					// stop cat == 0x1 --> 0; retain cat == 0x2 or 0x4
+				}
+			} else {
+				textRes  = text
+				lineText = text					// unmodified input text for error messages
+				offset   = 0
+				ForIfFlg = false
+				FORcomm  = false
+				FORend   = 0
+				SQstSv   = make([]rune, 0, 5)	// reset square bracket stack at start of a new line
+				SQbrCnt  = 0
+				SQbrFlag = false
+				SQbrInr  = make([]int, 0, 5)
+				SQprCnt  = 0
+			}
+			if *opt_X { fmt.Printf(">1 %d:\t%q\n", lineNo, text) }
 			l    := len(text)
 			last := byte(0)
 			if l > 0 {
 				last  = text[l-1]				// could be trailing backslash
 			}
-			pos      := 0
-			pose     := 0
-			posePrev := 0
-			offset   := 0
-			sqNest   := 0
-			sqNestSv := 0
-			textFOR  := text
-			semi     := true					// start of line is syntactically like after a semi-colon
-			useNo    := false
-			prefix   := ""
-			/***********************************************************************
-			 *  Process lines with a state machine, which recognises comments,
-			 *  parenthesised strings, quoted characters as well a relevant atoms
-			 *  'A' inside iCa, iC or C code
-			 *  'C' inside a C comment
-			 *  'P' inside a C++ comment
-			 *  'S' inside a parenthesised string
-			 *  'H' inside a single quoted character constant
-			 ***********************************************************************/
-			//	reState: (%?#|%%?|/[/*]|\*/|[\w.]+|%?\{\{?|%?}}?|(\\\\)+|\\n|\\t|\\?"|\\?'|\\?\[|\\?\]|\S|.?$)
-			for i, posPair := range reState.FindAllStringIndex(text, -1) {
-				//	(
-				//		%?#		|	# directive prefix # %#
-				//		%%?		|	# directive prefix % %%
-				//		/[/*]	|	# /* // start of C or C++ comment
-				//		\*/		|	# */    end of C comment
-				//		[\w.]+	|	# word identifier or number - balance {{
-				//		%?\{\{?	|	# { {{ %{ - not used %{{
-				//		%?}}?	|	# } }} %} - not used %}}
-				//		(\\\\)+	|	# remove pairs of backslashes
-				//		\\n		|	# char \n NL in string
-				//		\\t		|	# char \t TAB in string
-				//		\\?"	|	# " or \"
-				//		\\?'	|	# ' or \'
-				//		\\?\[	|	# [ or \[	- used in iCa analysis only
-				//		\\?\]	|	# ] or \]	- used in iCa analysis only
-				//		\S			# any single non space character
-				//	)
-				posePrev = pose						// start of white space after previous atom
-				pos   = posPair[0]
-				pose  = posPair[1]
-				atom := text[ pos : pose ]
- fmt.Printf("%2d\t%3d %3d\t%q\n", i, pos, pose, atom)
-				if state == 'A' {				// program - not comment, string, char constant
-					if i == 0 {
-						/***********************************************************************
-						 *	If -m then both %%directives and %#directives are excluded - #define and %define (warning)
-						 *		reCdirective = regexp.MustCompile(`^\s*%[%#]\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b`)
-						 *	Else if -M %%directives, #directives and %#directives are excluded - %define %if only
-						 *		reCdirective = regexp.MustCompile(`^\s*(%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b`)
-						 *	Else if -Y additionally %define %undef %include are excluded - %define only (no %if)
-						 *		reCdirective = regexp.MustCompile(`^\s*((%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)|%(define|undef|include))\b`)
-						 *	Else if none of the above %directives, #directives and %# directives are excluded - only %%directives
-						 *		reCdirective = regexp.MustCompile(`^\s*(%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b`)
-						 *
-						 *	These regular expressions exclude directives which are not resolved for the chosen language
-						 *	Output these directives completely unchanged with possible trailing \
-						 *	except if blocked by #if #else or #elif
-						 ***********************************************************************/
-						if Cdirective || reCdirective.MatchString(text) {	// match text because of -Y
-							if last == '\\' {		// trailing backslash
-								Cdirective = true	// #define or %define etc output as is, up to line
-							} else {
-								Cdirective = false	// without trailing backslash
-							}
-							if !*opt_t {
-								if si <= 0 {
-									blankLines++	// count lines not output as blank lines
-									goto Line		// do not output lines in false blocks
-								}
-								if opt_m_M_Y && blankLines > 0 {
-									blanks()		// print blank lines now
-								}
-								genLine(text)
-							}
-							goto Line				// must not modify because of comments
-						}
-						/***********************************************************************
-						 *	All directives not belonging to the current option -m, -M, -Y or none
-						 *  have been excluded in the previous section.
-						 *	From now on treat %%directives, %directives and #directives equivalently
-						 *	except warn if %directive used in straight iC file or in immac -m call
-						 *  The prefix and the directive should only be the first two atoms in a line
-						 *  After the directive continue scanning for comments.
-						 *  The macro with possible parenthesised argument list starts with the next
-						 *  atom, which  has all comments and space before comments deleted.
-						 ***********************************************************************/
-						if prefixes[atom] {			// %% % # or %#
-							prefix = atom
-							if *opt_m && prefix == "%" {
-								mWarn = true		// output Warning later for -m only
-							}
-						}
-					} else if i == 1 && prefix != "" && directives[atom] {
-						direcve = atom				// directive found
-						macroStart = -1				// must get next atom to obtain a macro 
-					} else if i == 2 && macroStart == -1 {
-						macroStart = pos			// start of macro
-					}
-					if atom == "/*" {
-						state = 'C'					// start of C comment found
-						comStart = posePrev			// include leading spaces
-						sqNestSv = sqNest			// save for state 'A'
-						sqNest = 0					// sync square brackets
-// fmt.Printf("comStart = %d offset = %d\n", comStart, offset)
-					} else if atom == "//" {
-						state = 'P'					// start of C++ comment found
-						comStart = posePrev			// include leading spaces
-						sqNestSv = sqNest			// save for state 'A'
-						sqNest = 0					// sync square brackets
-// fmt.Printf("comStart = %d offset = %d\n", comStart, offset)
-					} else if useNo && pragmas[atom] == 6 {	// currently "strict" (could be more)
-						/***********************************************************************
-						 *	Pragma found
-						 *	use or no strict is deprecated - both are now a NOP
-						 ***********************************************************************/
-						lnErr = append(lnErr, "//* Warning: use or no strict is deprecated - ignore\n")
-						w++							// warning found
-						useNo = false
-					} else if semi && pragmas[atom] == 5 {	// "use" or "no" at start of line or after semi-colon
-						useNo = true
-					} else if atom == ";" {
-						semi = true
-					} else {
-						semi = false				// any atom except start of comments
-						if atom == "[" {			// leading backslash will not compare
-							sqNest++				// opening square bracket
-						} else if atom == "]" {		// leading backslash will not compare
-							sqNest--				// closing square bracket
-						} else if atom == "\"" {	// leading backslash will not compare
-							state = 'S'				// start of string found
-							sqNestSv = sqNest		// save for state 'A'
-							sqNest = 0				// sync square brackets
-						} else if atom == "'" {		// leading backslash will not compare
-							state = 'H'				// start of character constant found
-							sqNestSv = sqNest		// save for state 'A'
-							sqNest = 0				// sync square brackets
-/***********************************************************************
-						} else if iCaKey[atom] {	// FOR IF ELSE or ELSE IF
-							if aix {
-								if atom == "IF" && prevAtom == "ELSE" {
-									len = pos - prevPos - 3		// both have offset added, which cancels
-									substr(_, prevPos + offset + 3, len) = ""
-									offset -= len	// change "ELSE IF" to "ELSIF" for Perl code TODO Fix
-								}
-							}
-							FORline = "_"
-						} else if atom == "{{" {	// ignore old style single brace
-							FORline = ""
-							FORend = sqNest = 0		// sync square brackets
-						} else if atom == "}}" {	// ignore old style single brace
-							FORend = 0				// special false marker that twin brace in this line
-						} else if atom == ";" {
-							sqNest = 0				// sync square brackets
- ***********************************************************************/
-						}
-					}
-				} else if state == 'S' {			// string constant
-					if atom == "\"" {				// leading backslash will not compare
-						sqNest = sqNestSv			// restore for state 'A'
-						state = 'A'					// end of string constant
-					}
-				} else if state == 'H' {			// character constant
-					if atom == "'" {				// leading backslash will not compare
-						sqNest = sqNestSv			// restore for state 'A'
-						state = 'A'					// end of character constant
-					}
-				} else if state == 'C' {			// C comment
-					if atom == "*/" {
-						sqNest = sqNestSv			// restore for state 'A'
-						state = 'A'					// end of C comment
-						if direcve != "" || FORline != "" {
-							al := pose - comStart;	// length of C comment
-							textFOR = substr(textFOR, comStart + offset, al, "")
-							offset -= al
-// fmt.Printf("comStart = %d offset = %d al = %d textFOR = %q\n", comStart, offset, al, textFOR)
-						}
-					}
-				}
+			var pos, pose, prevPos, prevPose, expPos int
+			var prevAtom, expAtom string
+			if iNext == 0 {
+				prefix   = ""
 			}
-			if state == 'P' {						// C++ or Perl comment end
-				sqNest = sqNestSv					// restore for state 'A'
-				state = 'A'							// end of C++ or Perl comment
-				if direcve != "" || FORline != "" {
-					al := pose - comStart;			// length of C comment
-					textFOR = substr(textFOR, comStart + offset, al, "")
-					offset -= al
-// fmt.Printf("comStart = %d offset = %d al = %d textFOR = %q\n", comStart, offset, al, textFOR)
-				}
-			}
-			/***********************************************************************
-			 *	End of a line processed by the state machine
-			 *	state may be 'A' normal code
-			 *			  or 'C' C comment
-			 *			  or 'S' string constant
-			 *			  or 'H' character constant
-			 *	state may never be 'P' C++ comment here
-			 ***********************************************************************/
- fmt.Printf("%c>:\t%q\n", state, textFOR)
-			if direcve != "" {
+			atom     := ""
+			posNext  := 0
+			if *opt_S { fmt.Fprintf(genFile, "//***** %d: '%c' %q\n", lineNo, state, text) }
+		  Rescan:
+			for {
+				if *opt_S { fmt.Fprintf(genFile, "//*Rs1* %d: '%c' %q\n", lineNo, state, text) }
+				pose     = 0					// balance {{
 				/***********************************************************************
-				 *	Directive found
-				 *	analyse possible macro and store in map defs[]
+				 *  Process lines with a state machine, which recognises comments,
+				 *  parenthesised strings, quoted characters as well as relevant atoms.
+				 *
+				 *  States are:
+				 *  'A' inside iCa, iC or C code
+				 *  'C' inside a C comment
+				 *  'P' inside a C++ comment
+				 *  'S' inside a parenthesised string
+				 *  'H' inside a single quoted character constant
+				 *
+				 *  text     is the unmodified text that is scanned by the state machine
+				 *  textRes  is the text modified by resolved macros and other changes
+				 *  lineText is the really unmodified text for error messages
+				 *
+				 *  This processing is done before recognising pre-processor lines #if etc,
+				 *  because some system headers have pre-processor lines in a C comment block
+				 *  eg: #if in /usr/include/sys/cdefs.h line 84 and line 137
+				 *      #include in /usr/include/limits.h line 40
+				 *
+				 *  Collect lines for the first part of a FOR control statement up to the
+				 *  opening braces and present the complete line for further processing.
+				 *  This needs to be done here to remove comments between FOR and opening
+				 *  double braces and to present a clean FOR control line for output as a
+				 *  comment.
+				 *  If there is a second FOR, after the opening braces on the same line,
+				 *  stay in this loop and collect lines up to the next opening braces also.
+				 *  Comments in the FOR control line and just after any double braces are
+				 *  deleted. A FOR in a comment or string is ignored (this is very important).
+				 *
+				 *  The same applies for IF ELSE control statements.
+				 *
+				 *  NOTE: no brace counting is necessary - only look for next opening double
+				 *  brace after a FOR IF ELSE or ELSE IF.
 				 ***********************************************************************/
-				if macroStart >= 0 {
-					if macroStart > 0 {
-						if macroStart <= len(textFOR) {
-							macro = textFOR[ macroStart : ]
-						} else {
-							macro = ""
-						}
-						macroStart = 0
-					} else {
-						macro += textFOR			// concatenate new part to previous part(s)
+				//  reState:`(%?\{\{?|%?}}?|%?#|%%?|/[/*]|\*+/?|\w+|(\\\\)+|\\n|\\t|\\?"|\\?'|\\?\[|\\?\]|\S)`
+				for i, posPair := range reState.FindAllStringIndex(text, -1) {
+					//	(							balance {{
+					//		%?\{\{?	|	# { {{ %{ - not used %{{
+					//		%?}}?	|	# } }} %} - not used %}}
+					//		%?#		|	# directive prefix # %#
+					//		%%?		|	# directive prefix % %%
+					//		/[/*]	|	# /* // start of C or C++ comment
+					//		\*+/?	|	# */ **/ etc   end of C comment or * **
+					//		\w+		|	# word identifier or number
+					//		(\\\\)+	|	# remove pairs of backslashes
+					//		\\n		|	# char \n NL in string
+					//		\\t		|	# char \t TAB in string
+					//		\\?"	|	# " or \"
+					//		\\?'	|	# ' or \'
+					//		\\?\[	|	# [ or \[   - used in iCa analysis only
+					//		\\?\]	|	# ] or \]   - used in iCa analysis only
+					//		\S			# any single non space character
+					//	)
+					prevPose = pose						// start of white space after previous atom
+					pose  = posPair[1]
+					if i < iNext {
+						continue						// skip tokens in text already scanned
 					}
-	 fmt.Printf("macro = %s %q\n", direcve, macro)
-				}
-				if macro != "" && last == '\\' {	// must check last in case previous C++ comment
-					lm    := len(macro)
-					if lm > 0 && macro[lm-1] == '\\' {
-						om := l - posePrev
-						macro = macro[ : lm-om ]	// remove trailing '\' with preceding spaces
-	 fmt.Printf("MACRO = %s %q lm = %d om = %d\n", direcve, macro, lm, om)
-					}								// append next line to macro
-				} else {
-					/***********************************************************************
-					 *	Scan %define or %undef macro definition as well as other directives
-					 ***********************************************************************/
-					if mWarn {
-						lnErr = append(lnErr, "//* Warning: %directive in iC file or immac -m - expanded\n")
-						w++							// warning found
-						mWarn = false
+					iNext = i							// save token count in case concatenated
+					pos = posPair[0]
+					posOff := pos + offset
+					atom = text[ pos : pose ]
+					if *opt_X { fmt.Printf("%2d\t%3d %3d\t%q\n", i, pos, pose, atom) }
+					if last == '\\' {			// line with trailing backslash \
+						cat |= 0x1				// concatenate next line to current line less \
+						if *opt_X { fmt.Printf("*** skip with cat = %#x\n", cat) }
+						blankLines++
+						continue Line			// build up full line early
 					}
-// fmt.Printf("direcve macro: %q %q\n", direcve, macro)
-					/***********************************************************************
-					 *	Conditional inclusion statements %%if, %if or #if with #else #elif snd #endif
-					 *	are executed in the generated GO code.  If there are nesting errors in those
-					 *	statements the error will be reported by the GO code.
-					 *	Use IF as the control variable, because it is a keyword in the iCa language
-					 *	and cannot therefore be used as a macro
-					 ***********************************************************************/
-					const DEF = true
-					if direcve == "if" {				// if EXPRESSION
-						genIf(parseIf(macro, !DEF), ifx, text)
-					} else if direcve == "ifdef" {		// ifdef NAME
-						genIf(parseIf("defined "+macro, DEF), ifx, text)
-					} else if direcve == "ifndef" {		// ifndef NAME
-						genIf(parseIf("!defined "+macro, DEF), ifx, text)
-					} else if direcve == "elif" {		// elif EXPRESSION
-						genIf(parseIf(macro, !DEF), elif, text)
-					} else if direcve == "else" {		// else
-						genIf("", elsx, text)
-					} else if direcve == "endif" {		// endif
-						genIf("", endif, text)
-					} else if si > 0 {
-						if direcve == "define" {
-	/***********************************************************************
-							resolve_line()					// resolve embedded macros
-							(direcve, macro) = split " ", _, 2	// split again after resolve_line()
-							macro =~ s!\s*(//.*)?$!!				// delete C++ comment and trailing blanks
-	 ***********************************************************************/
-	// fmt.Printf("#define si = %d macro = '%s'\n", si, macro)
-							if *opt_l != "" { fmt.Fprintf(genFile, "//# %s\n", text) }
-							if *opt_a {
-								blankLines--
-								if opt_m_M_Y && blankLines > 0 {	// blankLines is at least 1 because it is a directive
-									blanks()		// print blank lines now
-								}
-								genLine("//***** "+text)
+					/********************************************************************
+					 *  Scan 1 square bracket handling in iCa mode
+					 *
+					 *  A square bracket in a FOR IF ELSE control line (while ForIfFlg is true)
+					 *  is an error. (This allows cat = 0x2 to be used for unmached brackets)
+					 *
+					 *  In iCa mode inner square brackets are evaluated in generated code.
+					 *  This is done even if a square bracket expression is contained in
+					 *  a comment, string or character constant.
+					 *
+					 *  Push state on SQstSv stack for each opening square bracket.
+					 *  The state inside the square bracket is changed to 'A'.
+					 *  Pop state from SQstSv stack for each closing square bracket.
+					 *  Stack handling is necessary, because because states must be
+					 *  restored in the inverserse order they are stored.
+					 *  This will allow nesting to any depth, which is really over-kill.
+					 *  The last matching square bracket restores the previous state.
+					 *  The square bracket stack SQstSv is reset for every new line
+					 *  after extensions of extra lines have been added by concatenation.
+					 *
+					 *  A C or C++ comment inside any square bracket pair is removed,
+					 *  even if they are nested.
+					 *
+					 *  If there are unmatched square brackets missing at the end of a line
+					 *  the line is extended until square brackets are matched. (cat = 0x2).
+					 *  This may lead to very long (erroneous) lines if brackes are missing.
+					 *
+					 *  An added benefit is that FOR loop control variables modified by
+					 *  a macro will be translated correctly in comments.
+					 *******************************************************************/
+					if !opt_m_M_Y {
+						if atom == "[" {
+							if ForIfFlg && state != 'S' {
+								pushError(&ret, "//* Error: square bracket \"[\" not allowed in FOR control line\n")
 							}
-							scan_define(direcve, macro)		// scan and save macro in %defs
-						} else if direcve == "undef" {
-							if reWord.MatchString(macro) {
-								if *opt_l != "" { fmt.Fprintf(genFile, "//# %s\n", text) }
-								if *opt_a {
-									blankLines--
-									if opt_m_M_Y && blankLines > 0 {	// blankLines is at least 1 because it is a directive
+							SQstSv = append(SQstSv, state)	// push current state
+							state = 'A'
+							SQbrCnt++
+							SQbrFlag = true
+							cat = 0x2					// concatenate next line unless terminated with matching brackets
+							if *opt_X { fmt.Printf("%d: SqSt1 cat = %#x SQbrCnt = %d state = %c SQstSv = %c %q\n", lineNo, cat, SQbrCnt, state, SQstSv, textRes) }
+						} else if atom == "]" {
+							var l int
+							SQbrCnt--
+							if SQbrCnt < 0 {
+								SQbrCnt = 0
+								pushError(&ret, "//* Error: too many closing square brackets\n")
+							} else {
+								if SQbrFlag {
+									SQbrInr = append(SQbrInr, SQbrCnt)	// marks an inner nestesd square bracket pair
+									SQbrFlag = false
+								}
+								if SQbrCnt == 0 {
+									cat &^= 0x2				// final closing square bracket found
+								}
+								l = len(SQstSv) - 1
+								if l >= 0 {
+									state = SQstSv[l]		// pop saved state
+									SQstSv = SQstSv[:l]		// TODO check if stack is needed
+								}
+								if ForIfFlg && state != 'S' {
+									pushError(&ret, "//* Error: square bracket \"]\" not allowed in FOR control line\n")
+								}
+							}
+							if *opt_X { fmt.Printf("%d: SqEn1 cat = %#x SQbrCnt = %d state = %c SQstSv = %c l = %d %q\n", lineNo, cat, SQbrCnt, state, SQstSv, l, textRes) }
+						}
+					}
+					if state == 'A' {					// program - not comment, string, char constant
+						if i == 0 {
+							/***********************************************************************
+							 *  If -m then both %%directives and %#directives are excluded - #define and %define (warning)
+							 *      reCdirective = regexp.MustCompile(`^\s*%[%#]\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b`)
+							 *  Else if -M %%directives, #directives and %#directives are excluded - %define %if only
+							 *      reCdirective = regexp.MustCompile(`^\s*(%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b`)
+							 *  Else if -Y additionally %define %undef %include are excluded - %define only (no %if)
+							 *      reCdirective = regexp.MustCompile(`^\s*((%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)|%(define|undef|include))\b`)
+							 *  Else if none of the above %directives, #directives and %# directives are excluded - only %%directives
+							 *      reCdirective = regexp.MustCompile(`^\s*(%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b`)
+							 *
+							 *  These regular expressions exclude directives which are not resolved for the chosen language
+							 *  Output these directives completely unchanged with possible trailing \
+							 *  except if blocked by #if #else or #elif
+							 *
+							 *  NOTE: %{ #include <stdio.h> %} may only occur in iC or iCa code (option -M or none).
+							 *        Thus the C code #include <stdio.h> or other # directives are passed unchanged
+							 *        to the output and do not need to be at the start of the line.
+							 *        %{ and %} are processed by the immcc compiler.
+							 ***********************************************************************/
+							if Cdirective || reCdirective.MatchString(text) {	// match text because of -Y
+								if last == '\\' {		// trailing backslash
+									Cdirective = true	// #define or %define etc output as is, up to line
+								} else {
+									Cdirective = false	// without trailing backslash
+								}
+								if !*opt_t {
+									if si <= 0 {
+										blankLines++	// count lines not output as blank lines
+										continue Line	// do not output lines in false blocks
+									}
+									if opt_m_M_Y && blankLines > 0 {
 										blanks()		// print blank lines now
 									}
-									genLine("//***** "+text)
+									genLine(text, "\\n")
 								}
-								delete(defs, macro)		// safe to delete even if hash entry does not exist
-								delete(clDefs, macro)
-							} else {
-								lnErr = append(lnErr, fmt.Sprintf("//* Warning: %s%s '%s' has bad characters - ignored\n", prefix, direcve, macro))
-								w++					// warning found
+								continue Line			// must not modify because of comments
 							}
-						} else if direcve == "include" {
-							var includeFile, f string
-							var fileInfo os.FileInfo
-							macro = reSpaces.ReplaceAllLiteralString(macro, "")	// take out any white space
-							if m := reInclude.FindStringSubmatch(macro); m != nil {
-								//	^["<]
-								//	(						# $1 full include file name
-								//		([A-Za-z]:)?		# $2 optional Windows disc selector
-								//		([/\\]?)			# $3 optional Linux or Windows path separator
-								//		[A-Z_a-z.][\w/\\.-]*
-								//	)
-								//	[">]$/x
-							  Include:
-								for {
-									f = m[1]					// a correct Linux, Unix or Windows path name
-									if m[3] != "" {
-										includeFile = f
-										if fileInfo, err = os.Stat(includeFile); err == nil &&
-											fileInfo.Mode().IsRegular()	{
-											break Include			// absolute path name
-										}
-									} else {
-										for _, p := range strings.Split(path, ":") { // include path
-											includeFile = fmt.Sprintf("%s%c%s", p, os.PathSeparator, f)	// p/f
-											if fileInfo, err = os.Stat(includeFile); err == nil &&
-												fileInfo.Mode().IsRegular()	{
-												break Include		// relative path name
-											}
-										}
-									}
-									lnErr = append(lnErr, fmt.Sprintf("//* Warning: '%s' not in include path '%s' - ignored\n", includeFile, path))
-									w++						// warning found
-									includeFile = ""
-									break Include
-								}
-							} else {
-								lnErr = append(lnErr, fmt.Sprintf("//* Warning: %s%s '%s' has bad characters - ignored\n", prefix, direcve, macro))
-								w++					// warning found
-							}
-							if includeFile != "" {
-								fi := &fileStk{ name: argIn, line: lineNo, si: si, file: inFileC, scan: scanner }
-								inFileStk = append(inFileStk, fi)	// push current file info
-								argIn = f							// use original "file" for error messages
-								if inFileC , err = os.Open(includeFile); err == nil {
-									scanner = bufio.NewScanner(inFileC)
-									scanner.Split(bufio.ScanLines)
-									lineNo = 0
-									si = 1							// start sense indication again for a new include file
-									if *opt_l != "" { fmt.Fprintf(genFile, "//# %s\n", text) }
-									if *opt_a {
-										blankLines--
-										if opt_m_M_Y && blankLines > 0 {	// blankLines is at least 1 because it is a directive
-											blanks()		// print blank lines now
-										}
-										genLine("//***** "+text)
-	 genLine(fmt.Sprintf("//### start of include %q len(siStk) = %d si = %d", argIn, len(siStk), si))
-									}
-									if opt_m_M_Y {
-										blanks()					// print blank lines now
-										genLine(fmt.Sprintf("# 1 %q 1", argIn))	// # 1 "file" 1
-									}
-									direcve = ""
-									macro   = ""
-									continue Level
-								} else {
-									lnErr = append(lnErr, "//* Error: Could not open file\n")
-									ret++							// open error
-									l := len(inFileStk) - 1
-									fi := inFileStk[l]
-									inFileStk = inFileStk[:l]		// pop current file info
-									argIn   = fi.name
-									lineNo  = fi.line
-									si      = fi.si
-									inFileC = fi.file
-									scanner = fi.scan
+							/***********************************************************************
+							 *  All directives not belonging to the current option -m, -M, -Y or none
+							 *  have been excluded in the previous section.
+							 *  From now on treat %%directives, %directives and #directives equivalently
+							 *  except warn if %directive used in straight iC file or in immac -m call
+							 *  The prefix and the directive should only be the first two atoms in a line
+							 *  After the directive continue scanning for comments.
+							 *  The macro with a possible parenthesised argument list starts with the next
+							 *  atom, which  has all comments and space before comments deleted.
+							 ***********************************************************************/
+							if prefixes[atom] {			// %% % # or %#
+								prefix = atom
+								if *opt_m && prefix == "%" {
+									mWarn = true		// output Warning later for -m only
 								}
 							}
-						} else if err_wa := reErrWarn.FindString(direcve); err_wa != "" {	// `^(error|warning)$`
-	/***********************************************************************
-							if !opt_m_M_Y && prefix == "%%" {
-								lnErr = append(lnErr, "//* Error: direcve macro\n")
-								ret++ if er_wa == "error"			// deliberate error
-								if !*opt_t {
-									if len(block) > 0 || finBlock || opt_L {
-										macro =~ s/"/\\"/g
-										block = append(block, "\FOR .= \"%{\\n#er_wa macro\\n%}\\n\";\n")
-									} else {
-										print "%{\n#er_wa macro\n%}\n"
-									}
-								}
-							} else {						// -m or -M or #error or #warning
-								print STDERR "argIn:$.:2: er_wa: direcve macro\n"
-								exit 1 if er_wa == "error"	// deliberate error - emulate cpp
-							}
-	 ***********************************************************************/
-						} else if direcve == "line" {
-	/***********************************************************************
-							if macro =~ m/^\s*(\d+)\s+(".+")(.*)$/ {
-								print "prefix $1 $2"
-							} else {
-								print STDERR "argIn:$.: 'direcve macro' malformed\n"
-							}
-	 ***********************************************************************/
-						} else {
-							lnErr = append(lnErr, "//* Warning: direcve 'macro' unknown iCa directive - ignored\n")
-							w++						// warning found
+						} else if i == 1 && prefix != "" && direcves[atom] {
+							direcve = atom				// directive found
+							macroStart = -1				// must get next atom to obtain a macro
+							textRes = reSpaces.ReplaceAllLiteralString(textRes, " ")	// compress spaces to 1 space
+							textRes = reLdTrSps.ReplaceAllLiteralString(textRes, "")	// remove leading and trailing spaces
+							text = textRes
+							offset = 0
+							iNext = 2					// go directly to i == 2 (avoids infinite loop) 
+							continue Rescan
+						} else if i == 2 && macroStart == -1 {
+							macroStart = posOff			// start of macro - do not resolve this atom (offset should be 0)
 						}
-					}
-					if *opt_T { fmt.Printf("*9* si = %d\n", si) }
-					direcve = ""
-					macro   = ""
-				}
-				goto Line							// do not output %define etc directives (already counted as blank)
-			}
-/***********************************************************************
-			^***********************************************************************
-			 *	Collect lines for the first part of a FOR control statement up to the
-			 *	opening braces and present the complete line for further processing.
-			 *	This needs to be done here to remove comments between FOR and opening
-			 *	braces and to present a clean FOR control line for output as a comment.
-			 *	If there is a second FOR, after the opening braces on the same line,
-			 *	stay in this loop and collect lines up to the next opening braces also.
-			 *	Comments in the FOR control line and just after the first braces are
-			 *	deleted. A FOR in a comment or string is ignored (this is very important).
-			 *
-			 *	The same applies for IF ELSE control statements.
-			 *
-			 *	NOTE: no brace counting is necessary - only look for next opening
-			 *	brace(s) after a FOR IF ELSE or ELSE IF.					{ balance
-			 ***********************************************************************^
-			else if (not opt_m_M_Y &&
-				(m/(\bFOR\b|\bIF\b|\bELSE\b|}|\[|\])/ || FORline || FORend || SQline)) {
-				if FORline {					// speeds up this scan
-					s/^\s+//					// delete leading blanks in follow on lines
-					_ = "FORline_"				// concatenate new part to previous part(s)
-					FORline = ""				// wait till FOR is scanned to set it again
-					state = st0Save
-				}
-				if FORend {						// ignore value '0'
-					s/^\s+//					// delete leading blanks in follow on lines
-					_ = "FORend_"				// concatenate new part to previous part(s)
-					FORend = ""			// wait till end of C comment
-					state = st0Save
-				}
-				if SQline {
-					s/^\s+//					// delete leading blanks in follow on lines
-					_ = "SQline_"				// concatenate new part to previous part(s)
-					SQline = ""			// wait till ']' is scanned
-					state = st0Save
-				}
-				st0Save = state
-				if *opt_T && !*opt_l != "" { fmt.Print("$.*FOR*IF*		_") }
-				@atoms = ()								// repeat scan if line has been extended   {{ balance
-				sqNest = sqNestSv = offset = 0	// sqNest is used independently here and in full analysis
-				while (m/((\\\\)*)(\\?("|'|\[|\]|\n)|\/\*|\/\/|\*\/|#|%?\{\{?|%?}}?|\w+|;)/g) {
-					atoms = append(atoms, [ length($`)+length($1), $3 ])		// [ pos, atom ]
-				}
-				for (my aix = 0; aix < @atoms; aix++) {
-					( prevPos, prevAtom ) = ( pos, atom )
-					my ref = atoms[aix]
-					( pos, atom ) = @ref
-					if *opt_T && !*opt_l != "" { fmt.Println("$.* atom*		pos = pos, offset = offset, state = state") }
-					if state == 'A' {			// iC - Program
-						if atom == "[" {
-							sqNest++					// opening square bracket
-						} else if atom == "]" {
-							--sqNest					// closing square bracket
-						} else if atom == "\"" { // leading backslash will not compare
-							state = 'S'				// start of string found
-							sqNestSv = sqNest	// save for state 'A'
-							sqNest = 0			// sync square brackets
-						} else if atom == "'" { // leading backslash will not compare
-							state = 'H'				// start of character constant found
-							sqNestSv = sqNest	// save for state 'A'
-							sqNest = 0			// sync square brackets
-						} else if atom == "/*" {
-							state = 'C'				// start of C comment found
-							comStart = pos + offset		// will remain if comment finishes on another line
-							sqNestSv = sqNest	// save for state 'A'
-							sqNest = 0			// sync square brackets
-						} else if atom == "//" || atom == "#" {
-							state = "CP"				// start of C++ or Perl comment found
-							comStart = pos + offset		// C-pre-processor directives are taken out earlier
-							sqNestSv = sqNest	// save for state 'A'
-							sqNest = 0			// sync square brackets
-						} else if iCaKey[atom] {		// FOR IF ELSE or ELSE IF
-							if aix {
-								if atom == "IF" && prevAtom == "ELSE" {
-									len = pos - prevPos - 3		// both have offset added, which cancels
-									substr(_, prevPos + offset + 3, len) = ""
-									offset -= len		// change "ELSE IF" to "ELSIF" for Perl code TODO Fix
+						if !opt_m_M_Y {
+							if (keywords[atom] & 0x100) != 0 {	// FOR IF ELSE (test before reWord.MatchString)
+								if *opt_t {
+									os.Exit(1)			// iAc code found
 								}
+								ForIfFlg = true			// If "ELSE IF" ForIfFlg stays true
+								cat |= 0x2				// concatenate next line unless terminated with double braces
+								if *opt_X { fmt.Printf("%d: FOR  %q\n", lineNo, textRes) }
+								continue
 							}
-							FORline = "_"
-						} else if atom == "{{" {		// ignore old style single brace
-							FORline = ""
-							FORend = sqNest = 0 // sync square brackets
-						} else if atom == "}}" {		// ignore old style single brace
-							FORend = 0			// special false marker that twin brace in this line
-						} else if atom == ";" {
-							sqNest = 0			// sync square brackets
+							if atom == "{{" {			// ignore old style single brace
+								ForIfFlg = false		// end of FOR IF ELSE control line
+								FORend  = 1				// remove comment if it starts with next atom
+								cat &^= 0x2				// no need to concatenate since terminated with double braces
+								continue
+							}
+							if atom == "}}" {			// ignore old style single brace
+								FORend  = 1				// remove comment if it starts with next atom
+								cat &^= 0x2				// no need to concatenate since terminated with double braces
+								continue
+							}
+						}
+						if reWord.MatchString(atom) {
+							if macroStart == 0 {
+								/********************************************************************
+								 *  atom   word to be resolved (directives already dealt with)
+								 *  pos    starting position of atom in text with offset
+								 *
+								 *  ok     true if atom is in map defs and was resolved
+								 *         else false - do nothing with this word
+								 *  rs     true if Rescan required after resolve
+								 *
+								 *  Do not resolve words in #if etc and other directives
+								 *  Words in #if #ifdef etc must remain because of 'defined word'.
+								 *  Include file path in #include should certainly not be modified.
+								 *******************************************************************/
+								if _, _, ok, rs := resolve(atom, pos, &posNext, &offset, 0, &text, &textRes); ok {
+									if rs {
+										if *opt_X { fmt.Printf("*** %d skip after '... %q ==> %q ...' with posOff = %d posNext = %d\n", lineNo, atom, textRes[posOff:posNext], posOff, posNext) }
+										continue Rescan		// re-start scan of same text with token at current position
+									}						// which may not be a word
+								}
+								posNext = 0
+							}
+						} else if atom == "/*" {
+							state = 'C'					// start of C comment found
+							comStart = prevPose			// include leading spaces
+							comiNext = iNext
+							if FORend > 0 {
+								FORcomm = true
+							}
+							if *opt_X { fmt.Printf("state = '%c' comStart = %d offset = %d\n", state, comStart, offset) }
+						} else if atom == "//" {
+							state = 'P'					// start of C++ comment found
+							comStart = prevPose			// include leading spaces
+							comiNext = iNext
+							if FORend > 0 {
+								FORcomm = true
+							}
+						} else if atom == "\"" {		// leading backslash will not compare
+							state = 'S'					// start of string found
+							if *opt_X { fmt.Printf("%d: StSt %q	state = %c ForIfFlg = %v\n", lineNo, textRes, state, ForIfFlg) }
+						} else if atom == "'" {			// leading backslash will not compare
+							state = 'H'					// start of character constant found
 						}
 					} else if state == 'S' {			// string constant
 						if atom == "\"" {				// leading backslash will not compare
-							sqNest = sqNestSv	// restore for state 'A'
-							state = 'A'				// end of string constant
+							state = 'A'					// end of string constant
+							if *opt_X { fmt.Printf("%d: StEn %q	state = %c ForIfFlg = %v\n", lineNo, textRes, state, ForIfFlg) }
 						}
 					} else if state == 'H' {			// character constant
 						if atom == "'" {				// leading backslash will not compare
-							sqNest = sqNestSv	// restore for state 'A'
-							state = 'A'				// end of character constant
+							state = 'A'					// end of character constant
 						}
 					} else if state == 'C' {			// C comment
-						if atom == "*%%%/" {
-							sqNest = sqNestSv	// restore for state 'A'
-							state = 'A'				// end of C comment
-							if FORline {
-								len = pos + offset + 2 - comStart; # length of C comment
-								substr(_, comStart, len) = ""
-								offset -= len
+						if reCommEnd.MatchString(atom) {		// == "*/" or "**/ etc
+							state = 'A'					// end of C comment
+							if direcve != "" || ForIfFlg || FORcomm || SQbrCnt > 0 {
+								if FORcomm {
+									cat &^= 0x4			// end of multiple line FOR comment concatenation
+									FORcomm = false
+								}
+								al := pose - comStart;	// length of C comment
+								textRes = substr(textRes, comStart + offset, al, " ")
+								textRes = reTrSpaces.ReplaceAllLiteralString(textRes, "")	// remove trailing white space
+								text = textRes			// replace C comment with leading spaces by one space
+								offset = 0
+								iNext = comiNext
+								if *opt_X { fmt.Printf("comStart = %d iNext = %d offset = %d al = %d textRes = %q\n", comStart, iNext, offset, al, textRes) }
+								continue Rescan
 							}
-						}
-					} else if state == 'P'" {			// C++ or Perl comment
-						if atom =~ m/^(\\?\n)$/ {
-							sqNest = sqNestSv	// restore for state 'A'
-							state = 'A'				// end of C++ or Perl comment
-							if FORline {
-								len = pos + offset - comStart	// length of C++ or Perl comment
-								substr(_, comStart, len) = ""
-								offset -= len
+						} else if FORcomm {
+							cat |= 0x4					// finish useless FOR comment block
+							continue					// concatenate next line if necessary
+						} else if !opt_m_M_Y && macroStart == 0 && reWord.MatchString(atom) {
+							/********************************************************************
+							 *  Resolve word in comment for iCa translation only
+							 *  atom   word to be resolved (directives already dealt with)
+							 *  pos    starting position of atom in text with offset
+							 *
+							 *  ok     true if atom is in map defs and was resolved
+							 *         else false - do nothing with this word
+							 *  rs     true if Rescan required after resolve
+							 *******************************************************************/
+							if _, _, ok, rs := resolve(atom, pos, &posNext, &offset, 0, &text, &textRes); ok {
+								if rs {
+									if *opt_X { fmt.Printf("*** %d skip after '... %q ==> %q ...' with posOff = %d posNext = %d\n", lineNo, atom, textRes[posOff:posNext], posOff, posNext) }
+									continue Rescan		// re-start scan of same text with token at current position
+								}						// which may not be a word
 							}
+							posNext = 0
 						}
 					}
-				}
-				if FORline {
-					chomp								// FOR line not terminated by opening brace(s)
-					s/\s*$/ /							// 1 space at the end of the line for continuation
-					FORline = _
-					goto Line								// input continuation line(s)
-				}
-				if FORend == '0' {
-					if state == 'C' {
-						chomp							// end of FOR block ends in incomlete C comment
-						s/\s*$/ /						// 1 space at the end of the line for continuation
-						FORend = _						// twin opening or closing braces have been seen in this line
-						goto Line
+					if FORend > 0 {
+						FORend--
 					}
-					FORend = ""
 				}
-				if sqNest {
-					chomp								// square bracket nesting not comlete
-					s/\s+$//							// 0 space at the end of the line for continuation
-					SQline = _
-					goto Line
+				break Rescan
+			}	// end of state machine scan of one (possibly concatenated) line
+			if state == 'P' {						// C++ comment
+				state = 'A'							// end of C++ comment
+				if direcve != "" || ForIfFlg || FORcomm || SQbrCnt > 0 {
+					FORcomm = false
+					al := pose - comStart;			// length of C++ comment
+					textRes = substr(textRes, comStart + offset, al, "")
+					text = textRes					// remove C++ comment with leading spaces
+					offset = 0
+					iNext = comiNext
 				}
-				if *opt_T && !*opt_l != "" { fmt.Print("$.*END*		_") }
 			}
- ***********************************************************************/
+			if atom == "[" {
+				iNext++								// skip "[" after concatenation for correct SQbrCnt and SQstSv
+			}
+			if *opt_S { fmt.Fprintf(genFile, "//*Es1* %d: '%c' %q\n", lineNo, state, text) }
+			if *opt_X { fmt.Printf("%d: END  cat = %#x SQbrCnt = %d state = %c atom = %q %q\n", lineNo, cat, SQbrCnt, state, atom, textRes) }
+			/***********************************************************************
+			 *  End of a line processed by the state machine
+			 *  state may be 'A' normal code
+			 *            or 'C' C comment
+			 *            or 'S' string constant
+			 *            or 'H' character constant
+			 *  state may never be 'P' C++ comment here
+			 *
+			 *  If iCa line is scanned again start with state2 and
+			 *  check state2 == state at end of scan 2 for that line
+			 ***********************************************************************/
+			if direcve != "" {
+				blankLines++
+				/***********************************************************************
+				 *  Directive found
+				 *  analyse possible macro and store a #define macro in map defs[]
+				 *  macrostart cannot be 0 for a directive line
+				 ***********************************************************************/
+				if macroStart > 0 {
+					if macroStart <= len(textRes) {
+						macro = textRes[ macroStart : ]
+						macro = reLdTrSps.ReplaceAllLiteralString(macro, "")	// remove leading and trailing spaces
+					} else {
+						macro = ""
+					}
+					if *opt_X { fmt.Printf("%s%s %s; si = %d\n", prefix, direcve, macro, si) }
+				}
+				macroStart = 0
+				/***********************************************************************
+				 *  Scan %define or %undef macro definition as well as other directives
+				 ***********************************************************************/
+				if mWarn {
+					pushError(&w, "//* Warning: %directive in iC file or immac -m - expanded\n")
+					mWarn = false
+				}
+				if *opt_T { fmt.Printf("*0* si = %d %q\n", si, text) }
+				if direcve[:2] == "if" {		// %%if, %if or #if...
+					/***********************************************************************
+					 *  si =  +1  initial value of sense indicator      output    %else or %elif not allowed
+					 *  si == +2  #ifdef defined #ifndef !defined #if 1 output    %else or %elif allowed
+					 *  si == -1  #ifdef !defined #ifndef defined #if 0 no output %else or %elif allowed
+					 *  si == +2  #elif 1 after false   (si < 0)        output    %else or %elif allowed
+					 *  si == -1  #elif 0 after false   (si < 0)        no output %else or %elif allowed
+					 *  si == -2  #elif X after true    (si > 0)        no output %else or %elif allowed
+					 *  si ==  0  #else (no inversion)  if si == -2     no output %else or %elif not allowed
+					 *  si == +1  #else after false     if si != -2     output    %else or %elif not allowed
+					 *  si ==  0  #else after true                      no output %else or %elif not allowed
+					 ***********************************************************************/
+					siStk = append(siStk, si)				// push current sense indicator
+					if si > 0 {								// actually test sense of previous level
+						if *opt_T { fmt.Printf("*1* si = %d direcve = %q macro = %q\n", si, direcve, macro) }
+						if direcve == "ifdef" {					// ifdef NAME
+							si, _ = evalIf("defined "+macro, DEF, EVAL)	// +2 if NAME defined else -1
+							if *opt_X { fmt.Printf("%sifdef %s; si = %d\n", prefix, macro, si) }
+						} else if direcve == "ifndef" {			// ifndef NAME
+							si, _ = evalIf("!defined "+macro, DEF, EVAL)	// +2 if NAME not defined else -1
+							if *opt_X { fmt.Printf("%sifndef %s; si = %d\n", prefix, macro, si) }
+						} else if direcve == "if" {				// if EXPR
+							si, _ = evalIf(macro, !DEF, EVAL)		// +2 if EXPR true else -1
+							if *opt_X { fmt.Printf("%sif %s; si = %d\n", prefix, macro, si) }
+						} else {
+							pushError(&w, fmt.Sprintf("//* Warning: bad if directive %s%s - ignored\n", prefix, direcve))
+						}
+						opt_aComment(text, "")
+					} else {
+						si = -1								// %ifxx seen - allow %else or %elif again at this level
+					}
+				} else if direcve == "elif" {					// elif EXP
+					l := len(siStk) - 1
+					if l >= 0 && (si & ^0x1) != 0 {			// eval if previous false 0 or -1 else lasting false -2
+						s := siStk[l]
+						if s <= 0 || si > 0 || si == -2 {
+							si = -2
+						} else {
+							si, _ = evalIf(macro, !DEF, EVAL)		// +2 elif EXPR true else -1
+						}
+						if *opt_X { fmt.Printf("%selif %s; si = %d l = %d\n", prefix, macro, si, l) }
+						if s > 0 {			// print elif unless in a previous false block
+							opt_aComment(text, "")
+						}
+					} else {
+						pushError(&w, fmt.Sprintf("//* Warning: extra %selif after %selse - ignored\n", prefix, prefix))
+					}
+				} else if direcve == "else" {					// else
+					l := len(siStk) - 1
+					if l >= 0 && (si & ^0x1) != 0 {			// invert sense indicator unless -2 marking %else
+						s := siStk[l]
+						if s <= 0 || si > 0 || si == -2 {
+							si = 0
+						} else {
+							si = 1
+						}
+						if *opt_X { fmt.Printf("%selse   si = %d l = %d s = %d\n", prefix, si, l, s) }
+						if s > 0 {			// print else unless in a previous false block
+							opt_aComment(text, "")
+						}
+					} else {
+						pushError(&w, fmt.Sprintf("//* Warning: extra %selse - ignored\n", prefix))
+					}
+				} else if direcve == "endif" {					// endif
+					l := len(siStk) - 1
+					if *opt_X { fmt.Printf("%sendif  si = %d l = %d\n", prefix, si, l) }
+					if l >= 0 {
+						si = siStk[l]; siStk = siStk[:l]	// pop stacked sense indicator
+						if si > 0 {			// print endif unless in a previous false block
+							opt_aComment(text, "")
+						}
+					} else {
+						pushError(&w, fmt.Sprintf("//* Warning: extra %sendif - ignored\n", prefix))
+					}
+				} else if si > 0 {
+					if direcve == "define" {
+						if *opt_X { fmt.Printf("%sdefine %s; si = %d\n", prefix, macro, si) }
+						if *opt_l != "" { fmt.Fprintf(genFile, "//# %s\n", text) }
+						opt_aComment(text, "")
+						scan_define(direcve, macro)		// scan and save macro in %defs
+					} else if direcve == "undef" {
+						if reWord.MatchString(macro) {
+							if *opt_l != "" { fmt.Fprintf(genFile, "//# %s\n", text) }
+							opt_aComment(text, "")
+							delete(defs, macro)		// safe to delete even if hash entry does not exist
+							delete(clDefs, macro)
+						} else {
+							pushError(&w, fmt.Sprintf("//* Warning: %s%s '%s' has bad characters - ignored\n", prefix, direcve, macro))
+						}
+					} else if direcve == "include" {
+						var includeFile, f string
+						var fileInfo os.FileInfo
+						macro = reSpaces.ReplaceAllLiteralString(macro, "")	// take out any white space
+						if m := reInclude.FindStringSubmatch(macro); m != nil {
+							//	^["<]
+							//	(						# $1 full include file name
+							//		([A-Za-z]:)?		# $2 optional Windows disc selector
+							//		([/\\]?)			# $3 optional Linux or Windows path separator
+							//		[A-Z_a-z.][\w/\\.-]*
+							//	)
+							//	[">]$/x
+						  Include:
+							for {
+								f = m[1]					// a correct Linux, Unix or Windows path name
+								if m[3] != "" {
+									includeFile = f
+									if fileInfo, err = os.Stat(includeFile); err == nil &&
+										fileInfo.Mode().IsRegular()	{
+										break Include			// absolute path name
+									}
+								} else {
+									for _, p := range strings.Split(path, ":") { // include path
+										includeFile = fmt.Sprintf("%s%c%s", p, os.PathSeparator, f)	// p/f
+										if fileInfo, err = os.Stat(includeFile); err == nil &&
+											fileInfo.Mode().IsRegular()	{
+											break Include		// relative path name
+										}
+									}
+								}
+								pushError(&w, fmt.Sprintf("//* Warning: '%s' not in include path '%s' - ignored\n", includeFile, path))
+								includeFile = ""
+								break Include
+							}
+						} else {
+							pushError(&w, fmt.Sprintf("//* Warning: %s%s '%s' has bad characters - ignored\n", prefix, direcve, macro))
+						}
+						if includeFile != "" {
+							fi := &fileStk{ name: argIn, line: lineNo, si: si, file: inFileC, scan: scanner }
+							inFileStk = append(inFileStk, fi)	// push current file info
+							argIn = f							// use original "file" for error messages
+							if inFileC , err = os.Open(includeFile); err == nil {
+								scanner = bufio.NewScanner(inFileC)
+								scanner.Split(bufio.ScanLines)
+								lineNo = 0
+								si = 1							// start sense indication again for a new include file
+								if *opt_l != "" { fmt.Fprintf(genFile, "//# %s\n", text) }
+								opt_aComment(text, "")
+								if opt_m_M_Y {
+									blanks()					// print blank lines now
+									genLine(fmt.Sprintf("# 1 %q 1", argIn), "\\n")	// # 1 "file" 1
+								}
+								direcve = ""
+								macro   = ""
+								continue Level
+							} else {
+								pushError(&ret, "//* Error: Could not open file\n")
+								l := len(inFileStk) - 1
+								fi := inFileStk[l]
+								inFileStk = inFileStk[:l]		// pop current file info
+								argIn   = fi.name
+								lineNo  = fi.line
+								si      = fi.si
+								inFileC = fi.file
+								scanner = fi.scan
+							}
+						}
+					} else if er_wa := reErrWarn.FindString(direcve); er_wa != "" {	// `^(error|warning)$`
+						ecP := &w
+						if er_wa == "error" {
+							ecP = &ret
+						}
+						fmt.Fprintf(os.Stderr, "%s:%d:2: %s: %s%s %s\n", argIn, lineNo, er_wa, prefix, direcve, macro)
+						*ecP++
+						opt_aComment(text, "")
+						if er_wa == "error" {
+							si = 1						// restore sense indicator (ignore missing directives)
+							siStk = siStk[0:0]			// clear sense indicator stack
+							break Level					// deliberate error - emulate cpp
+						}
+					} else if direcve == "line" {
+						if m = reLine.FindStringSubmatch(macro); len(m) == 3 {
+							lineNo, _ = strconv.Atoi(m[1])	// err unlikely because of \d+ in reLine := `^\s*(\d+)\s+"([A-Z_a-z][\w.]*)"`
+							lineNo--						// TODO take acount of m[3] file name when it does not equal argIn
+							opt_aComment(text, "")
+						} else {
+							pushError(&ret, fmt.Sprintf("//* Error: %s%s '%s' malformed - ignored\n", prefix, direcve, macro))
+						}
+					} else {
+						pushError(&w, fmt.Sprintf("//* Warning: %s%s '%s' unknown iCa directive - ignored\n", prefix, direcve, macro))
+					}
+				}	// end of skipped directive because of #if etc
+				if *opt_T { fmt.Printf("*9* si = %d\n", si) }
+				direcve = ""
+				macro   = ""
+				continue Line						// do not output %define etc directives (already counted as blank)
+			}	// end of pre-processor directive handling
+
 			if si <= 0 {
 				blankLines++							// count lines in false conditional blocks as blank lines
-				goto Line							// do not process lines in false blocks
+				continue Line							// do not process lines in false blocks
 			} else if opt_m_M_Y {
 				/***********************************************************************
-				 *	If -m -M or -Y then 8 or more blank are ignored
-				 *	# $. "file" is output instead (same as cpp)
+				 *  If -m -M or -Y then 8 or more blank are ignored
+				 *  # $. "file" is output instead (same as cpp)
 				 ***********************************************************************/
-				if text == "\n" {
+				if text == "" {
 					blankLines++
-					goto Line
+					continue Line
 				} else if blankLines > 0 {
 					blanks()						// print blank lines now
 				}
 			}
-//			resolve_line()							// resolve	macros for the rest of the code
-			if opt_m_M_Y {
-				genLine(text)						// just output macro processed line for <in.ic>
-				goto Line							// end of Line for -m -M or -Y options 
+			if cat != 0 {
+				continue Line
 			}
-
+			if opt_m_M_Y {
+				genLine(textRes, "\\n")				// just output macro processed non-iCa or error line
+				outputError(lineText)				// possible error or warning in previous line
+				continue Line						// end of Line for -m -M or -Y options
+			}
+			if *opt_S { fmt.Fprintf(genFile, "//*Ed1* %d: '%c' %q\n", lineNo, state, text) }
 			/***********************************************************************
-			 *	Analyse an iCa code line
+			 *  Analysis and generation of an iCa code line
 			 *
-			 *	Square bracket handling
+			 *  In the previous scan of one or more text lines all comments have been
+			 *  removed from FOR IF ELSE control lines and inner square barackets
 			 *
-			 *	FOR (N = 5; ...			x is a bare word; presumably a C variable
+			 *  Square bracket handling
 			 *
-			 *	iCa:  []		[2]		[N]		[N+2]	  [x]	[2+x]	[N+x]	[N+2+x]
-			 *	eval: []		@{[2]}	@{[N]}	@{[N+2]} [x]	[2+x]	[N+x]	[N+2+x]
-			 *	iC:		  []*	2		5		7		  [x]*	[2+x]*	[5+x]*	[5+2+x]*
-			 *	C:		  []	2		5		7		  [x]	[2+x]	[5+x]	[5+2+x]
-			 *	* iC error message (will also produce error if compiled by immcc)
+			 *  FOR (N = 5; ...             x is a bare word; presumably a C variable
 			 *
-			 *	There is no difference in expanding square bracket expressions in iC or C.
-			 *	The only difference is the output of error messages for iC code in 3 cases:
-			 *	1)		an empty square bracket pair
-			 *	2)		a bare word encountered in a square bracket pair
-			 *	3)		a square bracket inside an embedded square bracket pair
-			 *	These 3 cases are OK in C code and produce good C.
+			 *  iCa:  []    [2]     [N]     [N+2]     [x]   [2+x]   [N+x]   [N+2+x]
+			 *  eval: []    @{[2]}  @{[N]}  @{[N+2]}  [x]   [2+x]   [N+x]   [N+2+x]
+			 *  iC:   []*   2       5       7         [x]*  [2+x]*  [5+x]*  [5+2+x]*
+			 *  C:    []    2       5       7         [x]   [2+x]   [5+x]   [5+2+x]
+			 *  * iC error message (will also produce error if compiled by immcc)
 			 *
-			 *	iCa:  [[]]		 [[2]]	[[N]]	[[N+2]] [[N]+x] [[N+2]+x] [[N]+2+x] [[N]+2+[N+1]]
-			 *	iC:		  [[]]* [2]*	[5]*	[7]*	[5+x]*	[7+x]*	  [5+2+x]*	[5+2+6]*
-			 *	C:		  [[]]* [2]	[5]		[7]		[5+x]	[7+x]	  [5+2+x]	[5+2+6]
+			 *  There is no difference in expanding square bracket expressions in iC or C.
+			 *  The only difference is the output of error messages for iC code in 3 cases:
+			 *  1)      an empty square bracket pair
+			 *  2)      a bare word encountered in a square bracket pair
+			 *  3)      a square bracket inside an embedded square bracket pair
+			 *  These 3 cases are OK in C code and produce good C.
 			 *
-			 *	The inside of an embedded square bracket pair is treated like iC code
-			 *	ie. empty, bare words and more square brackets are not allowed.
+			 *  iCa:  [[]]  [[2]]   [[N]]   [[N+2]] [[N]+x] [[N+2]+x] [[N]+2+x] [[N]+2+[N+1]]
+			 *  iC:   [[]]* [2]*    [5]*    [7]*    [5+x]*  [7+x]*    [5+2+x]*  [5+2+6]*
+			 *  C:    [[]]* [2]     [5]     [7]     [5+x]   [7+x]     [5+2+x]   [5+2+6]
 			 *
-			 *	iCa:   [[[]]]	[[x]]	[[2+x]] [[N+x]]	[[N+2+x]]	[[[N]+2]+x]
-			 *	iC/C:  [[[]]]*	[[x]]*	[[2+x]]*  [[5+x]]*	[[5+2+x]]*	[[5+2]+x]*
+			 *  The inside of an embedded square bracket pair is treated like iC code
+			 *  ie. empty, bare words and more square brackets are not allowed.
 			 *
-			 *	Appropriate error messages will be output
+			 *  iCa:   [[[]]]   [[x]]   [[2+x]]     [[N+x]]  [[N+2+x]]  [[[N]+2]+x]
+			 *  iC/C:  [[[]]]*  [[x]]*  [[2+x]]*    [[5+x]]* [[5+2+x]]* [[5+2]+x]*
 			 *
-			 *	The design goal is, that the generated Perl code will eval correctly
-			 *	in all cases - error messages will give a good indication what is wrong
-			 *	and immac exit status will prevent immcc compilation if iCmake is used.
-			 *	Of course if immcc compilation is tried it will fail, but embedded iCa
-			 *	error messages will still indicate the source of the error in iC listing.
+			 *  Appropriate error messages will be output
 			 *
-			 *	sqNest
-			 *	+= 1	every opening square bracket
-			 *	-= 1	every closing square bracket until 0 (error if more)
-			 *	square bit encoding which is used when square brackets close
-			 *	0		outside square brackets
-			 *	|= 1	number or translated loop variable or finishing string
-			 *	|= 2	completed and expanded 2nd level nested square brackets
-			 *	&=~2	this bit is cleared when another nested [ is encountered
-			 *	|= 4	bare word unless state == 'S' - string is type 1 constant
-			 *	|= 8	after closing square bracket if sqNest != 0
-			 *	 = 0	after closing square bracket if sqNest == 0
+			 *  The design goal is, that the generated Perl code will eval correctly
+			 *  in all cases - error messages will give a good indication what is wrong
+			 *  and immac exit status will prevent immcc compilation if iCmake is used.
+			 *  Of course if immcc compilation is tried it will fail, but embedded iCa
+			 *  error messages will still indicate the source of the error in iC listing.
 			 *
-			 *	The innermost square bracket pair is expanded to @{[expression]}
-			 *	if square == 1 when the closing square bracket is encountered.
-			 *	In other words this block may only contain numbers or translated loop
-			 *	variables or finishing strings. Perl evaluates "expression" in an eval.
-			 *	Syntactic errors in "expression" will cause a Perl eval error- this
-			 *	should be rare, since index expressions are usually not complicated.
-			 *	The Perl eval error message is easy to interpret to fix the iCa code.
+			 *  sqNest
+			 *  += 1    every opening square bracket
+			 *  -= 1    every closing square bracket until 0 (error if more)
+			 *  square bit encoding which is used when square brackets close
+			 *  0       outside square brackets
+			 *  |= 1    number or translated loop variable or finishing string
+			 *  |= 2    completed and expanded 2nd level nested square brackets
+			 *  &=~2    this bit is cleared when another nested [ is encountered
+			 *  |= 4    bare word unless state == 'S' - string is type 1 constant
+			 *  |= 8    after closing square bracket if sqNest != 0
+			 *   = 0    after closing square bracket if sqNest == 0
 			 *
-			 *	Save state in sqState on opening square bracket and set to 'A'.
-			 *	Restore state with matching closing square bracket. This allows
-			 *	correct handling of strings in square brackets in comments and strings.
-			 *	iC Example: ["abc".N] generates abc0 abc1 ... (meaningless for C indices).
-			 *	This example is coded better as abc[N], but string may be conditional,
-			 *	in which case it must be handled as an expression in square brackets.
+			 *  The innermost square bracket pair is expanded to @{[expression]}
+			 *  if square == 1 when the closing square bracket is encountered.
+			 *  In other words this block may only contain numbers or translated loop
+			 *  variables or finishing strings. Perl evaluates "expression" in an eval.
+			 *  Syntactic errors in "expression" will cause a Perl eval error- this
+			 *  should be rare, since index expressions are usually not complicated.
+			 *  The Perl eval error message is easy to interpret to fix the iCa code.
+			 *
+			 *  Save state in sqState on opening square bracket and set state to 'A'.
+			 *  Restore state with matching closing square bracket. This allows
+			 *  correct handling of strings in square brackets in comments and strings.
+			 *  iC Example: ["abc".N] generates abc0 abc1 ... (meaningless for C indices).
+			 *  This example is coded better as abc[N], but string may be conditional,
+			 *  in which case it must be handled as an expression in square brackets.
 			 *
 			 *
-			 *	Brace handling
+			 *  Brace handling
 			 *
-			 *	Braces are used both in C and iC to identify blocks of code. They
-			 *	are also used in iCa to mark blocks of code controlled by a FOR loop.
-			 *	There are rare cases, where braces in C are deliberately not matched,
-			 *	which throws out the matching of the correct closing FOR brace if
-			 *	single braces for FOR were used.
+			 *  Braces are used both in C and iC to identify blocks of code. They
+			 *  are also used in iCa to mark blocks of code controlled by a FOR loop.
+			 *  There are rare cases, where braces in C are deliberately not matched,
+			 *  which throws out the matching of the correct closing FOR brace if
+			 *  single braces for FOR were used.
 			 *
-			 *	To overcome this problem iCa uses double braces:
-			 *	FOR (N = 0; N < 4; N++) {{
-			 *	   a[N] ...
-			 *	}}
-			 *	Independent brace counting of the double braces is easy and leads to
-			 *	clean translation code. An added advantage is, that visually the
-			 *	boundaries of iCa FOR blocks are obvious and double braces have the
-			 *	flavour of capital letters in the FOR keyword. It is also suggested,
-			 *	that all FOR loop control variables be made capitals - similar to
-			 *	the idea of capitalizing macros for the C pre-processor.
+			 *  To overcome this problem iCa uses double braces:
+			 *  FOR (N = 0; N < 4; N++) {{
+			 *     a[N] ...
+			 *  }}
+			 *  Independent brace counting of the double braces is easy and leads to
+			 *  clean translation code. An added advantage is, that visually the
+			 *  boundaries of iCa FOR blocks are obvious and double braces have the
+			 *  flavour of capital letters in the FOR keyword. It is also suggested,
+			 *  that all FOR loop control variables be made capitals - similar to
+			 *  the idea of capitalizing macros for the C pre-processor.
 			 *
-			 *	Literal blocks starting with '%{' mark the start of embedded C code.
-			 *	A closing '%}' always marks the return to iC code independent of the
-			 *	brace nesting of the C code in the literal block. This means that
-			 *	%{ and %} are counted separately and error messages are output if any
-			 *	nesting is attempted. Literal block (fragments) may be nested in a
-			 *	FOR block (even only the start or the end). It would be pretty daft
-			 *	to do so, but go figure - (quoting Larry Wall). In any case there
-			 *	must always be alternte %{ and %} braces - even if only some of them
-			 *	are in a FOR block.
+			 *  Literal blocks starting with '%{' mark the start of embedded C code.
+			 *  A closing '%}' always marks the return to iC code independent of the
+			 *  brace nesting of the C code in the literal block. This means that
+			 *  %{ and %} are counted separately and error messages are output if any
+			 *  nesting is attempted. Literal block (fragments) may be nested in a
+			 *  FOR block (even only the start or the end). It would be pretty daft
+			 *  to do so, but go figure - (quoting Larry Wall). In any case there
+			 *  must always be alternate %{ and %} braces - even if only some of them
+			 *  are in a FOR block.
 			 *
-			 *	%{
-			 *		FOR CARRAY_NAME ("aa", "bb", "cc") {{
-			 *	int		[CARRAY_NAME][[10]]		// expanding C array declaration
-			 *	%}
-			 *	%{
-			 *		}}	// correct FOR loop end
-			 *	%}
+			 *  %{
+			 *      FOR CARRAY_NAME ("aa", "bb", "cc") {{
+			 *  int     [CARRAY_NAME][[10]]     // expanding C array declaration
+			 *  %}
+			 *  %{
+			 *      }}  // correct FOR loop end
+			 *  %}
 			 *
-			 *	Brace counting of single braces must still be done to determine the
-			 *	boundaries between iC and C code. The start of C code embedded in iC
-			 *	are blocks starting with the keywords "if", "else" or "switch". The
-			 *	end of embedded C code of if/else/switch blocks can only be determimed
-			 *	by single brace counting and may turn out to be wrong in rare cases.
-			 *	The only other use of braces in iC is for the body of function blocks.
+			 *  Brace counting of single braces must still be done to determine the
+			 *  boundaries between iC and C code. The start of C code, embedded in iC
+			 *  code, are blocks starting with the keywords "if", "else" or "switch".
+			 *  The end of embedded C code of if/else/switch blocks can only be determined
+			 *  by single brace counting and may turn out to be wrong in rare cases.
+			 *  The only other use of braces in iC is for the body of function blocks.
 			 *
-			 *	if IX0.2 {
-			 *		if IB0 != aa0[[0]] {		// start of C code
-			 *			aa0[[0]] = IB0
-			 *			printf("aa0[[0]] = %d\n", aa0[[0]])
-			 *	FOR N (1 .. 2) {{		// unmatched FOR loop
-			 *		}
-			 *		else if IB[N] != aa[N][[0]] {
-			 *			aa[N][[0]] = IB[N]
-			 *			printf("aa[N][[0]] = %d\n", aa[N][[0]])
-			 *	}}						// FOR loop end
-			 *		}							// end of C code
-			 *	}
+			 *  if IX0.2 {
+			 *      if IB0 != aa0[[0]] {        // start of C code
+			 *          aa0[[0]] = IB0
+			 *          printf("aa0[[0]] = %d\n", aa0[[0]])
+			 *  FOR N (1 .. 2) {{               // unmatched FOR loop
+			 *      }
+			 *      else if IB[N] != aa[N][[0]] {
+			 *          aa[N][[0]] = IB[N]
+			 *          printf("aa[N][[0]] = %d\n", aa[N][[0]])
+			 *  }}                              // FOR loop end
+			 *      }                           // end of C code
+			 *  }
 			 *
-			 *	Both the literal block example and the C example would be much more
-			 *	sensibly coded by keeping the first closing brace above the FOR loop
-			 *	and the final closing brace in the FOR loop. Either way the literal
-			 *	block braces and in most cases the C braces must be in matching pairs.
-			 *	Under all circumstances FOR loop double braces must match, and are
-			 *	independent of bothe literal block and C code brace matching.
+			 *  Both the literal block example and the C example would be much more
+			 *  sensibly coded by keeping the first closing brace above the FOR loop
+			 *  and the final closing brace in the FOR loop. Either way the literal
+			 *  block braces and in most cases the C braces must be in matching pairs.
+			 *  Under all circumstances FOR loop double braces must match, and are
+			 *  independent of both the literal block and C code brace matching.
 			 *
-			 *	Here is a rather obscure example of (apparently) unmatched braces in
-			 *	C code when expanding the initialisation of a C array in a FOR loop.
+			 *  Here is a rather obscure example of (apparently) unmatched braces in
+			 *  C code when expanding the initialisation of a C array in a FOR loop.
 			 *
-			 *	int aa[] = {\			// can be written thus: int aa[] = ["{"]\
-			 *		FOR (N = 0; N <= 3; N++) {{
-			 *	 [N][N < 3 ? ", " : " };"]\
-			 *		}}
+			 *  int aa[] = {\
+			 *      FOR (N = 0; N <= 3; N++) {{
+			 *   [N][N < 3 ? ", " : " };"]\
+			 *      }}
 			 *
-			 *	This expands to:		int		aa[] = { 0, 1, 2, 3 }
+			 *  This expands to:    int aa[] = { 0, 1, 2, 3 };
 			 *
-			 *	The first alternative does not work with the old single FOR brace dialect.
-			 *	The second alternative of enclosing the constant string "{" in square
-			 *	brackets, which evaluates simply to { and matches both braces in
-			 *	parentheses, worked with the old iCa dialect, when string constants
-			 *	in square bracket index expressions were introduced. It was this case,
-			 *	which forced the re-design of the immac pre-processor.		  - }}
+			 *  Alternatively first line can be written thus:
 			 *
-			 *	Expansion of square bracket expressions is identical for C and iC -
-			 *	only the error messages differ in iC. Thus nesting errors for single
-			 *	braces will only cause wrong error messages for square bracket
-			 *	expressions containing bare words (not allowed in iC). The output will
-			 *	in most cases be nearly correct and errors should be easy to interpret
-			 *	at the iC compile stage. (immcc will complain loudly about remaining
-			 *	square brackets which do not belong to an immC array variable).
+			 *  int aa[] = ["{"]\
 			 *
+			 *  The first alternative does not work with the old single FOR brace dialect.
+			 *  The second alternative of enclosing the constant string "{" in square
+			 *  brackets, which evaluates simply to { and matches both braces in
+			 *  double quotes, worked with the old iCa dialect, when string constants
+			 *  in square bracket index expressions were introduced. It was this case,
+			 *  which forced the re-design of the immac pre-processor.        - }}
+			 *
+			 *  Expansion of square bracket expressions is identical for C and iC -
+			 *  only the error messages differ in iC. Thus nesting errors for single
+			 *  braces will only cause wrong error messages for square bracket
+			 *  expressions containing bare words (not allowed in iC). The output will
+			 *  in most cases be nearly correct and errors should be easy to interpret
+			 *  at the iC compile stage. (immcc will complain loudly about remaining
+			 *  square brackets which do not belong to an immC array variable).
 			 ***********************************************************************/
-/***********************************************************************
-			do {
-				if *opt_a {
-					if rest && rest =~ m/^\s*(ELSE|ELSIF)/ {
-						comment2nd = 1
-					} else {
-						comment =~ s/\s*(\/[\/*].*)?$//			// {{
-						if comment =~ m/^\s*}}$/ && _ =~ m/(ELSE|ELSIF)/ {
-							my b = pop(@block)
-							if *opt_l != "" { fmt.Fprintf(genFile, "#--pop \_=b") } && *opt_T
-							comment .= _
-							lfFlag = 1
+			text     = textRes							// should not be necessary TODO
+			iNext    = 0
+			FORstart := -1
+			FORctrl  := ""
+			SQstSv   = make([]rune, 0, 5)		// reset square bracket stack at start of a new analysis
+			SQbrCnt  = 0
+			SQflag  := false
+			SQvar   := false
+			SQcvar  := false
+			SQstart := -1
+			SQend   := -1
+			SQbrIx  := 0
+			SQdotIndex := 0
+			SQcolPrev := -1
+			if *opt_X { fmt.Printf(">2 %d:\t%q\n", lineNo, text) }
+			if *opt_S { fmt.Fprintf(genFile, "//*Sc2* %d: '%c' %q\n", lineNo, state2, text) }
+		  Rescan2:
+			for {
+				if *opt_S { fmt.Fprintf(genFile, "//*Rs2* %d: '%c' L %v atom = %q %q\n", lineNo, state2, LFflag, atom, text) }
+				atom     = ""
+				expAtom  = ""
+				expPos   = -1
+				pose     = 0					// balance {{
+				//  reState:`(%?\{\{?|%?}}?|%?#|%%?|/[/*]|\*+/?|\w+|(\\\\)+|\\n|\\t|\\?"|\\?'|\\?\[|\\?\]|\S)`
+				for i, posPair := range reState.FindAllStringIndex(text, -1) {
+					//	(							balance {{
+					//		%?\{\{?	|	# { {{ %{ - not used %{{
+					//		%?}}?	|	# } }} %} - not used %}}
+					//		%?#		|	# directive prefix # %#
+					//		%%?		|	# directive prefix % %%
+					//		/[/*]	|	# /* // start of C or C++ comment
+					//		\*+/?	|	# */ **/ etc   end of C comment or * **
+					//		\w+		|	# word identifier or number
+					//		(\\\\)+	|	# remove pairs of backslashes
+					//		\\n		|	# char \n NL in string
+					//		\\t		|	# char \t TAB in string
+					//		\\?"	|	# " or \"
+					//		\\?'	|	# ' or \'
+					//		\\?\[	|	# [ or \[   - used in iCa analysis only
+					//		\\?\]	|	# ] or \]   - used in iCa analysis only
+					//		\S			# any single non space character
+					//	)
+					prevAtom = atom
+					prevPos  = pos						// start of previous atom
+					prevPose = pose						// start of white space after previous atom
+					pose  = posPair[1]
+					if i < iNext {
+						continue						// skip tokens in text already scanned
+					}
+					iNext = i							// save token count in case concatenated
+					pos = posPair[0]
+					atom = text[ pos : pose ]
+					if *opt_X { fmt.Printf("%2d\t%3d %3d\t%q\n", i, pos, pose, atom) }
+					/********************************************************************
+					 *  Scan 2 "**" exponentiation (done in all states except comments and strings)
+					 *  Exponentiation expression [expr1 ** expr3] is implemented as follows
+					 *  replace with "pow(expr1, expr2)
+					 *******************************************************************/
+					if atom == "**" && state2 != 'C' && state2 != 'P' && state2 != 'S' {
+						if reNumWord.MatchString(prevAtom) {
+							expAtom = prevAtom			// 1st operand
+							expPos  = prevPos
 						} else {
-							comment = _
+							pushError(&ret, "//* Error: syntax error before '**' operator\n")
 						}
-						comment2nd = 0
-					}
-					if comment =~ m/\b(IF|ELSE|ELSIF)\b/ {
-						foreach id (@ids) {
-							if id {						// use lookaround asserions to avoid double change
-								comment =~ s/(?<!\$)\bid\b(?!=\$)/(id=identifiers[ id ])/g
+					} else if expPos >= 0 {
+						if reNumWord.MatchString(atom) {// 2nd operand must be next atom after "**"
+							iCexpr := fmt.Sprintf("pow(%s, %s)", expAtom, atom)
+							al := pose - expPos
+							textRes = substr(textRes, expPos + offset, al, iCexpr)
+							text = textRes
+							offset = 0
+							expFlag = true
+							if SQflag {
+								SQprCnt++			// count opening parentheses of pow() call
 							}
+							continue Rescan2
+						} else {
+							pushError(&ret, "//* Error: syntax error after '**' operator\n")
 						}
+						expPos  = -1
 					}
-					if *opt_l != "" { fmt.Fprintf(genFile, "##**** $.: EndP=commentEndPos EndE=commentEndEnd LfF=commentLfFlag 2nd=comment2nd :", comment?comment:"**_") } && *opt_T
-				} else {
-					comment = _
-				}
-				rest = ""
-				^***********************************************************************
-				 *	 Start of detailed analysis of code lines
-				 *	 extract atoms to drive state machine - save with position
-				 *	 ignore leading backslash pairs
-				 *	 include odd backslash to change atom for some lookups - \" != "
-				 ***********************************************************************^
-				@atoms = ()
-				@nlTabs = ()
-				control = sqNest = square = offset = 0
-				while (
-					//	m/
-					//		(					# $1 leading backslah pairs
-					//			(\\\\)*			# $2
-					//		)
-					//		(					# $3 found token
-					//			\\?				#	 with optional leading backslash
-					//			(				# ($4)
-					//				"	|		#	 " \"
-					//				'	|		#	 ' \'
-					//				\[	|		#	 [ \[
-					//				\]	|		#	 ] \]
-					//				\n			#	 EOL \EOL
-					//			)		|
-					//			%?				#	 with optional leading %
-					//			(				# ($5)
-					//				\{\{? |		#	 { {{ %{ (%{{)	  {{ balance
-					//				}}?			#	 } }} %} (%}})
-					//			)
-					//					|		#	 rest with no extra leading characters
-					//			\/\/	|		#	 C++ comment
-					//			\/\*	|		#	 start of C comment
-					//			\*\/	|		#	 end of C comment
-					//			\w+		|		#	 word identifier
-					//			\\n		|		#	 char LF
-					//			\\t		|		#	 char TAB
-					//			\S				#	 any other non-space character
-					//		)
-					//	/xg
-				) {
-					atoms = append(atoms, [ length($`)+length($1), $3 ])		// [ pos, atom ]
-				}
-				^***********************************************************************
-				 *		\n		end of line to terminate rest of line comments
-				 *				if preceded by \ it only affects end of C comment after braces
-				 *		"	'	string and character quotes				(may be preceded by \)
-				 *		[	]	iCa index expressions - also used in C code		(also \)
-				 *		\\n \\t string NL and TAB in final [  ] is replaced by real NL and TAB
-				 *		//	#	rest of line comments
-				 *		/%%%*  *%%%/	C style comments
-				 *		%{	%}	literal blocks
-				 *		{	}	iC/C compound statements blocks
-				 *		{{	}}	blocks controlled by a FOR IF ELSE or ELSE IF statement
-				 *		\w+		words and numbers - any type of program atom
-				 *		=	;	statement delimiter to trigger a preceding/follow on in FOR {{
-				 *		\S		any other non-space character starts new output after }}
-				 *	check atoms in sequence - positions in line may change now
-				 *	translate atoms only in square brackets in code, comments and strings
-				 *	and in iCa FOR control lines
-				 ***********************************************************************^
-				for (my aix = 0; aix < @atoms; aix++) {
-					my ref = atoms[aix]
-					( pos, atom ) = @ref
-					if (forEnd &&
-						not sqNest &&
-						state == 'A' &&
-						atom !~ m!^(/[/*]|#|\n)$!) {	// keep any trailing comment with the brace line
-						if atom != "\\\n" {
-							rest = substr(_, forEnd, 1000, "\n"); # split FOR after braces or C comment
-						}
-						control = 0x6 if control == 0x2 // no line termination if closing braces
-						last							// output up to here as a separate line
-					}
-					if atom =~ m/^(0|[1-9]\d*)$/ {		// decimal integer constant
-						square |= 0x1 if sqNest // numeral in square brackets (iC Ok, no change)
-					} else if atom =~ m/^\w+$/ {		// may be a bare word starting with a digit
-						if sqNest || forFlag {
-							len = length atom	// translate in strings and comments also
-							if defined(translate = identifiers[ atom ]) {
-								substr(_, pos + offset, len) = translate
-								offset += length(translate) - len
-								square |= 0x1 if sqNest // translation in square brackets (iC Ok)
-							} else if sqNest {			// not in FOR line
-								if state != 'S' {
-									square |= 0x4		// bare word in square brackets (iC error / C Ok)
-									sqE = append(sqE, atom)
-								}
-							} else if state == 'A' {	// bare word in FOR line - comment or string ignored
-								if forFlag == 2 {
-									substr(_, pos + offset + len, 0) = "\""
-									substr(_, pos + offset, 0) = "\""
-									offset += 2 // change bare word to quoted string variable
+					/********************************************************************
+					 *  Scan 2 square bracket handling (done in all states)
+					 *******************************************************************/
+					if SQflag && state2 != 'S' {		// operators in a string are ignored
+						if atom == "." {				// Perl type string concatenation operator
+							if SQdotIndex >= cap(SQdotSlice) - 2 {	// allow extra capacity for "?", ":" and final "]"
+								SQdotSlice = append(SQdotSlice, make([]SrtQmkColEndFlg, SQdotIndex)...)	// double capacity
+							}
+							SQdotSlice[SQdotIndex].end = pos + offset	// concatenate operator "." in a square bracket expression
+							SQdotIndex++
+							SQdotSlice[SQdotIndex].sta = pos + offset + 1	// start of text after "."
+							if SQprCnt != 0 {
+								pushError(&ret, "//* Error: unmatched parentheses before '.' in square bracket expression\n")
+							}
+						} else if atom == "(" {
+							SQprCnt++
+						} else if atom == "?" {			// ternary operator
+							if SQprCnt == 0 {
+								if SQcolPrev >= 0 {
+									SQdotSlice[SQdotIndex].flg = true
+									SQdotSlice[SQdotIndex+1].sta = SQdotSlice[SQdotIndex].sta
+									SQdotSlice[SQdotIndex+1].qmk = SQdotSlice[SQdotIndex].qmk
+									SQdotSlice[SQdotIndex+1].col = SQdotSlice[SQdotIndex].col
+									SQdotSlice[SQdotIndex+1].end = pos + offset
+									SQdotSlice[SQdotIndex].sta = SQcolPrev + 1
 								} else {
-									lnErr = append(lnErr, "//* Error: C variable 'atom' (bare word) in FOR line. File argIn, line $.\n")
-									ret++				// error return
+									SQdotSlice[SQdotIndex].flg = false
 								}
-							}
-						} else if (not defined compound &&		// not sqNest and not forFlag
-							state == 'A' &&						// not in comments or strings
-							(atom == "if" || atom == "else" || atom == "switch")) {
-							iesFlag = 1					// start of iC if else or switch control line
-						}
-					} else if atom == "\\n" || atom == "\\t" {	// look for innermost embedded string NLs or TABs in square brackets
-						nlTabs = append(nlTabs, [ pos + offset, atom ]) // [ pos, atom ]
-					}
-					if atom == "[" {					// not else if because "FOR" is looked for in state 'A'
-						if !sqNest++ {			// opening square bracket pair
-							sqSave = state
-							state = 'A'			// allows index expressions with strings in comments
-							@sqE = ()					// collect new set of bare words
-							sqP = pos			// note position of first bracket in a possibly nested block
-						}
-						sqStart = pos + offset	// save for changes to innermost bracket pair
-						square &= ~0x2			// possible start of another embedded bracket pair
-					} else if atom == "]" {
-						if sqNest {
-							sqS = "???"
-							sqS = substr(comment, sqP, pos-sqP+1) if comment	// for error messages
-							if square == 0x1 {					//	 1					iC/C Ok - expand
-								substr(_, pos + offset, 1) = "]}"		// end of bracket pair with expression
-								while (my ref = pop @nlTabs) {	// extract last first
-									my ( nlP, nlA ) = @ref
-									if nlP > sqStart {
-										substr(_, nlP, 2) = nlA == "\\n" ? "\n" : "\t"
-										offset -= 1				// replace string NL or TAB by real \n or \t
-									}							// inside final eval brackets
-								}								// in reverse order to keep offsets correct
-								substr(_, sqStart, 1) = "\@{["	// start of bracket pair - eval in Perl
-								offset += 3						// offset += 2 - 1 + 3 - 1
-							}
-							if --sqNest {
-								if square == 0x1 {
-									square |= 0x2				// mark good embedded bracket pair (iC error / C Ok)
-								} else {
-									square |= 0x8				// stop further eval - allows error message for deep nesting
-								}
+								SQdotSlice[SQdotIndex].qmk = pos + offset	// ternary operator "?" in a square bracket expression
+								SQcolPrev = -1
+								SQxFlag = false
 							} else {
-								if *opt_T && !*opt_l != "" { fmt.Print("$.:pos:square	_") }
-								if sqSave !~ m/C/ && !*opt_t {
-									if square > 0x8 {	// the following are not errors in a comment or -t
-										lnErr = append(lnErr, "//* Error: Index expression sqS in C or iC code has invalid nesting. File argIn, line $.\n")
-										ret++			// error return
-									} else if square == 0x8 {
-										lnErr = append(lnErr, "//* Error: Empty nested index expression sqS in iC or C code. File argIn, line $.\n")
-										ret++			// error return
-									} else if !defined compound {		// empty [] and nested [[3]] now allowed in iC code
-										if square & 0x4 {
-											lnErr = append(lnErr, "//* Error: Index expression sqS in iC code contains C variable @sqE. File argIn, line $.\n")
-											ret++				// error return
-										}
-									}
-								}
-								square = 0						// no other change outside nested square bracket
-								state = sqSave
-								@sqE = ()
+								pushError(&ret, "//* Error: ternary operator '?' in parenthes is not allowed in iCa\n")
 							}
-						} else if !defined compound {
-							lnErr = append(lnErr, "//* Error: lone ']' outside of square brackets\n")
-							ret++								// error return
-							lnErr = append(lnErr, "//* Trace: argIn line $.: \compound = 'compound', \braceCount = 'braceCount', \twinCount = '@{[twinCount-0x100]}'\n") if *opt_T && !*opt_l != ""
+						} else if atom == ":" {			// ternary operator
+							if SQprCnt == 0 {
+								SQdotSlice[SQdotIndex].col = pos + offset	// ternary operator ":" in a square bracket expression
+								SQcolPrev = pos + offset					// start of possible repeat ternary
+								SQxFlag = false
+							} else {
+								pushError(&ret, "//* Error: ternary operator ':' in parenthes is not allowed in iCa\n")
+							}
+						} else if atom == ")" {
+							SQprCnt--
 						}
-					} else if atom == "\\[" || atom == "\\]" {
-						substr(_, pos + offset, 1) = ""
-						offset -= 1								// allows square brackets (in comments)
+					} else if atom == "[" {
+						if SQend >= 0 {
+							SQxFlag = true
+							SQend = -1
+						} else {
+							SQxFlag = false
+						}
+						if SQbrIx < len(SQbrInr) && SQbrInr[SQbrIx] == SQbrCnt {
+							SQflag = true				// inner square bracket start
+							SQcolPrev = -1
+							SQbrIx++
+							SQstSv = append(SQstSv, state2)	// push current state2
+							state2 = 'A'
+							if *opt_Z { fmt.Fprintf(genFile, "//[   state2 = '%c'\n", state2) }
+							SQprCnt = 0					// start counting parentheses in an inner square bracket
+							SQdotIndex = 0				// start collecting "." operators for inner square brackets
+							SQdotSlice = make([]SrtQmkColEndFlg, cap(SQdotSlice))	// zero all elements
+							SQstart = pos + offset
+							SQdotSlice[0].sta = SQstart + 1	// start of inner square bracket expression
+						}
+						SQbrCnt++
+						if *opt_X { fmt.Printf("%d: SqSt2 SQbrCnt = %d state2 = %c SQstSv = %c %q\n", lineNo, SQbrCnt, state2, SQstSv, textRes) }
 					} else {
-						if state == 'A' {						// iC - Program
-							if atom == "\"" {					// leading backslash will not compare
-								state = 'S'						// start of string found
-							} else if atom == "'" {				// leading backslash will not compare
-								state = 'H'						// start of character constant found
-							} else if atom == "/*" {
-								state = 'C'						// start of C comment found
-								if sqNest {
-									lnErr = append(lnErr, "//* Error: Unmatched square bracket at start of C comment; sqNest ] missing\n")
-									ret++						// error return
-									sqNest = 0			// sync square brackets
-								}
-							} else if atom == "*%%%/" {
-								if sqNest {
-									lnErr = append(lnErr, "//* Warning: Unmatched square bracket at end of C comment; sqNest ] missing\n")
-									w++					// warning found
-									sqNest = 0			// sync square brackets
-								} else {
-									lnErr = append(lnErr, "//* Warning: *%%%/ found after end of comment\n")
-									w++					// warning found
-								}
-							} else if atom == "//" || atom == "#" {
-								state = "CP"					// start of C++ or Perl comment found
-								^***********************************************************************
-								 *	 C-pre-processor directives are taken out earlier
-								 ***********************************************************************^
-							} else if (ref = iCaKey[atom]) {
-								if *opt_t { return 1 }			// test has found iCa code FOR IF ELSE IF or ELSE
-								if aix {						// iC/C code before braces - output first
-									rest = substr(_, pos+offset, 1000, "")
-									s/\\?\s*$/\\\n/		// strip trailing spaces from split part - \
-									if comment { substr(comment, 0, pos, "") }
-									last						// output up to here as a separate line
-								}
-								( tran, len, control ) = @ref
-								substr(_, pos + offset, len) = tran		// "FOR" to Perl "for", "IF" to "if" etc
-								if atom == "FOR" {
-								  retry:
-									ref = atoms[aix + 1]		// next atom in @atoms [int] identifier
-									if ref(ref) == "ARRAY" {
-										( pos, identifier ) = @ref
-										if identifier == "(" {
-											aix++				// skip over "("
-											goto retry
-										}
-										if identifier == "int" {
-											substr(_, pos + offset, 4) = ""
-											offset -= 4 // delete "int " from perl eval code
-											aix++				// skip over "int"
-											goto retry
-										}
-										if !forFlag {
-											forFlag = 1			// translate atoms till next (twin) brace
-											substr(_, pos + offset, 0) = "my "
-											offset += 3
-											if len(block) == 0 {
-												%identifiers = ()		// the first FOR line after eval
-												@ids = ()
-												el = $.			// start of block to eval for error reporting
+						SQend = -1						// not adjacent "["
+					}
+					if atom == "]" {
+						var l int
+						SQend = pose + offset
+						SQbrCnt--						// checks have been done in previous pass
+						l = len(SQstSv) - 1				// process inner square bracket
+						if l >= 0 {
+							state2 = SQstSv[l]			// pop saved state2
+							SQstSv = SQstSv[:l]			// TODO do not need stack here
+							if *opt_Z { fmt.Fprintf(genFile, "//]   state2 = '%c'\n", state2) }
+						}
+						if SQflag && SQvar && (iCmode || SQcvar) {	// must have some variable or number in iC mode
+							SQflag = false							// or a valid control variable im C mode
+							SQvar = false
+							SQcvar = false
+							if SQprCnt == 0 {			// parentheses must be matched in a square bracket expression
+								if SQxFlag {
+									/********************************************************************
+									 *  Add x between index pairs of a multidimensional array
+									 *   m[N][M]   ==> m0x0
+									 *  Spaces are allowed
+									 *   m [N] [M] ==> m0x0
+									 *  Any space between the index pairs is removed at ## below
+									 *******************************************************************/
+									genSliceAppend("\"x\"")	// adjoining square bracket expressions are separated by "x"
+									if *opt_S { fmt.Fprintf(genFile, "//*=0= %d: genSlice = %v\n", lineNo, genSlice) }
+								}											// unless the expression contains a "string"
+								genText := textRes[:SQstart]			// text preceding opening square bracket
+								if len(genText) > 0 {
+									if len(genSlice) > 0 || !reAllSpaces.MatchString(genText) {	// leading spaces is genText
+										/********************************************************************
+										 *  Precede " and \ by extra \
+										 *******************************************************************/
+										genText = reQuoteSlash.ReplaceAllString(genText, "\\$1")
+										if iCmode && state2 != 'S' && reWordSpace.MatchString(genText) ||
+											SQxFlag {
+											/********************************************************************
+											 *  Remove trailing white space if in iC mode and not in a string and
+											 *                              following a word, IX\d. or QX\d.
+											 *  ## or possible spaces after an insered x
+											 *
+											 *  For N == 0 in all cases
+											 *   m [N] ==> m0     // space between array variable and index is removed
+											 *   IX0. [N] ==> IX0.0	// same between digital I/O variale snd index
+											 *
+											 *  Spaces before index expressions in C code and strings are not removed 
+											 *   case [N]: ==> case 0:
+											 *   "Hello Nr [N]\n" ==> "Hello Nr 0\n"
+											 *  If you must use indexed iC array variables in C code and strings
+											 *  avoid extra spaces
+											 *
+											 *  Spaces before an index expression following one of the iC type keywords
+											 *  bit, int, clock, timer or void are also not removed
+											 *******************************************************************/
+											m := reWordSpace. FindStringSubmatch(genText)
+											if len(m) == 2 && (keywords[m[1]] & 0x2) == 0 { // not bit int clock timer void
+												genText = reTrSpaces.ReplaceAllLiteralString(genText, "")
 											}
-											if !defined identifiers[ identifier ] {
-												if *opt_a {
-													foreach id (@ids) {
-														if id { // use lookaround assertions to avoid double change
-															comment =~ s/(?<!\$)\bid\b(?!=\$)/(id=identifiers[ id ])/g
-														}
-													}
-												}
-												ids = append(ids, identifier)	// each iCa FOR loop only has one identifier
-												identifiers[ identifier ] = "\identifier"
-												finBlock = ++inBlock
-												spOfs = 1
-												forFlag = 2				// proper identifier for this FOR line found
-											} else {
-												lnErr = append(lnErr, "//* Warning: FOR 'identifier' used twice\n")
-											w++					// warning found
-											}
+										}
+										/********************************************************************
+										 *  Remove spaces around lone x or . for
+										 *  array [N] x [M]		 // x would normally be left out - same output
+										 *  QX [N] . [M]		 // C spec alows spaces before index operator [ 
+										 *******************************************************************/
+										genText = reSpacexdot.ReplaceAllString(genText, "$1")
+										/********************************************************************
+										 *  Add y to array name finishing with a numeral
+										 *  aaa1 [N] translates to aaa1y0 for N == 0
+										 *  in iC or C mode and in any state2; also remove spaces
+										 *******************************************************************/
+										genText = reWordNum.ReplaceAllString(genText, "${1}y")
+									}
+									if len(genText) > 0 {
+										genSliceAppend("\""+genText+"\"")	// text string before inner opening square bracket
+									}
+									if *opt_S { fmt.Fprintf(genFile, "//*=1= %d: genSlice = %v\n", lineNo, genSlice) }
+								}
+								SQxFlag = false
+								SQstart++
+								SQdotSlice[SQdotIndex].end = pos + offset	// final "]" in a square bracket expression
+								SQdotIndex++							// cap(SQdotSlice) is made large enough at "." handling
+								expr3 := ""
+								for i := 0; i < SQdotIndex; i++ {
+									sta := SQdotSlice[i].sta
+									end := SQdotSlice[i].end
+									genText = textRes[sta:end]	// text string to next "." operator or final "]"
+									qmk := SQdotSlice[i].qmk
+									col := SQdotSlice[i].col
+									if qmk > sta+1 && col > qmk+1 && col < end {
+										/********************************************************************
+										 *  ternary expression [expr1 ? expr2 : expr3] is implemented as follows
+										 *  replace with "tern(expr1, expr2, expr3)
+										 *******************************************************************/
+										ternFlag = true
+										_, expr1 := evalIf(textRes[sta:qmk], !DEF, !EVAL)	// add != 0 if expr1 is 'int'
+										expr1  = reLdTrSps.ReplaceAllLiteralString(expr1, "")	// remove leading and trailing spaces
+										expr2 := reLdTrSps.ReplaceAllLiteralString(textRes[qmk+1:col], "")
+										if expr3 == "" {
+											expr3 = reLdTrSps.ReplaceAllLiteralString(textRes[col+1:end], "")
+										}
+										expr3 = fmt.Sprintf("tern(%s, %s, %s)", expr1, expr2, expr3)
+										if SQdotSlice[i].flg {
+											SQdotIndex++
 										} else {
-											lnErr = append(lnErr, "//* Warning: another "FOR" used before '{{'\n")
-											w++					// warning found
-										}
-									} else {
-										lnErr = append(lnErr, "//* Warning: "FOR" not followed by identifier\n")
-										w++								// warning found
-									}
-								} else {
-									^***********************************************************************
-									 *	If IF occurs before a FOR, then only the block marked by its double
-									 *	braces is eval'd. A following ELSE and its block will be eval'd
-									 *	separately, which will cause a Perl error (else without previous if).
-									 *	To make sure it executes correctly opt_L is set after seeing IF, which
-									 *	will put the rest of the code in one eval, which is OK.
-									 ***********************************************************************^
-									if atom == "IF" && !inBlock {
-										opt_L = 1				// keep IF and ELSE in same eval block
-									}
-									ids = append(ids, "")				// dummy identifier when IF ELSE IF or ELSE
-									finBlock = ++inBlock
-									spOfs = 1
-									forFlag = 2			// proper control statement
-								}
-							} else if atom =~ m"^\{\{?$" {
-								if *opt_T && !*opt_l != "" { lnErr = append(lnErr, "//# OPEN_BRACE: argIn line $.: atom \compound = 'compound', \braceCount = 'braceCount', \twinCount = '@{[twinCount-0x100]}'\n") }
-								if forFlag {
-									iesFlag && die "Compiler error: \iesFlag should not be set if \forFlag"
-									if forFlag == 1 {
-										lnErr = append(lnErr, "//* Warning: FOR line has no control variable ???\n")
-										w++						// warning found
-									}
-									if !control {
-										spOfs = 2
-										control = 0x8			// free standing brace (cannot happen any more)
-									}
-									forFlag = 0			// stop translating atoms in FOR control line
-									forEnd = pos + offset + 1	// in case FOR line continues
-									if atom == "{{" {
-										forHash{ twinCount++ } = 1		// expecting twin braces
-										substr(_, pos + offset, 1) = "" // change to "{"
-										offset -= 1				// applies to next atom, not this one
-									} else {
-										forHash{ braceCount++ } = 1		// accept old dialect anyway
-										if opt_S {
-											lnErr = append(lnErr, "//* Error: strict: FOR line requires '{{'\n")
-											ret++				// error return
+											genText = expr3
+											expr3 = ""
 										}
 									}
-								} else {
-									if iesFlag {				// end of if else switch or literal block control line
-										compound = braceCount; # start of a C compound statement in iC code
-										iesFlag = 0
-									}
-									braceCount++				// current brace count
-									if atom == "{{" {
-										substr(_, pos + offset, 1) = ""
-										offset -= 1
-										lnErr = append(lnErr, "//* Error: iC/C code should not use '{{'\n")
-										ret++					// error return
+									if !SQdotSlice[i].flg {
+										genSliceAppend(genText)	// text string to next "." operator
+										if *opt_S { fmt.Fprintf(genFile, "//*=2= %d: genSlice = %v\n", lineNo, genSlice) }
 									}
 								}
-							} else if atom == "}" {
-								count = --braceCount
-								if *opt_T && !*opt_l != "" { lnErr = append(lnErr, "//# CLOSE_BRACE: argIn line $.: atom \compound = 'compound', \braceCount = 'braceCount', \twinCount = '@{[twinCount-0x100]}'\n") }
-								if defined forHash[ braceCount ] {
-									if opt_S {
-										lnErr = append(lnErr, "//* Error: strict: FOR line requires '}}'\n")
-										ret++					// error return
-									}
-									goto alternate				// support old dialect
-								}
-							  single:
-								if defined compound {
-									if braceCount <= compound; { undef compound }		// end of C compound statement
-								}
-							} else if atom == "}}" {
-								count = --twinCount
-								if defined forHash[ count ] {
-								  alternate:
-									if aix {					// iC/C code before braces - output first
-										if count < 0xf0 {		// atom == "}"
-											braceCount++		// restore for next round
-										} else {				// atom == "}}"
-											twinCount++ // in either mode
-										}
-										rest = substr(_, pos+offset, 1000, "")
-										s/\\?\s*$/\\\n/ // strip trailing spaces from split part - \
-										if comment { substr(comment, 0, pos, "") }
-										last					// output up to here as a separate line
-									}							// aix == 0 closing braces at start of line
-									ref = atoms[aix + 1]		// next atom in @atoms maybe ELSE or ELSE IF
-									if ref(ref) == "ARRAY" {
-										( pos1, identifier ) = @ref
-										if identifier =~ m/^(ELSE|ELSIF)$/ {
-											rest = substr(_, pos1+offset, 1000, "")
-											s/\\?\s*$/\\\n/		// strip trailing spaces from split part - \
-										}
-									}
-									forEnd = pos + offset + 1	// in case "}}" line continues
-									if count >= 0xf0 {	// atom == "}}"
-										substr(_, pos + offset, 1) = ""
-										offset -= 1				// strip first brace
-									}
-									inBlock--					// FOR IF ELSE IF ELSE control block finishes with brace
-									if m"}\s*\\" {
-										control = 0x6			// - { {
-										s/}(\s*\\)/}/			// only first instance
-										offset -= length $1
-										comment =~ s/\\$//
-									} else {
-										control = 0x2
-									}
-									spOfs = 0
-									delete forHash[ count ]
-
-									if idPop := pop ids; idPop != "" {	// dummy members for IF ELSE ELSE IF keep order
-										delete identifiers[ idPop ]; // latest identifier out of scope
-									}
-									if rest { last }			// output up to here as a separate line
-								} else {
-									lnErr = append(lnErr, "//* Warning: Unmatched '}}'\n")
-									w++					// warning found
-									goto single			// keep going - makes output cleaner
-								}
-							} else if atom == "%{" {
-								if iesFlag || defined compound {
-									lnErr = append(lnErr, "//* Warning: Attempt to use '%{' in C code - not correct\n")
-									w++					// warning found
-									iesFlag = 0
-								}
-								compound = braceCount	// start of a C literal block in iC code
-								braceCount++					// current brace count
-								if sqNest {
-									lnErr = append(lnErr, "//* Error: Unmatched square bracket at start of C literal block; sqNest ] missing\n")
-									ret++						// error return
-									sqNest = 0			// sync square brackets
-								}
-							} else if atom == "%}" {
-								--braceCount
-								if defined compound {
-									if braceCount <= compound; { undef compound }		// end of C compound statement
-								} else {
-									lnErr = append(lnErr, "//* Warning: Unmatched '%}' - not correct immediate C\n")
-									w++					// warning found
-								}
-								if sqNest {
-									lnErr = append(lnErr, "//* Error: Unmatched square bracket at end of C literal block; sqNest ] missing\n")
-									ret++						// error return
-									sqNest = 0			// sync square brackets
-								}
-							} else if atom == ";" {
-								if forFlag == 2 { forFlag = 3 } // expression FOR line
-								if sqNest {
-									lnErr = append(lnErr, "//* Error: Unmatched square bracket at end of statement; sqNest ] missing\n")
-									ret++						// error return
-									sqNest = 0			// sync square brackets
-								}
-							} else if atom == "=" && forFlag == 2 {
-								forFlag = 3						// expression FOR line
+								textRes = substr(textRes, 0, SQend, "")	// remove text + inner square bracket pair
+								text = textRes
+								offset  = 0
+								iNext = 0;
+								SQstart = -1			// no square bracket expression evaluation until next "["
+								continue Rescan2
 							}
-						} else if state == 'S' {				// string constant
-							if atom == "\"" {					// leading backslash will not compare
-								state = 'A'
-								if sqNest { square |= 0x1 }		// string in square brackets (no change)
-							}
-						} else if state == 'H' {				// character constant
-							if atom == "'" {					// leading backslash will not compare
-								state = 'A'
-							}
-						} else if state == 'C' {				// C comment
-							if atom == "*%%%/" {
-								state = 'A'						// end of C comment
-								if forEnd; { forEnd = pos + offset + 2 }		// split after C comment
-							} else if atom == "/*" {
-								lnErr = append(lnErr, "//* Warning: /* found during comment\n")
-								w++								// warning found
-							}
-						} else if state == "CP" {				// C++ or Perl comment
-							if atom =~ m/^(\\?\n)$/ {
-								state = 'A'						// end of C++ or Perl comment
-							}
+							pushError(&ret, "//* Error: unmatched parentheses in square bracket expression\n")
 						}
-					}
-				}
-				forEnd = 0										// end of line or split line
-				if sqNest && !defined compound {
-					lnErr = append(lnErr, "//* Error: Unmatched square bracket at end of line; sqNest ] missing\n")
-					ret++				// error return
-				}
-				^***********************************************************************
-				 *	End of line analysis
-				 *	Generate Perl code for an eval block
-				 ***********************************************************************^
-				if finBlock {
-					finBlock = inBlock			// { balance
-					if *opt_T && !*opt_l != "" { lnErr = append(lnErr, "//# END_ANALYSIS: argIn line $.: \compound = 'compound', \braceCount = 'braceCount', \twinCount = '@{[twinCount-0x100]}'\n") }
-					if m/(\@\{\[|\]})/ {
-						while (m/([\w.]+)(\s+)\@\{\[/g) {
-							if !defined keywords[$1] {
-								save = pos(_)
-								pos(_) -= length($2) + 3
-								s/\G\s+//				// remove spaces after array name and . unless keyword
-								pos(_) = save	// .. and ... are declared as keywords - leave spaces
-							}
-						}								// { balnce
-						while (m/\]}(\s+)([\w.]+)/g) {
-							if !defined keywords[$2] {
-								save = pos(_)
-								pos(_) -= length($1) + length($2)
-								s/\G\s+//				// and before array continuation and . unless keyword
-								pos(_) = save	// .. and ... are declared as keywords - leave spaces
-							}
-						}								// {{ balance
-						if s/\]}\s*\@\{\[/]}x\@{[/g {	// insert x for multi-dimensional arrays { balance
-							s/x(\@\{\[[^\]]*"[^\]]*\]})/$1/g;# remove x before [exp?",":""] special
-						}								// } balance
-						if s/(\d)\@\{\[/${1}y\@{[/g {	// insert y for array name ending in numerals { balance
-							s/y(\@\{\[[^\]]*"[^\]]*\]})/$1/g;# remove y before [exp?",":""] special
-						}								// } balance
-					}
-					if control || forFlag {
-						if *opt_a {
-							comment =~ s/\\/\\\\/g		// protect interpolated \ in string
-							comment =~ s/"/\\"/g		// protect interpolated " in string
-							chomp comment
-							if comment {
-								if lfFlag {
-									commentOut = "\FOR .= \"\\n//***** comment\\n\";\n"
-									commentLfFlag = 1
-									lfFlag = 0	// lines terminated by '\' are now terminated by LF in genFile
-								} else {
-									commentOut = "\FOR .= \"//***** comment\\n\";\n"
-									commentLfFlag = 0
-								}
-							}
+						SQflag = false
+						if *opt_X { fmt.Printf("%d: SqEn2 SQbrCnt = %d state = %c SQstSv = %c l = %d %q\n", lineNo, SQbrCnt, state, SQstSv, l, textRes) }
+					} else if state2 == 'S' {			// string constant
+						if atom == "\"" {				// leading backslash will not compare
+							_, state2 = PopCtrlState("\" 'S'")	// end of string constant
+							if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+							if *opt_X { fmt.Printf("%d: StEn %q	state2 = %c\n", lineNo, textRes, state2) }
 						}
-						s!(\s*(/[*%%%/]|#).*|[ \t]+)$!! // delete C, C++ or Perl comment and trailing blanks
-					} else {
-						s/\\/\\\\/g						// protect interpolated \ in string
-						s/"/\\"/g						// {{ - protect interpolated " in string
-						s/\]}\[/]}"."[/g				// insert something between @{[]}[ - needed for Perl interpretation
-						chomp
-						if s/\\\\$// {
-							if (spOfs &&				// this line is not terminated by a LF
-								s/^(\s*)(\s)/ /) {		// repeat with single space unless there were none
-								my space = $1 . ($2 == "\t" ? "		  " : "")
-								if space {
-									splice(@block, @block - spOfs, 0, "\FOR .= \"space\";\n")
-									if *opt_l != "" { fmt.Fprintf(genFile, "###### splice: block[@block-spOfs]") } && *opt_T
-								}
-							}
-							_ = "\FOR .= \"_\";\n"		// output line without LF in the FOR loop when eval'd
-							lfFlag = 1			// terminate the last line in the block with LF
-						} else {
-							_ = "\FOR .= \"_\\n\";\n"	// output line with LF in the FOR loop when eval'd
-							lfFlag = 0			// line already terminated wih LF
+					} else if state2 == 'H' {			// character constant
+						if atom == "'" {				// leading backslash will not compare
+							_, state2 = PopCtrlState("' 'H'")	// end of character constant
+							if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+							if *opt_X { fmt.Printf("%d: CcEn %q	state2 = %c\n", lineNo, textRes, state2) }
 						}
-						spOfs = 0						// was set in "FOR line and brace"
-					}
-					if *opt_a {
-						if (control & 0x1) && comment && !comment2nd {
-							if commentEndPos < len(block) && comment =~ m/(ELSE|ELSIF)/ {
-								if *opt_l != "" { fmt.Fprintf(genFile, "####1# splice @{[scalar @block]} commentEndPos commentEndEnd \commentOut=commentOut") } && *opt_T
-								splice(@block, commentEndPos, commentEndEnd, commentOut)
+					} else if state2 == 'C' {			// C comment
+						if reCommEnd.MatchString(atom) {		// == "*/" or "**/ etc
+							_, state2 = PopCtrlState("*/ 'C'")	// end of C comment
+							if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+							if *opt_X { fmt.Printf("%d: CoEn %q	state2 = %c\n", lineNo, textRes, state2) }
+						}
+					} else if atom == "/*" {
+						PushCtrlState(atom, state2, "/*")
+						state2 = 'C'					// start of C comment found
+						if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+					} else if atom == "//" {
+						if state2 != 'P' {				// ignore "//" inside C++ comment
+							PushCtrlState(atom, state2, "//")
+							state2 = 'P'				// start of C++ comment found
+							if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+						}
+					} else if atom == "\"" {			// leading backslash will not compare
+						if SQflag {
+							SQvar = true				// square bracket contains at least one string - evaluate
+						}
+						PushCtrlState(atom, state2, "\"")
+						state2 = 'S'					// start of string found
+						if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+						if *opt_X { fmt.Printf("%d: StSt %q	state2 = %c\n", lineNo, textRes, state2) }
+					} else if atom == "'" {				// leading backslash will not compare
+						PushCtrlState(atom, state2, "'")
+						state2 = 'H'					// start of character constant found
+						if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+					} else if state2 == 'A' {			// program - not comment, string, char constant
+						if FORorIF(0, SQflag, atom, pos, pose, prevPose,
+							&offset, &iNext, &FORstart, &dBraceCnt, &braceCnt, &posNext, &state2,
+							&text, &textRes, &FORctrl, &ForIfFlg, &iesFlag, &SQvar, &SQcvar) {
+							continue Rescan2
+						}
+					} else if state2 == 'B' {
+						if atom == "{{" {
+							/********************************************************************
+							 *  Opening double braces after "FOR"
+							 *******************************************************************/
+							var forLine string
+							ForIfFlg = false			// end of FOR control line
+							if FORstart < 0 { panic("FORstart error") }	// should not happen
+							if len(genSlice) > 0 {
+								/********************************************************************
+								 *  Special FOR line with string list containing square bracket index
+								 *  FOR CARRAY_NAME ("aa[N]", "bb[N]") {{												// }}
+								 *  converts to:
+								 *  forLine = 'FOR CARRAY_NAME (\"aa", N, "\", \"bb", N, ") {{'							// }}
+								 *  modified here to:
+								 *  forLine = 'FOR CARRAY_NAME (fmt.Sprint("aa", N), fmt.Sprint("bb", N)) {{'			// }}
+								 *  final genFile line:
+								 *  for _, CARRAY_NAME := range []string{fmt.Sprint("aa", N), fmt.Sprint("bb", N)} {	// }
+								 *******************************************************************/
+								genSlice = append(genSlice, textRes)
+								tx := strings.Join(genSlice, ", ")
+								genSlice = make([]string, 0, cap(genSlice))
+								FORstart++
+								forLine = tx[FORstart:]
+								forLine = reStrInd.ReplaceAllString(forLine, "fmt.Sprint(\"$1)")
 							} else {
-								block = append(block, commentOut)		// push the FOR (), IF (), ELSE and ELSE IF () comment line for eval
-								if *opt_l != "" { fmt.Fprintf(genFile, "####1# @{[scalar @block]} commentEndPos \commentOut=commentOut") } && *opt_T
+								forLine = textRes[FORstart:pose]
 							}
-							commentEndPos = 65535
-							commentEndEnd = 0
-						}								// {
-						if _ =~ m/^\s*}\s*$/ {
-							commentEndPos = scalar @block
-						} else {
-							commentEndPos = 65535
-						}
-					}
-					block = append(block, _)					// push the modified line for eval
-					if *opt_l != "" { fmt.Fprintf(genFile, "###### \control=control scalar \@block=@{[scalar @block]} \lfFlag=lfFlag LfF=commentLfFlag EndP=commentEndPos\n###### \_=_") } && *opt_T
-					if control & 0x2 {
-						if *opt_a {
-							if comment {
-								if commentEndPos < len(block) && comment =~ m/(ELSE|ELSIF)/ {
-									if *opt_l != "" { fmt.Fprintf(genFile, "####2# splice @{[scalar @block]} commentEndPos \commentOut=commentOut") } && *opt_T
-									splice(@block, commentEndPos, 0, commentOut)
-									commentEndPos = 65535
-									commentEndEnd = 0
-								} else {
-									if commentEndPos < len(block) && !idPop && commentOut =~ s/= "\\n/= "/ {
-										if *opt_l != "" { fmt.Fprintf(genFile, "####2# splice @{[scalar @block]} commentEndPos end='\FOR .= \"\\n\";'\n") } && *opt_T
-										splice(@block, commentEndPos, 0, "\FOR .= \"\\n\";\n")	// splice LF in block
-										commentEndEnd = 1
-									}
-									if comment =~ m/(ELSE|ELSIF)/ {
-										commentOut =~ s/= "\\n/= "/		// remove leading LF
-									}
-									block = append(block, commentOut)	// push the FOR (), IF (), ELSE and ELSE IF () comment line for eval
-									if *opt_l != "" { fmt.Fprintf(genFile, "####2# @{[scalar @block]} commentEndPos 'idPop' \commentOut=commentOut") } && *opt_T
+							FORstart = -1
+							if FORline != "" {
+								fmt.Fprint(genFile, FORline)
+								FORline = ""			// IF, ELSE IF and error are output immediately
+							}
+							if *opt_S { fmt.Fprintf(genFile, "//*BrO* %d: '%c' %q\n", lineNo, state2, forLine) }
+							if m := reFORstd.FindStringSubmatch(forLine); len(m) == 5 {
+								/********************************************************************
+								 *  Standard C FOR statement: FOR (N = 0; N < 10; N++) {{	  		// }}
+								 *  `^FOR\s*\(\s*((int)\s+)?([a-zA-Z]\w*)\s*=(.*)\)\s*{{$`				  		// }}
+								 *******************************************************************/
+								FORline = fmt.Sprintf("  for %s :=%s {\n", m[3], m[4])
+								if sFlag && m[2] == "int" {
+									pushError(&w, "//* Warning: type specifier 'int' is deprecated - ignored\n")
 								}
-								lfFlag = 0				// lines terminated by '\' are now terminated by LF
+								if FORctrl != m[3] { panic("FOR loop compile error") }	// should not happen
+							} else if m := reFORdot.FindStringSubmatch(forLine); len(m) == 10 {
+								/********************************************************************
+								 *   Perl .. FOR statement: FOR N ( 0 .. 9 ) {{						// }}
+								 *  `^FOR\s+((int)\s+)?([a-zA-Z]\w*)\s*\(\s*(\w+(\s*([*%/&^|()+-]|<<|>>)\s*\w+)*)\s*\.\.\s*(\w+(\s*([*%/&^|()+-]|<<|>>)\s*\w+)*)\s*\)\s*{{$`	// }}
+								 *******************************************************************/
+								FORline = fmt.Sprintf("  for %[1]s := %[2]s; %[1]s <= %[3]s; %[1]s++ {\n", m[3], m[4], m[7])
+								if sFlag && m[2] == "int" {
+									pushError(&w, "//* Warning: type specifier 'int' is deprecated - ignored\n")
+								}
+								if FORctrl != m[3] { panic("FOR loop compile error") }	// should not happen
+							} else if m := reFORlist.FindStringSubmatch(forLine); len(m) == 5 {
+								/********************************************************************
+								 *  Perl string list FOR statement: FOR N ("aa", "ab", "ac") {{		// }}
+								 *  or Perl int list FOR statement: FOR N (4, -3, +2) {{		 	// }}
+								 *  Loop control variables may occur in either list.
+								 *  If a list contains one string or string type loop control variable,
+								 *  the whole list is type string - else it is type int.
+								 *  `^FOR\s+((int)\s+)?([a-zA-Z]\w*)\s*\(\s*(.*\S)\s*\)\s*{{$`			  		// }}
+								 *******************************************************************/
+								numbers := make([]string, 0)
+								members := make([]string, 0)
+								strFlag := false
+								m[4] = reTrComma.ReplaceAllLiteralString(m[4], "")	// remove trailing comma of a list
+								prevMember := ""
+								for _, member := range reComma.Split(m[4], -1) {
+									if prevMember != "" {
+										members = append(members, prevMember + "," + member)
+										strFlag = true
+										prevMember = ""
+									} else if reSignNum.MatchString(member) {
+										member = reSpaces.ReplaceAllLiteralString(member, "")	// take out any white space
+										numbers = append(numbers, member)
+										members = append(members, "\""+member+"\"")
+									} else if reString.MatchString(member) {
+										members = append(members, member)
+										strFlag = true
+									} else if reFmtSprint.MatchString(member) {
+										prevMember = member						// special FOR line with indexed strings
+										continue
+									} else if reBareWd.MatchString(member) {
+										if ts, ok := FORctrlVar[member]; ok {	// exists
+											if ts == "string" {
+												strFlag = true
+											}
+											numbers = append(numbers, member)
+											members = append(members, member)
+										} else {
+											pushError(&ret, fmt.Sprintf("//* Error: bare word %q not allowed in string list\n", member))
+										}
+									} else {
+										pushError(&ret, fmt.Sprintf("//* Error: bare words %q not allowed in string list\n", member))
+									}
+								}
+								typeSpec := "int"
+								list     := ""
+								if strFlag {
+									list = strings.Join(members, ", ")
+									typeSpec = "string"
+									FORctrlVar[FORctrl] = "string"
+								} else {
+									list = strings.Join(numbers, ", ")
+								}
+								FORline = fmt.Sprintf("  for _, %s := range []%s{%s} {\n", m[3], typeSpec, list)
+								if sFlag && m[2] == "int" {
+									pushError(&w, "//* Warning: type specifier 'int' is deprecated - ignored\n")
+								}
+								if FORctrl != m[3] { panic("FOR loop compile error") }	// should not happen
+							} else {
+								/********************************************************************
+								 *  Syntax error in FOR control statement
+								 *******************************************************************/
+								if *opt_S { fmt.Fprintf(genFile, "//*ERR* %d: '%c' %q\n", lineNo, state2, text) }
+								pushError(&ret, "//* Error: syntax error in FOR control statement - state2 'B'\n")
+								break;
 							}
-						} else if control == 0x2 && lfFlag {
-							endPos = scalar @block
-							block = append(block, "\FOR .= \"\\n\";\n")
-							if *opt_l != "" { fmt.Fprintf(genFile, "#+++++ \_=\FOR .= \"\\n\";\n") } && *opt_T
-							lfFlag = 0			// lines terminated by '\' are now terminated by LF
-						} else if control == 0x3 && !lfFlag && endPos {
-							my b = splice(@block, endPos, 1)
-							undef endPos
-							if *opt_l != "" { fmt.Fprintf(genFile, "#--spl \_=b") } && *opt_T
+							opt_aComment(forLine, opt_aEdit(&forLine, FORctrl))
+							LFflag = false
+							if *opt_Z { fmt.Fprint(genFile, "//= LFflag = false at 'B' \"{{\"\n") }
+							state2 = 'F'
+							if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+							if *opt_X { fmt.Printf("{{ dBraceCnt = %d %q\n", dBraceCnt, textRes) }
+							FORctrl = ""
+							dBraceCnt++
+							textRes = substr(textRes, 0, pose, "")
+							text = textRes			// remove text just output
+							if *opt_S { fmt.Fprintf(genFile, "//*BrF* %d: '%c' %q\n", lineNo, state2, text) }
+							offset = 0
+							if textRes != "" {
+								iNext = 0;
+								continue Rescan2
+							}
+						} else if atom == "}}" {
+							pushError(&ret, "//* Error: syntax error closing double brace - state2 'B'\n")
+						} else if _, ok := FORctrlVar[atom]; !ok && reWord.MatchString(atom) {
+							pushError(&ret, fmt.Sprintf("//* Error: %q not a valid control variable or not in scope\n", atom))
 						}
-					} else {
-						undef endPos
-					}
-					if !finBlock && len(block) > 0 && !lfFlag && !opt_L {
-						eval_block(\@block, "BLOCK @{[++evalBlock]} at ", el)
-					}							// { balance
-				} else if m/(\@\{\[|\]}|\\$/	// look for iCa index expressions and backslash outside block
-					&& !*opt_t					// do not return for [] outside "FOR loop" - could be in comment
-				) {								// can select either alternatives above or below
-					while (m/([\w.]+)(\s+)\@\{\[/g) {
-						if !defined keywords[$1] {
-							save = pos(_)
-							pos(_) -= length($2) + 3
-							s/\G\s+//			// remove spaces after array name and . unless keyword
-							pos(_) = save		// .. and ... are declared as keywords - leave spaces
+					} else if state2 == 'F' {
+						if FORorIF(0, SQflag, atom, pos, pose, prevPose,
+							&offset, &iNext, &FORstart, &dBraceCnt, &braceCnt, &posNext, &state2,
+							&text, &textRes, &FORctrl, &ForIfFlg, &iesFlag, &SQvar, &SQcvar) {
+							continue Rescan2
 						}
-					}							// { balance
-					while (m/\]}(\s+)([\w.]+)/g) {
-						if !defined keywords[$2] {
-							save = pos(_)
-							pos(_) -= length($1) + length($2)
-							s/\G\s+//			// and before array continuation and . unless keyword
-							pos(_) = save		// .. and ... are declared as keywords - leave spaces
+					} else if state2 == 'G' {
+						if atom == "{{" {
+							/********************************************************************
+							 *  Opening double braces after "IF" or "ELSE IF"
+							 *******************************************************************/
+							ForIfFlg = false			// end of FOR IF ELSE control line
+							if FORstart < 0 { panic("FORstart error") }	// should not happen
+							forLine := textRes[FORstart:pose]
+							FORstart = -1
+							if FORline != "" {
+								fmt.Fprint(genFile, FORline)
+								FORline = ""			// IF, ELSE IF and error are output immediately
+							}
+							if *opt_S { fmt.Fprintf(genFile, "//*BrO* %d: '%c' %q\n", lineNo, state2, forLine) }
+							if m := reIFstd.FindStringSubmatch(forLine); len(m) == 3 {
+								/********************************************************************
+								 *  Standard C IF statement: IF (N%2 != 2) {{						// }}
+								 *  or Standard C ELSE IF statement: ELSE IF (N%2 == 2) {{			// }}
+								 *  `^(ELSE\s+)?IF\s*\(\s*(.*\S)\s*\)\s*{{$`						// }}
+								 *******************************************************************/
+								elsif := "if"
+								if m[1] != "" {
+									elsif = "} else if"
+									forLine = "}} "+forLine
+								}
+								params := opt_aEdit(&forLine, "")
+								opt_aComment(forLine, params)
+								_, expr := evalIf(m[2], !DEF, !EVAL)	// add != 0 if m[2] is 'int'
+								fmt.Fprint(genFile, fmt.Sprintf("  %s %s {\n", elsif, expr))
+								if m[1] != "" {
+									opt_aComment(forLine, params)
+								}
+							} else {
+								/********************************************************************
+								 *  Syntax error in IF or ELSE IF control statement
+								 *******************************************************************/
+								if *opt_S { fmt.Fprintf(genFile, "//*ERR* %d: '%c' %q\n", lineNo, state2, text) }
+								pushError(&ret, "//* Error: syntax error in IF or ELSE IF control statement - state2 'G'\n")
+							}
+							LFflag = false
+							if *opt_Z { fmt.Fprint(genFile, "//= LFflag = false at 'G' \"{{\"\n") }
+							state2 = 'J'
+							if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+							if *opt_X { fmt.Printf("{{ dBraceCnt = %d %q\n", dBraceCnt, textRes) }
+							FORctrl = ""
+							dBraceCnt++
+							textRes = substr(textRes, 0, pose, "")
+							text = textRes			// remove text just output
+							if *opt_S { fmt.Fprintf(genFile, "//*BrI* %d: '%c' %q\n", lineNo, state2, text) }
+							offset = 0
+							if textRes != "" {
+								iNext = 0;
+								continue Rescan2
+							}
+						} else if atom == "}}" {
+							pushError(&ret, "//* Error: syntax error closing double brace - state2 'G'\n")
+						} else if _, ok := FORctrlVar[atom]; !ok && reWord.MatchString(atom) {
+							pushError(&ret, fmt.Sprintf("//* Error: %q not a valid control variable or not in scope\n", atom))
 						}
-					}							// {{{ balance
-					s/\]}\s*\@\{\[/]}x\@{[/g	// insert x for multi-dimensional arrays
-					s/(\d)\@\{\[/${1}y\@{[/g	// insert y for array name ending in numerals
-					s/\\/\\\\/g			// protect interpolated \ in string
-					s/"/\\"/g					// protect interpolated " in string
-					s/\]}\[/]}"."[/g			// insert something between ]}[ - needed for Perl interpretation
-					chomp
-					if s/\\\\$//) {				// is line terminated by a backslash ? (remove it
-						_ = "\FOR .= \"_\";\n"	// yes - output line without LF in the FOR loop when eval'd
-						lfFlag = 1				// terminate the last line in the block with LF
-					} else {
-						_ = "\FOR .= \"_\\n\";\n"		// no - output line with LF in the FOR loop when eval'd
-						lfFlag = 0				// line already terminated wih LF
-					}
-					block = append(block, _)			// push the modified line for eval
-				} else if !*opt_t {
-					if len(block) > 0 || lfFlag || opt_L {
-						s/'/\\'/g
-						if chomp {
-							block = append(block, "\FOR .= '_\n';\n")	// push the modified line for eval with LF
-							lfFlag = 0
+					} else if state2 == 'J' {
+						if FORorIF('D', SQflag, atom, pos, pose, prevPose,
+							&offset, &iNext, &FORstart, &dBraceCnt, &braceCnt, &posNext, &state2,
+							&text, &textRes, &FORctrl, &ForIfFlg, &iesFlag, &SQvar, &SQcvar) {
+							continue Rescan2
+						}
+					} else if state2 == 'D' {
+						if atom == "ELSE" {
+							FORstart = pos
+							PushCtrlState("ELSE", Read_ifStat("ELSE at 'D'"), "ELSE at 'D'")	// use state2 of initial IF; ignore state2 of current ELSE
+							state2 = 'E'				// ELSE
+							if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+						} else if atom == "FOR" || atom == "IF" {
+							if FORorIF('X', SQflag, atom, pos, pose, prevPose,	// block double braces
+								&offset, &iNext, &FORstart, &dBraceCnt, &braceCnt, &posNext, &state2,
+								&text, &textRes, &FORctrl, &ForIfFlg, &iesFlag, &SQvar, &SQcvar) {
+								continue Rescan2
+							}
+						} else if atom == "{{" {
+							pushError(&ret, "//* Error: opening double braces directly follow closing double braces\n")
+							state2 = 'A'
+							if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
 						} else {
-							block = append(block, "\FOR .= '_';\n")		// or without LF
+							if FORline != "" {
+								fmt.Fprint(genFile, FORline)
+								FORline = ""
+							}
+							if *opt_a && genFlag {
+								genLine("", "\\n")
+							}
+							fmt.Fprint(genFile, "  }\n")	// IF {{ ... }} x
+							opt_aComment("}}", "")
+							if genTail != "" {
+								if *opt_Z { fmt.Fprintf(genFile, "//= genSliceOut(%q, %s) 'D' deferred output\n", genSlice, genTail) }
+								genSliceOut(genTail)	// deferrred output for 'D'
+								genTail = ""
+							}
+							state2 = 'A'				// any other atom ignore further FOR or IF
+							if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+							if *opt_S { fmt.Fprintf(genFile, "//*Ds2* %d: '%c' L %v atom = %q %q prevPose = %d\n", lineNo, state2, LFflag, atom, text, prevPose) }
+							if prevPose > 0 {
+								textRes = substr(textRes, 0, prevPose, "")
+								if *opt_S { fmt.Fprintf(genFile, "//*De2* %d: '%c' %q\n", lineNo, state2, textRes) }
+								text = textRes			// remove text just output
+								offset = 0
+								iNext = 0;
+								continue Rescan2
+							}
+							if atom == "}}" {			// is next atom another closing double braces?
+								continue Rescan2		// yes - scan this closing double braces again
+							}
 						}
-					} else {
-						print					// no iCa index expressions - faster if direct print
+					} else if state2 == 'E' {
+						if atom == "IF" {
+							state2 = 'G'				// ELSE IF
+							if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+						} else if atom == "{{" {
+							/********************************************************************
+							 *  Opening double braces after "ELSE"
+							 *******************************************************************/
+							if *opt_X { fmt.Printf("{{ dBraceCnt = %d %q\n", dBraceCnt, textRes) }
+							FORctrl = ""
+							dBraceCnt++
+							opt_aComment("}} ELSE {{", "")
+							fmt.Fprint(genFile, "  } else {\n")
+							opt_aComment("}} ELSE {{", "")
+							LFflag = false
+							if *opt_Z { fmt.Fprint(genFile, "//= LFflag = false at 'E' \"{{\"\n") }
+							state2 = 'L'
+							if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+							if textRes != "" {
+								textRes = substr(textRes, 0, pose, "")
+								text = textRes			// remove text just output
+								if *opt_S { fmt.Fprintf(genFile, "//*BrI* %d: '%c' %q\n", lineNo, state2, text) }
+								offset = 0
+								iNext = 0;
+								continue Rescan2
+							}
+						} else {
+							pushError(&ret, "//* Error: syntax error after ELSE - state2 'E'\n")
+						}
+					} else if state2 == 'L' {
+						if FORorIF(0, SQflag, atom, pos, pose, prevPose,
+							&offset, &iNext, &FORstart, &dBraceCnt, &braceCnt, &posNext, &state2,
+							&text, &textRes, &FORctrl, &ForIfFlg, &iesFlag, &SQvar, &SQcvar) {
+							continue Rescan2
+						}
 					}
 				}
-				if !finBlock && len(block) > 0 && !lfFlag && !opt_L {
-					eval_block(\@block, "", $.)
+				break Rescan2
+			}	// end of state2 machine scan 2 of one iCa line
+			if state2 == 'P' {							// C++ comment
+				_, state2 = PopCtrlState("end of line 'P'")	// end of C++ comment
+				if *opt_Z { fmt.Fprintf(genFile, "//#   state2 = '%c' atom = %q\n", state2, atom) }
+			}
+			if *opt_S { fmt.Fprintf(genFile, "//*Es2* %d: '%c' L %v %q\n", lineNo, state2, LFflag, text) }
+			if state2 == 'A' || state2 == 'F'  || state2 == 'J'  || state2 == 'D' || state2 == 'L' {
+				if !reAllSpaces.MatchString(text) {
+					genText := text
+					genText  = reQuoteSlash.ReplaceAllString(genText, "\\$1")	// precede " and \ by extra \
+					genSliceAppend("\""+genText+"\"")
+					LFflag = true
+					if *opt_Z { fmt.Fprintf(genFile, "//= LFflag = true at '%c' at end of line\n", state2) }
+					if *opt_S { fmt.Fprintf(genFile, "//*=5= %d: genSlice = %v\n", lineNo, genSlice) }
+				} else if reAllSpaces.MatchString(lineText) {
+					if *opt_Z { fmt.Fprint(genFile, "//= empty line\n") }
+					LFflag = true
 				}
-			} while ((_ = rest))				// maybe the line was split
-			^***********************************************************************
-			 *	End of analysis and generation of an iCa code line
-			 ***********************************************************************^
- ***********************************************************************/
-		  Line:
-			if len(lnErr) > 0 && !*opt_t { output_error(text) }
-		}	// end of Scan line
+				if LFflag {
+					if len(genSlice) > 0 {
+						genTail = ", \"\\n\""
+					} else {
+						if *opt_Z { fmt.Fprint(genFile, "//= empty genSlice\n") }
+						genTail = "\"\\n\""
+					}
+					if state2 != 'D' {
+						if *opt_Z { fmt.Fprintf(genFile, "//= genSliceOut(%q, %s) '%c' at end of line\n", genSlice, genTail, state2) }
+						genSliceOut(genTail)	// output now for 'A' 'F' or 'L'
+						genTail = ""			// defer output for 'D'
+					}
+				}
+			} else if state2 == 'C' {
+				if len(genSlice) > 0 {
+					if *opt_Z { fmt.Fprintf(genFile, "//= genSliceOut(%q) 'C' square bracket expressions\n", genSlice) }
+					genSliceOut("")				// output square bracket expressions in comment
+				}
+				genLine(textRes, "\\n")			// output line of unfinished C comment
+			} else {
+				pushError(&ret, fmt.Sprintf("//* Error: syntax error at end of line - state2 '%c'\n", state2))
+			}
+			/***********************************************************************
+			 *  End of analysis and generation of an iCa code line
+			 ***********************************************************************/
+		}	// end of Scan Line
+		if err := scanner.Err(); err != nil {
+			log.Print(err); os.Exit(3)
+		}
+		/***********************************************************************
+		 *  End of one file - synchronise brace and square bracket counts TODO
+		 ***********************************************************************/
+		if state2 == 'D' {
+			if *opt_a && genFlag {
+				genLine("", "\\n")
+			}
+			fmt.Fprint(genFile, "  }\n")		// dangling closing double braces after an incomplet IF block
+			opt_aComment("}}", "")
+		}										// unlikely to finish with an IF block - go figure
+		if state != 'A' {
+			pushError(&ret, fmt.Sprintf("//* Error: syntax error at end of file %q - state '%c'\n", argIn, state))
+		}
+		outputError(lineText)					// possible error or warning in previous line
 		if l := len(inFileStk) - 1; l >= 0 {
 			inFileC.Close()						// EOF of an include file reached
- genLine(fmt.Sprintf("//### end of include %q len(siStk) = %d si = %d", argIn, len(siStk), si))
 			if len(siStk) > 0 || si != 1 {
-//				lnErr = append(lnErr, fmt.Sprintf("//* end of #include %s #if ... #endif not matched - si = %d\n", argIn, si))
+				pushError(&ret, fmt.Sprintf("//* end of #include %s #if ... #endif not matched - si = %d\n", argIn, si))
 			}
 			fi := inFileStk[l]
 			inFileStk = inFileStk[:l]			// pop current file info
@@ -2075,51 +2604,42 @@ Level:
 			inFileC = fi.file
 			scanner = fi.scan
 			if opt_m_M_Y {
-// TODO				my l = $. + ((eof in) ? 0 : 1)
-				genLine(fmt.Sprintf("# %d %q 2", lineNo+1, argIn))	// # 8 "file" 2
+				hashLineFlag = true
 			}
 			continue Level
 		}
+		if hashLineFlag {
+			genLine(fmt.Sprintf("# %d %q 2", lineNo, argIn), "\\n")	// # 8 "file" 2
+		}
+		if ForIfFlg {
+			pushError(&ret, "//* Error: at EOF - FOR line not complete\n")
+		}
+		if dBraceCnt != 0 {
+			pushError(&ret, "//* Error: at EOF - FOR line twin braces do not match\n")
+		}
 		break Level
 	} // exhaust all nested include files
-/***********************************************************************
-	^***********************************************************************
-	 *	If -m -M or -Y then output any blank lines at the end of the file
-	 ***********************************************************************^
-	if opt_m_M_Y && blankLines > 0 {
-		blanks()								// print blank lines now
-	}
-	^***********************************************************************
-	 *	All lines in the iCa file have been read
-	 ***********************************************************************^
-	if finBlock {
-		lnErr = append(lnErr, "//* Error: at EOF - probably braces are not matched. File argIn, line $.\n")
-		ret++			// error return
-	}
-	if FORline {
-		lnErr = append(lnErr, "//* Error: at EOF - FOR line not complete. File argIn, line $.\n")
-		ret++			// error return
-	}
-	if twinCount != 0x100 {
-		lnErr = append(lnErr, "//* Error: at EOF - FOR line twin braces {{ @{[twinCount-0x100]} }} do not match. File argIn, line $.\n")
-		ret++			// error return
-	}
+	/***********************************************************************
+	 *  All lines in the iCa file have been read
+	 ***********************************************************************/
 	if len(siStk) > 0 || si != 1 {
-		lnErr = append(lnErr, "//* Warning: at EOF - missing %endif in argIn at line $. - ignored\n")
-		w++				// Warning found
+		pushError(&w, "//* Warning: at EOF - missing %endif - ignored\n")
+		outputError(lineText)
 	}
-	if len(block) > 0 { eval_block(\@block, "LAST BLOCK @{[++evalBlock]} at ", el) }
-	if ret > 0 || w > 0 {
-		lnErr = append(lnErr, "%{\n")
-		if ret > 0 { lnErr = append(lnErr, "#error immac found ret compilation error@{[ret>1?"s":""]} - see comments in iC list file\n") }
-		if w > 0 { lnErr = append(lnErr, "#warning immac found w compilation warning@{[w>1?"s":""]} - see comments in iC list file\n") }
-		lnErr = append(lnErr, "%}\n")
-	}
-	if len(lnErr) > 0 && !*opt_t { output_error(text) }
-	if braceCount && *opt_T && !*opt_l != "" { fmt.Println("//***** \braceCount = braceCount") }
- ***********************************************************************/
 
-	if *opt_T {
+	/***********************************************************************
+	 *  Show all defined macros
+	 ***********************************************************************/
+	if *opt_T || *opt_X {
+		clPrefix := "P"
+		prefix   := "%%"
+		if *opt_m {
+			clPrefix = "D"
+			prefix   = "#"
+		} else if *opt_M || *opt_Y {
+			clPrefix = "D"
+			prefix   = "%"
+		}
 		if len(clDefs) > 0 || len(defs) > 0 {
 			fmt.Println("*******************************************************")
 		}
@@ -2131,7 +2651,7 @@ Level:
 			}
 			sort.Strings(macros)
 			for _, macro := range macros {
-				fmt.Printf("-P         %-15q %2d    %q\n", macro, clDefs[macro].num, clDefs[macro].str)
+				fmt.Printf("-%s         %-15q %2d    '%s'\n", clPrefix, macro, clDefs[macro].num, clDefs[macro].str)
 			}
 		}
 		if len(defs) > 0 {
@@ -2142,7 +2662,7 @@ Level:
 			}
 			sort.Strings(macros)
 			for _, macro := range macros {
-				fmt.Printf("%%%%define   %-15q %2d    %q\n", macro, defs[macro].num, defs[macro].str)
+				fmt.Printf("%2sdefine   %-15q %2d    '%s'\n", prefix, macro, defs[macro].num, defs[macro].str)
 			}
 		}
 		if len(clDefs) > 0 || len(defs) > 0 {
@@ -2150,71 +2670,116 @@ Level:
 		}
 	}
 
-CloseFiles:
-	fmt.Fprint(genFile,
-`}
+  CloseFiles:
+	if !*opt_t {
+		fmt.Fprint(genFile,		// balance { {
+` }
 }
-`)
-	genFile.Close() // close generated file
-	/********************************************************************
-	 *	Execute the generated GO file and read its output
-	 *******************************************************************/
-	genOut, err := exec.Command("go", "run", genName).CombinedOutput()
-	if err != nil {
-		fmt.Print(string(genOut)) // error message from generated file
-		log.Print(err)
-		ret++
-	} else {
-		outLines := strings.SplitAfter(string(genOut), "\n")
-		for _, outLine := range outLines {
-			if len(outLine) > 0 {
-				outLine = reCommaSemi.ReplaceAllString(outLine, ";")	// remove comma from ,; in generated code
-				fmt.Print(outLine) // final output to stdout or -o output
+`		)
+
+		if expFlag {
+			fmt.Fprint(genFile,
+`
+func pow(op1, op2 int) int {
+	if op2 > 63 {
+		panic("pow: op2 > 63")
+	}
+	ret := 1
+	for i := 0; i < op2; i++ {
+		ret *= op1
+	}
+	return ret
+}
+`			)
+		}
+
+		if ternFlag {
+			fmt.Fprint(genFile,
+`
+func tern(cond bool, ifVal, elseVal interface{}) interface{} {
+	if cond {
+		return ifVal
+	}
+	return elseVal
+}
+`			)
+		}
+
+		genFile.Close() // close generated file
+		if ret == 0 && !*opt_t {
+			/********************************************************************
+			 *  Execute the generated GO file and read its output
+			 *******************************************************************/
+			genOut, err := exec.Command("go", "run", genName).CombinedOutput()
+			if err != nil {
+				fmt.Print(string(genOut)) // error message from generated file
+				log.Print(err)
+				ret++
+			} else {
+				outLines := strings.SplitAfter(string(genOut), "\n")
+				for _, outLine := range outLines {
+					if len(outLine) > 0 {
+						if !opt_m_M_Y {
+							outLine = reCommaSemi.ReplaceAllString(outLine, ";")	// remove comma from ,; in generated iCa code
+						}
+						fmt.Print(outLine) // final output to stdout or -o output
+					}
+				}
+			}
+		}
+		if *opt_l != "" && *opt_l != genName {
+			err = os.Remove(genName)	// remove generated file unless log file
+			if err != nil {
+				log.Print(err); os.Exit(e)
+			}
+		}
+		if *opt_l != "" {
+			err := os.Chmod(*opt_l, 0444)
+			if err != nil {
+				log.Print(err); os.Exit(e)
 			}
 		}
 	}
-	if *opt_l == "" && ret == 0 {
-		err = os.Remove(genName) // remove generated file unless log file or error
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else if err := os.Chmod(genName, 0444); err != nil {
-		log.Fatal(err)
-	}
 	if *opt_o != "" {
 		if err := os.Chmod(*opt_o, 0444); err != nil {
-			log.Fatal(err)
-		}
-	}
-	if *opt_e != "" {
-		if err := os.Chmod(*opt_e, 0444); err != nil {
-			log.Fatal(err)
+			log.Print(err); os.Exit(e)
 		}
 	}
 	if w > 0 {
-		fmt.Fprintf(os.Stderr, "*** %d Warnings reported\n", w)
+		fmt.Fprintf(os.Stderr, "//*** %d Warnings reported\n", w)
 	}
 	if ret > 0 {
-		fmt.Fprintf(os.Stderr, "*** %d Errors reported\n", ret)
+		fmt.Fprintf(os.Stderr, "//*** %d Errors reported\n", ret)
 		ret = 2
+	}
+	if *opt_e != "" {
+		if err := os.Chmod(*opt_e, 0444); err != nil {
+			log.Print(err); os.Exit(e)
+		}
 	}
 	os.Exit(ret)
 } // main
 
 /***********************************************************************
  *
- *		Scan %define or -P macro and save it in map defs[X] where
- *		X(a, b) (a * b) will be converted to   { (#1 * #2), 2 }
- *		Y(len)	(len * 8) will be converted to { (#1 * 8) , 1 }
- *		Z		32		  will be converted to { 32		  , 0 }
- *		DEF				  will be converted to { 1		  , 0 }
+ *      Scan %define or -P macro and save it in map defs[macro]
  *
- *		argument count is				.num
- *		the actual macro translation is .str
+ *      argument count is               .num   -1 for object macro,
+ *                                              0 - n for function macro
+ *      the actual macro translation is .str
  *
- *		Called for -P command line macro definitions and %define
+ *          Object macros
+ *      SIZE    512       will be converted to { -1 , 512       }
+ *      DEF               will be converted to { -1 , 1         }
  *
- *		If no macros at all are defined defs == nil.
+ *          Function macros
+ *      X()     32        will be converted to {  0 , 32        }
+ *      Y(len)  (len * 8) will be converted to {  1 , (#1 * 8)  }
+ *      Z(a, b) (a * b)   will be converted to {  2 , (#1 * #2) }
+ *
+ *      Called for -P or -D command line macro definitions and %define
+ *
+ *      If no macros at all are defined defs == nil.
  *
  ***********************************************************************/
 
@@ -2222,11 +2787,11 @@ func scan_define(direcve, macro string) (string, string) {
 	if *opt_T { fmt.Printf("//* %d:	%s %s\n", lineNo, direcve, macro) }
 	if m := reMacro.FindStringSubmatch(macro); m != nil {
 		//	m/^
-		//	([A-Z_a-z]\w*)					# $1 $identifier (not optional)
+		//	([A-Z_a-z]\w*)					# $1 identifier (not optional)
 		//	(								# $2 arguments in parentheses
 		//	  \(							#	 no space allowed between identifier and opening parentheses
 		//		\s*							#	 space before arguments is optional
-		//		(							# $3 $arguments
+		//		(							# $3 arguments
 		//		  ([A-Z_a-z]\w*)			# $4 1st argument
 		//		  (							# $5
 		//			\s*,\s*([A-Z_a-z]\w*)	# $6 2nd or further comma separated arguments
@@ -2237,42 +2802,46 @@ func scan_define(direcve, macro string) (string, string) {
 		//	)?								#	 arguments in parentheses are optional
 		//	(								# $7
 		//	  \s+							#	 space between identifier and translate mandatory
-		//	  (.+)							# $8 $translate
+		//	  (.+)							# $8 translate
 		//	)?								#	 whole of translate is optional (default is 1)
 		//	$/x
 		identifier := m[1]
-		arguments  := m[3]					// has no leading and trailing spaces
+		parens     := m[2]					// optional arguments in parentheses  - "" is object macro
+		arguments  := m[3]					// has no leading and trailing spaces - "" is 0 parameter function macro
 		translate  := m[8]
 		if translate == "" {
 			translate = "1"					// default 1 for translate
 		}
 		val := ""
-		if *opt_T { fmt.Printf("//* %d: identifier = %q arguments = %q translate = %q\n", lineNo, identifier, arguments, translate) }
-// fmt.Printf("//* %d: identifier = %q arguments = %q translate = `%s`\n", lineNo, identifier, arguments, translate)
+		if *opt_T { fmt.Printf("//* %d: identifier = %q parens = %q arguments = %q translate = %q\n", lineNo, identifier, parens, arguments, translate) }
 		translate = reHashHash.ReplaceAllLiteralString(translate, " #\\# ")	// ## must be embedded in spaces which will disappear
-// fmt.Printf("//* %d: identifier = %q arguments = %q translate = `%s`\n", lineNo, identifier, arguments, translate)
 		translate = reHash.ReplaceAllString(translate, "#\\$1")				// protect previous #'s in translate except parameters
-// fmt.Printf("//* %d: identifier = %q arguments = %q translate = `%s`\n", lineNo, identifier, arguments, translate)
 		/********************************************************************
 		 *  Collect individual parameters from argument list of a function macro
 		 *******************************************************************/
 		parameters := make(map[string]*numNum)
 		pCnt := 0										// required outside for loop
-		if arguments != "" {							// if none, arguments is guaranteed to be ""
+		if parens != "" && arguments != "" {			// if none, arguments is guaranteed to be ""
 			for _, parameter := range reComma.Split(arguments, -1) {
 				pCnt++ // no need to test parameters for being valid C words - extraction above ensures this
 				parameters[parameter] = &numNum{ nm1: pCnt, nm2: 0 }	// start with positional index 1
 			}
-		}
+		} else if parens == "" {
+			pCnt = -1										// object macro
+		}													// else pCnt = 0 - function macro with 0 arguments
 		/********************************************************************
 		 *  Replace parameters in the translation with #1 #2 etc
 		 *  Handle C and C++ comments and "xyz" strings in macro translation
 		 *  as well as 'x' character constants, taking care if \ escapes
 		 *******************************************************************/
-		stat2   := 0									// outside of string, character constant or comment
-		offset2 := 0
+		state   := 'A'									// outside of string, character constant or comment
+		offset := 0
 		cPos    := 0
 		tr      := translate							// do not modify translate while scanning it
+		lo      := 0
+		posNext := 0
+		//	reTranslate: ([A-Z_a-z]\w*|\/[*\/]|\*\/|\\?["'])
+	  Rescan:
 		for _, posPair := range reTranslate.FindAllStringIndex(translate, -1) {
 			//	m/
 			//	(							# $1
@@ -2282,732 +2851,816 @@ func scan_define(direcve, macro string) (string, string) {
 			//		\\?["']					#	 string or character constant delimiters
 			//	)
 			//	/xg
-			pos2  := posPair[0]
-			atom2 := translate[ pos2 : posPair[1] ]
-// fmt.Printf("posPair = %v pos2 = %d atom2 = `%s`\n", posPair, pos2, atom2)
-			if stat2 >= 0 {
-				if reWord.MatchString(atom2) {	// TODO should be `^[A-Z_a-z]`	// avoid parameter replacement in string and character constants
-					if p, ok := parameters[atom2]; ok {	// map parameters is empty for object like macro
-						al := len(atom2)
+			pos  := posPair[0] + lo
+			pose := posPair[1] + lo
+			atom := translate[ pos : pose ]
+			if state == 'A' {
+				if reWord.MatchString(atom) {	// TODO should be `^[A-Z_a-z]`  // avoid parameter replacement in string and character constants
+					if p, ok := parameters[atom]; ok {	// map parameters is empty for object like macro
+						al := len(atom)
 						r  := "#"+strconv.Itoa(p.nm1)	// change parameter to '#1' etc
-						tr = substr(tr, pos2 + offset2, al, r)
-						offset2 -= al - len(r)
+						tr = substr(tr, pos + offset, al, r)
+						offset -= al - len(r)
 						p.nm2++							// record that this parameter has occured in the translation
-					}									// ignore missing parameters in translate (info cpp) Warning later
-				} else if atom2 == "//" {
-					stat2 = -1							// C++ comment
-					tr = tr[:pos2+offset2]				// truncate
+					} else if ald, _, ok, rs := resolve(atom, pos, &posNext, &offset, 0, &translate, &tr); ok {
+						if rs {
+							lo = ald
+							continue Rescan		// re-start scan of same text with token at current position
+						}						// which may not be a word
+						lo = 0
+					}
+					posNext = 0
+				} else if atom == "/*" {
+					state = 'C'							// start of C comment */
+					cPos  = pos
+				} else if atom == "//" {
+					state = 'P'							// C++ comment
+					tr = tr[:pos+offset]				// truncate
 					break
-				} else if atom2 == "/*" {
-					stat2 = -2							// start of C comment */
-					cPos  = pos2
-				} else if atom2 == "\"" {				// '\"' will not compare
-					stat2 = -3							// start of string
-				} else if atom2 == "'" {				// "\'" will not compare
-					stat2 = -4							// start of character constant
+				} else if atom == "\"" {				// '\"' will not compare
+					state = 'S'							// start of string
+				} else if atom == "'" {					// "\'" will not compare
+					state = 'H'							// start of character constant
 				}
-			} else if stat2 == -2 {						// C comment in translate
-				if atom2 == "*/" {
-					al := pos2 - cPos + 2
-					tr = substr(tr, cPos + offset2, al, " ")
-					offset2 -= al - 1					// replace C comment by one space
-					stat2 = 0							// end of C comment
+			} else if state == 'C' {					// C comment in translate
+				if reCommEnd.MatchString(atom) {		// == "*/" or "**/ etc
+					al := pose - cPos
+					tr = substr(tr, cPos + offset, al, " ")
+					offset -= al - 1					// replace C comment by one space
+					state = 'A'							// end of C comment
 				}
-			} else if stat2 == -3 {						// in string constant
-				if atom2 == "\"" {						// leading backslash will not compare
-					stat2 = 0							// end of string constant
+			} else if state == 'S' {					// in string constant
+				if atom == "\"" {						// leading backslash will not compare
+					state = 'A'							// end of string constant
 				}
-			} else if stat2 == -4 {						// in character constant
-				if atom2 == "'" {						// leading backslash will not compare
-					stat2 = 0							// end of character constant
+			} else if state == 'H' {					// in character constant
+				if atom == "'" {						// leading backslash will not compare
+					state = 'A'							// end of character constant
 				}
 			}
 		}
 		translate = tr
-// fmt.Printf("//* %d: identifier = %q arguments = %q translate = `%s`\n", lineNo, identifier, arguments, translate)
 		translate = reSpaces.ReplaceAllLiteralString(translate, " ")	// compress spaces to 1 (no leading spaces in translate)
-// fmt.Printf("//* %d: identifier = %q arguments = %q translate = `%s`\n", lineNo, identifier, arguments, translate)
 		translate = reTrSpaces.ReplaceAllLiteralString(translate, "")	// remove possible space from trailing C comment
- fmt.Printf("//* %d: identifier = %q arguments = %q translate = `%s` pCnt = %d\n", lineNo, identifier, arguments, translate, pCnt)
-		if arguments != "" {							// if none, arguments is guaranteed to be ""
+		if *opt_X { fmt.Printf("//* %d: identifier = %q arguments = %q translate = `%s` pCnt = %d\n", lineNo, identifier, arguments, translate, pCnt) }
+		if parens != "" {								// if none, arguments is guaranteed to be ""
 			val = translate+":"+strconv.Itoa(pCnt)
 		} else {
 			val = translate
 		}
-// fmt.Printf("identifier = %q val = %q\n", identifier, val)
 		if ref, ok := clDefs[identifier]; ok {			 // exists
-// fmt.Printf("ref = %v\n", ref)
 			val1 := ref.str
-			if ref.num > 0 {
+			if ref.num >= 0 {
 				val1 += ":"+strconv.Itoa(ref.num)
 			}
-			if *opt_l != "" { fmt.Fprintf(genFile, "//# command line definition -P %s=%s has precedence over %define %s %s\n", identifier, val1, identifier, val) }
-			if *opt_a { fmt.Printf("//***** -P %s=%s has precedence over %define %s %s\n", identifier, val1, identifier, val) }
+			if *opt_l != "" { fmt.Fprintf(genFile, "//# command line definition -P %s=%s has precedence over \"%%define %s %s\"\n", identifier, val1, identifier, val) }
+			if *opt_a { fmt.Printf("//***** -P %s=%s has precedence over \"%%define %s %s\"\n", identifier, val1, identifier, val) }
 		} else if ref, ok := defs[identifier]; ok {		 // exists
 			val1 := ref.str
-			if ref.num > 0 {
+			if ref.num >= 0 {
 				val1 += ":"+strconv.Itoa(ref.num)
 			}
 			if val != val1 {
-				lnErr = append(lnErr, fmt.Sprintf("//* Warning: re-definition '%s=%s' to '%s' - ignored\n", identifier, val1, val))
-				w++										// warning found
+				pushError(&w, fmt.Sprintf("//* Warning: re-definition '%s=%s' to '%s' - ignored\n", identifier, val1, val))
 			}
 		} else {
 			for k, p := range parameters {
 				if p.nm2 == 0 {
-					lnErr = append(lnErr, fmt.Sprintf("//* Warning: parameter %q (%s) missing in %q\n", k, "#"+strconv.Itoa(p.nm1), translate))
-					w++					// warning found
+					pushError(&w, fmt.Sprintf("//* Warning: parameter %q (%s) missing in %q\n", k, "#"+strconv.Itoa(p.nm1), translate))
 				}
 			}
-/***********************************************************************
-			if !opt_m_M_Y && translate !~ m/^\s*\d+\s*$/ && translate !~ m/[^ \t()\d*\/%+-]/ {
-				my tran = eval translate		// not -m and not -M and not a constant but a constant expression
-				if $@ {
-					lnErr = append(lnErr, "//* Error: start of Perl eval File argIn, line $.\n")
-					lnErr = append(lnErr, sprintf("// %2d:		%s", 1, _))		// append eval Perl code to iC file
-					lnErr = append(lnErr, "//* Error: end of Perl eval\n")
-					lnErr = append(lnErr, "/** Error messages from Perl eval:	 **\\\n")		// start of C comment
-					lnErr = append(lnErr, split /^/, $@)										// eval error messages
-					lnErr = append(lnErr, "\\** End Error messages from Perl eval **%%%/\n")	// end of C comment
-					ret++						// eval error return
+			if !opt_m_M_Y && !reConstExpr.MatchString(translate) {	// `(^\s*\d+\s*$|[^\s()\d*\/%+-])`
+				/********************************************************************
+				 *  If 'translate' is a constant arithmetic expression in iCa processing
+				 *  use 'govaluate' to compile and evaluate the arithmetic expression after
+				 *  modifying any division sub-expressions by adding '|0' to them.
+				 *  The OR operation causes govaluate to cast the result of any division
+				 *  from float64 to int64. This trunctes any fractional part of a division.
+				 *  ORing with '0' does not change the result, which is cast back to float64.
+				 *  CAVEAT: the regular expression 'reDivInt' only recognises plain numbers
+				 *  and singly nested expressions in parentheses as operands of a division.
+				 *  More deeply nested parenthesised expressions as operands will cause errors.
+				 *******************************************************************/
+				tr := reDivInt.ReplaceAllString(translate, "($1|0)")
+				if expression, errExp := govaluate.NewEvaluableExpression(tr); errExp == nil {
+					if result, errEval := expression.Evaluate(nil); errEval == nil {
+						if *opt_X { fmt.Printf("go-tran> %v\n", result) }
+						if result, ok := result.(float64); ok {		// should be float64
+							translate = strconv.Itoa(int(result))
+						}
+					}	// ignore evaluation or ! float64 result error - unlikely - just keep translate
+					lineText += " ==> "+translate					// extra info for error messages TODO ??
 				} else {
-					translate = tran
-					chomp _
-					_ = "_ ==> translate\n"
+					pushError(&ret, fmt.Sprintf("//* Error: compile error in constant expression %q in #define etc\n", translate))
 				}
 			}
- ***********************************************************************/
-			// %define X(a,b) (a * b) is   map defs[X] = { 2, "(#1 * #2)" }
+			/***********************************************************************
+			 *  %define X(a,b) (a * b) is   map defs[X] = { 2, "(#1 * #2)" }
+			 ***********************************************************************/
 			defs[identifier] = &strNum{ num: pCnt, str: translate }
-/***********************************************************************
-			if direcve != "-P" {
-				if *opt_l != "" { fmt.Fprintf(genFile, "//# _") }
-				if *opt_a && $. {
-					blankLines--
-					if opt_m_M_Y && blankLines > 0 {		// blankLines is at least 1 because it is a directive
-						blanks()				// print blank lines now
-					}
-					print "//***** _"
-				}
-			}
- ***********************************************************************/
 		}
 		return identifier, val
 	}
-	lnErr = append(lnErr, fmt.Sprintf("//* Warning: scan_define: %s '%s' has bad characters - ignored\n", direcve, macro))
-	w++									// warning found
+	pushError(&w, fmt.Sprintf("//* Warning: scan_define: %s '%s' has bad characters - ignored\n", direcve, macro))
 	return "", ""
 } // scan_define
 
 /***********************************************************************
  *
- *	Resolve %%define, %define and #define macros in lines of code
- *	which may occur in the remaining lines after some have been excluded
+ *  Resolve %%define, %define and #define macros
+ *
+ *  Two types of macros are resolved:
+ *
+ *      Object like macros which look like a C style word.
+ *
+ *      Function like macros where the word is followd by comma separated
+ *      arguments in parentheses.
  *
  ***********************************************************************/
 
-func resolve_line() {
-/***********************************************************************
-	if %defs {
-		lastAtom1 = lastTranslate = ""
-		off = 0
-		re = 0
-		%used = ()
-		if *opt_T { fmt.Println("//0 $.: re = re _ '_'") }
-		_ = resolve(_)					// resolve macros in line recursively
-		if *opt_T { fmt.Println("//5 $.: re = re _ '_'") }
-		if *opt_l != "" { fmt.Fprintf(genFile, "//# SUB 'lastAtom1' 'lastTranslate' in $.: _") } && off && lastAtom1
-	}
- ***********************************************************************/
-} // resolve_line
-
-/***********************************************************************
- *
- *	Resolve %%define, %define and #define macros
- *	Call resolve(translate) recursively
- *
- *	Two types of macros are resolved:
- *
- *		Object like macros which look like a C style word.
- *
- *		Function like macros where the word is followd by comma separated
- *		arguments in parentheses.
- *
- *	Do not resolve macros, which have already been resolved once in a
- *	previous recursion to avoid infinite recursion. (see info cpp)
- *
- ***********************************************************************/
-
-func resolve() {
-/***********************************************************************
-	my line = shift @_
-	my (atom1, atom, pos, translate, openP, @atoms1, prevAtom1, Aref, @realParameters, realPstring)
-	my (stat, newS, oldS, iPos, rPos, tail, length, spLen, lPos, prevTranslate, defineFlag)
-	re++
-	if *opt_T { fmt.Println("//1 $.:	re = re line = 'line'") }
-	defineFlag = 0
-	prevAtom1 = ""
-	undef pos
-	undef translate
-	while ($line =~						# look for 'word' 'word (' '%%word' '%word' or '#word' in $line
-		m/(((%%|[%#])\s*)?[A-Z_a-z]\w*)((\s*)(\())?/g
-		//	m/
-		//	(								# $1
-		//		(							# $2 optional %%, % or #
-		//			(%%|[%#])				# $3
-		//		\s*)?						#	 followed by optional spaces
-		//		[A-Z_a-z]\w*				#	 followed by macro (not optional C style word)
-		//	)
-		//	(								# $4
-		//		(\s*)						# $5 spaces preceding '(' (maybe null string)
-		//		(\()						# $6 '(' marking start of function like macro
-		//	)?								#	 missing for object like macro
-		//	/xg
-	) {
-		iPos   = length($`)										// position of "word" found
-		atom1  = $1												// "word" found
-		length = length atom1
-		spLen  = defined $5 ? length $5 : 0						// spaces after "word"
-		openP  = $6												// '('
-		tail   = $'												// string after "word" or "word ("
-		lPos   = pos(line)
-		if *opt_T { fmt.Println("//2 $.:		re = re atom1 = 'atom1' iPos = iPos lPos = lPos") }
-		if !pos && prevAtom1 =~ m/^(%%|[%#])define$/ {
-			defineFlag = 1		// suppress translation of redefined macro name (first word after %%, %define or #define)
-		} else if defined (Aref = defs[ atom1 ] &&				// expand object like macro defined without parameters
-			(Aref->[1] == 0 || openP) &&						// or function like macro defined and called with (
-			defined (translate = Aref->[0])) {			// do not expand function like macro called as object
-			pos = iPos
-			if Aref->[1] > 0 && openP {					// function like macro ( with defined parameters ?
-				rPos = pos + length + spLen + 1			//	yes expand parameters - ignore (...) if defined as object
-				@atoms1 = ()									// analyse string after "word (" to find closing ")"
-				while ($tail =~
-					m/(\(|,|\)|\/[*\/]|\*\/|\\?["'])/g
+func resolve(word string, pos int, posNextP, offsetP *int, alo int, textP, textResP *string) (_, _ int, ex bool, _ bool) {
+	var ref *strNum
+	var macroArgs    = make([]string, 5)
+	var macroExps    = make([]string, 5)
+	if ref, ex = defs[word]; ex {		// exists
+		ald  := 0
+		if *opt_Z { fmt.Printf("Resolve start: ald = %d alo = %d ex = %v\n", ald, alo, ex) }
+		al   := len(word)
+		num  := ref.num
+		tran := ref.str					// "15"
+		posOff := pos + *offsetP
+		if num >= 0 {
+			if *opt_Z { fmt.Printf("### resolve function macro %q\n    word = %q pos = %d *offsetP = %d num = %d tran = %q\n", *textP, word, pos, *offsetP, num, tran) }
+			/***********************************************************************
+			 *  Resolve one function macro call.
+			 *  1) extract comma separated function macro arguments in parentheses.
+			 *  2) each argument may contain embedded expressions in parentheses
+			 *     - parentheses in each argument must balance.
+			 *  3) a comma inside parentheses does not end the argument.
+			 *  4) there is no requirement for square brackets and braces to balance
+			 *     in an argument.
+			 *  5) all arguments are completely macro-expanded before they are
+			 *     subbstituted into the macro body except stringified resoltions,
+			 *     which substitute the original argument in double quotes.
+			 *     This means the original argument must be saved before the argument
+			 *     is macro-expanded.
+			 *  6) after substitution the complete text is scanned again, including
+			 *     the arguments. No substitution is carried out in quoted strings
+			 *     included strings generated by stringification.
+			 ***********************************************************************/
+			var lPos, lPose, parenCnt int
+			iNext     := 0
+			atom      := ""
+			state     := 'A'						// outside of string, character constant or comment
+			prevState := state
+			argStart  := 0
+			wordStart := 0
+			expStart  := 0
+			aCnt      := 0
+			lPosNext  := 0
+			lOffset   := 0
+			lText     := (*textP)[pos:]				// local text slice starting with word to be resolved
+			lTextRes  := (*textResP)[posOff:]		// resolved text slice starting with word to be resolved
+			arg       := ""
+		  Rescan:
+			for {
+				lPose     = 0
+				//	reResolve: (\(|[A-Z_a-z]\w*|,|\)|\\?["'])
+				for i, lPosPair := range reResolve.FindAllStringIndex(lText, -1) {
 					//	m/
-					//	(					# $1
-					//		\(		|		#	 opening parentheses
-					//		,		|		#	 comma
-					//		\)		|		#	 closing parentheses
-					//		\/[*\/] |		#	 start of C or C++ comment
-					//		\*\/	|		#	 end of C comment
-					//		\\?["']			#	 string or character constant delimiters
+					//	(						# $1
+					//		\(				|	#    opening parentheses
+					//		[A-Z_a-z]\w*	|	#	 word in argument
+					//		,				|	#    comma
+					//		\)				|	#    closing parentheses
+					//		\\?["']				#    string or character constant delimiters
 					//	)
 					//	/xg
-				) {
-					atoms1 = append(atoms1, [ rPos + length($`), $1 ])	// [ pos, atom ]
-				}
-				stat = newS = oldS = 1					// start of function like macro( found
-				@realParameters = ()							// prepare to receive real parameters
-				for (my aix = 0 ; aix < @atoms1; aix++) {
-					my ref = atoms1[aix]
-					( pos, atom ) = @ref
-					if *opt_T && !*opt_l != "" { fmt.Println("//* $.: stat=stat		oldS=oldS		aix=aix pos=pos atom=atom") }
-					if stat >= 0 {
-						if atom == "//" {
-							stat = -1							// C++ comment in macro replacement
-							last								// should have finished earlier
-						} else if atom == "/*" {
-							oldS = stat
-							newS = -2							// start of C comment
-						} else if atom == "\"" {			// '\"' will not compare
-							oldS = stat
-							newS = -3							// start of string
-						} else if atom == "'" {			// "\'" will not compare
-							oldS = stat
-							newS = -4							// start of character constant
-						} else if stat == 1 {
-							if atom == "(" {
-								newS = 2						// nested parentheses
-							} else if atom == "," {
-								realPstring = substr line, rPos, pos - rPos
-								realParameters = append(realParameters, realPstring)	// real parameters before ','
-								rPos = pos + 1
-							} else if atom == ")" {
-								my n
-								realPstring = substr line, rPos, pos - rPos
-								realParameters = append(realParameters, realPstring)	// last real parameter before ')'
-								^***********************************************************************
-								 *	 Distribute real parameters to translate
-								 ***********************************************************************^
-								if (n = Aref->[1]) != len(realParameters) {
-									lnErr = append(lnErr, "//* Error: Macro 'atom1' should have Aref->[1] real parameters. File argIn, line $.\n")
-									ret++						// error return
-									return line
-								} else if n {
-									n = 1
-									foreach realPstring (@realParameters) {
-										realPstring =~ s/^\s+// // remove leading spaces
-										realPstring =~ s/\s+$// // remove trailing spaces
-										realPstring =~ s/ +/ /g // actual cpp 4.5.1 collapses only spaces to 1 space
-												// info cpp says all whitespace and comments should collapse to 1 space
-										if translate =~ m/#\\#n/ {		// is this argument stringified ?
-											my (string, stat2, pos2, atom2, offset2)	// yes
-											var atoms2	= make([]string, 0)
-											string = realPstring		// analyse replacement string for embedded strings
-											stat2 = offset2 = 0 // outside of string, character constant or comment
-											while ($string =~
-												m/(\/[*\/]|\*\/|\\?["']|\\)/g
-												//	m/
-												//	(				# $1
-												//		\/[*\/] |	#	 start of C or C++ comment
-												//		\*\/	|	#	 end of C comment
-												//		\\?["'] |	#	 string or character constant delimiters
-												//		\\			#	 backslash
-												//	)
-												//	/xg
-											) {
-												atoms2 = append(atoms2, [ length($`), $1 ])		// [ pos2, atom2 ]
-											}
-											for (my aix2 = 0 ; aix2 < @atoms2; aix2++) {
-												my ref = atoms2[aix2]
-												( pos2, atom2 ) = @ref
-												if stat2 >= 0 {
-													if atom2 == "//" {
-														stat2 = -1				// C++ comment
-														last					// should have finished earlier
-													} else if atom2 == "/*" {
-														stat2 = -2				// start of C comment
-													} else if atom2 == "\"" {	// '\"' will not compare
-														stat2 = -3				// start of string
-														substr(string, pos2 + offset2, 0) = '\\'
-														offset2 += 1			// change bare '"' to '\"'
-													} else if atom2 == "'" {	// "\'" will not compare
-														stat2 = -4				// start of character constant
-													}
-												} else if stat2 == -2 { // C comment in stringified parameter
-													if atom2 == "*%%%/" {
-														stat2 = 0				// end of C comment
-													}
-												} else if stat2 <= -3 { // in string or character constant
-													if (atom2 == "\\" ||		// bare '\' in string or character constant
-														atom2 == "\"" || // bare '"' in string or character constant
-														atom2 == "\\'") {		// "\'" in string or character constant
-														substr(string, pos2 + offset2, 0) = '\\'
-														offset2 += 1			// change leading '\' to '\\'
-													} else if atom2 == '\\"' {
-														substr(string, pos2 + offset2, 0) = '\\\\'
-														offset2 += 2			// change '\"' to '\\\\"'
-													}
-													if stat2 == -3 {			// in string constant
-														if atom2 == "\"" {		// leading backslash will not compare
-															stat2 = 0			// end of string constant
-														}
-													} else if atom2 == "'" {	// leading backslash will not compare
-														stat2 = 0				// end of character constant
-													}
-												}
-											}
-											translate =~ s/#\\#n/\"string\"/g	// stringify all #parameters into translate
-										}
-										translate =~ s/#n/realPstring/g unless defineFlag		// replace normal parameters in translate
-										n++
-									}
-									translate =~ s/#\\/#/g						// re-constitute protected #'s
-									translate =~ s/ ## ?//g						// concatenete parameters separated by ' ## '
-								}
-								^***********************************************************************
-								 *	 Resolve translation with ( parameters )
-								 ***********************************************************************^
-								length = pos + 1 - iPos
-								stat = 0
-								last							// for (aix...) macro ( ) complete
-							}
-						} else if stat >= 2 {
-							if atom == "(" {
-								newS = stat + 1
-							} else if atom == ")" {
-								newS = stat - 1
-							}
-						}
-					} else if stat == -2 {						// C comment in macro replacement
-						if atom == "*%%%/" {
-							newS = oldS					// end of C comment
-						}
-					} else if stat == -3 {						// string in macro replacement
-						if atom == "\"" {						// leading backslash will not compare
-							newS = oldS					// end of string
-						}
-					} else if stat == -4 {						// character constant in macro replacement
-						if atom == "'" {						// leading backslash will not compare
-							newS = oldS					// end of character constant
+					lPose  = lPosPair[1]
+					if i < iNext {
+						continue					// skip tokens in text already scanned
+					}
+					lPos  = lPosPair[0]
+					lPosOff := lPos + lOffset
+					atom = lText[lPos : lPose]
+					macroCall := ""
+					if *opt_Z { fmt.Printf("lPosPair = %v lPos = %d atom = `%s`\n", lPosPair, lPos, atom) }
+					if i == 0 {
+						if atom == word {			// is first atom function macro name?
+							continue				// yes - look for arguments in parentheses
+						} else {
+							panic("resolve: call")	// no - should not happen if resolve called correctly
 						}
 					}
-					stat = newS
-				} // end of for
-				if stat != 0 {
-					lnErr = append(lnErr, "//* Error: Macro was terminated prematurely. File argIn, line $.\n")
-					ret++						// error return
-					return line
+					if i == 1 && atom != "(" {
+						break Rescan				// function macro called as object
+					}
+					if state == 'A' {
+						if atom == "(" {
+							parenCnt++
+							if parenCnt == 1 {
+								argStart  = lPose
+								wordStart = lPose
+								expStart  = lPose + lOffset
+								aCnt = 0
+							}
+						} else if atom == "," || atom == ")" {
+							if atom == ")" {
+								parenCnt--
+								if parenCnt == 0 {
+									al = lPose			// length of function macro call
+									macroCall = lText[0:lPose]		// for error message
+									if *opt_Z { fmt.Printf("lPose = %d al = %d macroCall = %q\n  lText    = %q\n *textP    = %q\n  lTextRes = %q\n *textResP = %q\n", lPose, al, macroCall, lText, *textP, lTextRes, *textResP) }
+									state = 'R'		// start argument replacement in macro body
+								}
+							}
+							if parenCnt == 1 && atom == "," || parenCnt == 0 && atom == ")" {
+								aCnt++				// first argument is #1
+								if aCnt >= cap(macroArgs) {
+									macroArgs = append(macroArgs, make([]string, aCnt)...)	// double capacity
+									macroExps = append(macroExps, make([]string, aCnt)...)
+								}
+								arg += lText[wordStart:lPos]	// trailing text after last word in this argument
+								if *opt_Z { fmt.Printf("argument end:   atom = %q arg = %q lText = %q wordStart = %d lPos = %d lPose = %d\n", atom, arg, lText, wordStart, lPos, lPose) }
+								arg = reLdTrSps.ReplaceAllLiteralString(arg, "")	// remove leading and trailing spaces
+								arg = reSpaces.ReplaceAllLiteralString(arg, " ")	// compress spaces to 1 space
+								macroArgs[aCnt] = arg	// store unexpanded argument for stringizing and concatenating
+								if *opt_X { fmt.Printf("+++%d+ arg  = %q\n",aCnt , arg) }
+								exp := lTextRes[expStart:lPosOff]
+								exp = reLdTrSps.ReplaceAllLiteralString(exp, "")	// remove leading and trailing spaces
+								exp = reSpaces.ReplaceAllLiteralString(exp, " ")	// compress spaces to 1 space
+								macroExps[aCnt] = exp	// store expanded argument for normal replacement
+								if *opt_X { fmt.Printf("+++%d+ exp  = %q\n",aCnt , macroExps[aCnt]) }
+								if *opt_Z { fmt.Printf("[%d] argStart = %d lPos    = %d lText    = %q arg = %q\n*   expStart = %d lPosOff = %d lTextRes = %q exp = %q\n", aCnt, argStart, lPos, lText, arg, expStart, lPosOff, lTextRes, exp) }
+								arg = ""							// ready for next argument
+								argStart  = lPose		// start of next argument if ',' else start of next text
+								wordStart = lPose		// start of next word in original argument with preceding text
+								expStart  = lPose + lOffset
+							}
+						} else if reWord.MatchString(atom) {
+							if lPos >= wordStart {
+								arg += lText[wordStart:lPose]	// next word from an original argument
+								wordStart = lPose
+							}
+							if *opt_Z { fmt.Printf("before resolve: atom = %q arg = %q lText = %q lPosNext = %d wordStart = %d lPos = %d lPose = %d lOffset = %d\n", atom, arg, lText, lPosNext, wordStart, lPos, lPose, lOffset) }
+							/********************************************************************
+							 *  atom   word to be resolved
+							 *  lPos starting position of atom in text
+							 *
+							 *  ok     true if atom is in map defs and was resolved
+							 *         else false - do nothing with this word
+							 *  rs     true if Rescan required after resolve
+							 *
+							 *  words in strings and character constants are not re-scanned
+							 *  comments have been removed previously
+							 *******************************************************************/
+							var ok, rs bool
+							if ald, alo, ok, rs = resolve(atom, lPos, &lPosNext, &lOffset, alo, &lText, &lTextRes); ok {
+								if *opt_Z { fmt.Printf("after resolve: atom = %q arg = %q lText = %q lPosNext = %d wordStart = %d lPos = %d lPose = %d lOffset = %d\n", atom, arg, lText, lPosNext, wordStart, lPos, lPose, lOffset) }
+								if lPosNext > wordStart {
+									wordStart = lPosNext	// start of further words in this argument if changed
+								} else if lPos < wordStart {
+									wordStart += ald		// modify wordStart to account for change in previous replacement
+								}
+								if *opt_Z { fmt.Printf("after resolve: atom = %q arg = %q lText = %q lPosNext = %d wordStart = %d lPos = %d lPose = %d lOffset = %d\n", atom, arg, lText, lPosNext, wordStart, lPos, lPose, lOffset) }
+								if rs {
+									iNext = i		// skip over tokens already scanned
+									if *opt_X { fmt.Printf("*** resolve %d skip after '... %q ==> %q ...' with iNext = %d lPosOff = %d lPosNext = %d\n", lineNo, atom, lTextRes[lPosOff:lPosNext], iNext, lPosOff, lPosNext) }
+									continue Rescan	// re-start scan of same text with token at current position
+								}					// which may not be a word
+							}
+						} else if atom == "\"" {	// leading backslash will not compare
+							prevState = state
+							state = 'S'				// start of string found
+						} else if atom == "'" {		// leading backslash will not compare
+							prevState = state
+							state = 'H'				// start of character constant found
+						}
+					} else if state == 'R' {		// resolve macro
+						if num != aCnt {
+							pushError(&ret, fmt.Sprintf("//* Error: function macro call %q has %d arguments - should be %d\n", macroCall, aCnt, num))
+							return ald, alo, false, false		// no change to macro call TODO check
+						}
+						if *opt_Z { fmt.Printf("resolve: tran before replacement = %q\n", tran) }
+						if *opt_X { fmt.Printf(">>>>> tran = %q\n", tran) }
+						for i := 1; i <= aCnt; i++ {
+							is := strconv.Itoa(i)
+							arg := macroArgs[i]					// unexpanded argument
+							// replace stringified argument in translate
+							reStringify := regexp.MustCompile(`#\\#`+is)
+							if reStringify.MatchString(tran) {	// is this argument stringified ?
+								arg = reQuoteSlash.ReplaceAllString(arg, "\\$1")	// yes - precede " and \ by extra \
+								if *opt_X { fmt.Printf("===%d= arg  = %q\n",i , arg) }
+								tran = reStringify.ReplaceAllLiteralString(tran, "\""+arg+"\"")
+								if *opt_X { fmt.Printf("===%d= tran = %q\n",i , tran) }
+							}
+							reReplace := regexp.MustCompile("#"+is)
+							reConcatenate := regexp.MustCompile(`(#\\#\\\s+#`+is+`|#`+is+`\s+#\\#\\)`)
+							if reConcatenate.MatchString(tran) {	// is this argument part of a concatanation ?
+								tran = reReplace.ReplaceAllLiteralString(tran, arg)	// yes - use unexpanded argument
+							} else {
+								// replace normal argument in translate
+								tran = reReplace.ReplaceAllLiteralString(tran, macroExps[i])
+							}
+							if *opt_X { fmt.Printf("<<<<< tran = %q\n", tran) }
+							if *opt_Z { fmt.Printf("resolve: tran after replacement  = %q macroExps[%d] = %q\n", tran, i, macroExps[i]) }
+						}
+						tran = reHashSlash.ReplaceAllLiteralString(tran, "#")	// re-constitute protected #'s including ##
+						tran = reHashHash.ReplaceAllLiteralString(tran, "")		// concatenete parameters separated by ' ## '
+						break Rescan				// function macro expansion complete
+					} else if state == 'S' {		// string constant
+						if atom == "\"" {			// leading backslash will not compare
+							state = prevState		// end of string constant
+						}
+					} else if state == 'H' {		// character constant
+						if atom == "'" {			// leading backslash will not compare
+							state = prevState		// end of character constant
+						}
+					}
 				}
-			} // else object like macro with no parameters defined - ignored if ... after call
-			^***********************************************************************
-			 *	Resolve all translations
-			 ***********************************************************************^
-			if !used[ translate ] {
-				if *opt_l != "" { fmt.Fprintf(genFile, "//# OLD 'atom1' 'translate' in $.: line") } && off++ == 0
-				if *opt_T { fmt.Println("//3 $.:		re = re translate = 'translate' iPos = iPos lPos = lPos length = length line = 'line'") }
-				used{ prevTranslate = translate } = 1
-				translate = resolve(translate)			// start a new scan of translate to resolve embedded macros
-				delete used[ prevTranslate ]
-				atom1 = substr(line, iPos, length, translate)	// line is now changed
-				lPos += length(translate) - length				// skip word or full translation
-				if *opt_T { fmt.Println("//4 $.:		re = re translate = 'translate' iPos = iPos lPos = lPos length = length line = 'line'") }
 			}
-			lastTranslate = translate					// until no more macros are found
-			lastAtom1 = atom1
-		} // end of if word atom1 is a valid macro
-		prevAtom1 = atom1										// no more embedded macros resolved
-		pos(line) = lPos										// skip word or full translation in word scan
-	} // end if while look for "word" or "word ("
-	re--
-	return line
- ***********************************************************************/
+			al += alo
+		}
+		if posOff >= *posNextP {
+			Used = map[string]string{}	// clear map Used
+		}
+		if t, u := Used[word]; !u || t != tran {
+			if !u {
+				Used[word] = tran
+			}
+			if *opt_Z { fmt.Printf("word = %q posOff = %d *posNextP = %d alo = %d al = %d ex = %v tran = %q\n", word, posOff, *posNextP, alo, al, ex, tran) }
+			if *opt_Z { fmt.Printf("*textResP before substr = %q\n", *textResP) }
+			*textResP = substr(*textResP, posOff, al, tran)
+			if *opt_Z { fmt.Printf("*textResP after substr  = %q\n", *textResP) }
+			*textP = *textResP
+			*offsetP = 0
+			lt      := len(tran)
+			if num >= 0 {
+				alo = 0
+			}
+			ald = lt - al
+			alo -= ald
+			*posNextP = posOff + lt
+			if *opt_X { fmt.Printf("word = %q posOff = %d *posNextP = %d alo = %d al = %d ex = %v tran = %q\n", word, posOff, *posNextP, alo, al, ex, tran) }
+			if *opt_Z { fmt.Printf("Resolve end re-start: ald = %d alo = %d ex = %v tran = %q used = %v\n", 0, alo, ex, tran, Used) }
+			return ald, alo, ex, true		// re-start scan of same text with token at current position
+		}								// which may not be a word
+		if *opt_Z { fmt.Printf("Resolve end: ald = %d alo = %d ex = %v tran = %q used = %v\n", 0, alo, ex, tran, Used) }
+		if *opt_X { fmt.Printf("word = %q posOff = %d tran = %q al = %d ex = %v\n", word, posOff, tran, al, ex) }
+	}
+	return 0, alo, ex, false				// do not rescan
 } // resolve
 
 /***********************************************************************
  *
- *	Eval of a generated block from iCa code to produce expanded iC code
+ *  Push errors and warnings as they occur
  *
  ***********************************************************************/
 
-func eval_block() {
-/***********************************************************************
-	my (Rblock, msg, el) = @_
-	my FOR = ""
-	if *opt_l != "" { fmt.Fprintf(genFile, "\FOR = "";\n//# eval ${msg}LINE $.\n", Rblock) }
-	eval "@Rblock"						// evaluate code block
-	if $@ {
-		lnErr = append(lnErr, "//* Error: start of Perl eval File argIn, line el\n")
-		my line = 0
-		for (@Rblock) {
-			line++
-			lnErr = append(lnErr, sprintf("// %2d:		%s", line, _))	// append eval Perl code to iC file
-		}
-		lnErr = append(lnErr, "//* Error: end of Perl eval (line lines) File argIn, line $.\n")
-		lnErr = append(lnErr, "/** Error messages from Perl eval:	 **\\\n")	// start of C comment
-		lnErr = append(lnErr, split /^/, $@)									// eval error messages
-		lnErr = append(lnErr, "\\** End Error messages from Perl eval **%%%/\n")		// end of C comment
-		ret++							// eval error return
+func pushError(r *int, errorMsg string) {
+	if !*opt_t {
+		lnErr = append(lnErr, errorMsg)		// push error or warning message
+		*r++								// count error or warning
 	}
-	@Rblock = ()						// end of this eval block
-	if FOR != "" {
-		FOR =~ s/,(\s*;)/$1/g			// remove comma from ,; in generated code
-		print FOR						// actual output of this eval block
-	}									// ignore empty output from eval - is algorithmically ok
-	if *opt_l != "" { fmt.Fprintf(genFile, "print \FOR if \FOR;\n") }
- ***********************************************************************/
-} // eval_block
+} // pushError
 
 /***********************************************************************
  *
- *	Output errors and warnings after completing analysis of one line.
+ *  Output errors and warnings after completing analysis of one line.
  *
  ***********************************************************************/
 
-func output_error(listLine string) {
-	lnErr = append([]string{fmt.Sprintf("//* %s:%d: %s\n", argIn, lineNo, listLine)}, lnErr...) // precede error message(s) by one listing line
+func outputError(listLine string) {
+	listLine = fmt.Sprintf("//* %s:%d: %q\n", argIn, lineNo, listLine)	// precede error message(s) by one listing line
+	listFlag  := true
+	wListFlag := true
 	for _, e := range lnErr {
-		fmt.Fprint(os.Stderr, e) // output errors and warnings to terminal
-		if *opt_o != "" || *opt_e != "" {
-			fmt.Print(e)
-		} // and output file
+		if listFlag {
+			fmt.Fprint(os.Stderr, listLine)
+		}
+		fmt.Fprint(os.Stderr, e)		// output errors and warnings to terminal or error file
 		if *opt_l != "" {
-			fmt.Fprint(genFile, e)
-		} // and log file
+			if listFlag {
+				fmt.Fprint(genFile, listLine)
+			}
+			fmt.Fprint(genFile, e)		// and to generated GO file for log
+		}
+		listFlag = false
+		if (*opt_o != "" || *opt_e != "") {
+			if wListFlag {
+				fmt.Print(listLine)
+				wListFlag = false
+			}
+			fmt.Print(e)				// and error messages to output file
+		}
 	}
 	lnErr = []string{}
-} // output_error
+} // outputError
 
 /***********************************************************************
  *
- *	Auxiliary function for parseIf() to convert and replace a word or
- *	a number in *expr
+ *  Auxiliary function for evalIf() to convert and replace a word or
+ *  a number in *exprP
+ *  Ignore if not eval
  *
  ***********************************************************************/
 
-func replaceAtom(atom string, pos int, expr *string, offset *int) {
-	if !reNum.MatchString(atom) {
-		var arString string
-		al := len(atom)
-		if ref, ok := defs[atom]; ok {		// exists
-			arString = ref.str				// "15"
+func replaceAtom(atom string, pos int, posNextP *int, macroP, exprP *string, offsetP *int, i int, iNextP *int, eval bool) (rs bool) {
+	if eval && !reNum.MatchString(atom) {
+		var ok, rs bool
+		if *opt_X { fmt.Printf("beforeReplace: atom = %q pos = %d *exprP = %q *offsetP = %d, rs = %v\n", atom, pos, *exprP, *offsetP, rs) }
+		posOff := pos + *offsetP
+		if _, _, ok, rs = resolve(atom, pos, posNextP, offsetP, 0, macroP, exprP); ok {
+			if rs {
+				*iNextP = i			// skip over tokens already scanned
+				if *opt_Z { fmt.Printf("*** %d skip after '... %q ==> %q ...' with *iNextP = %d posOff = %d *posNextP = %d\n", lineNo, atom, (*exprP)[posOff:*posNextP], *iNextP, posOff, *posNextP) }
+				return true			// re-start scan of same text with token at current position
+			}						// which may not be a word
 		} else {
-			arString = "0"					// "0" is default for undefined macro value
+			al := len(atom)
+			if *opt_X { fmt.Printf("replaceDefault: atom = %q posOff = %d *exprP = %q *offsetP = %d, rs = %v\n", atom, posOff, *exprP, *offsetP, rs) }
+			*exprP = substr(*exprP, posOff, al, "0")	// "0" is default for undefined macro value
+			*posNextP = posOff + 1
 		}
-		bl := len(arString)
-		*expr = substr(*expr, pos + *offset, al, arString)
-		*offset -= al - bl
+		if *opt_X { fmt.Printf("replaceAtom: atom = %q posOff = %d *exprP = %q *offsetP = %d, rs = %v\n", atom, posOff, *exprP, *offsetP, rs) }
 	}										// number does not need to be replaced
+	return false
 } // replaceAtom
 
 /***********************************************************************
  *
- *	Auxiliary function for parseIf() to replace an arithmetic expression
- *	in *expr
+ *  Auxiliary function for evalIf() to replace an arithmetic expression
+ *  in *exprP
  *
  ***********************************************************************/
 
-func replaceExpr(posStart int, posEnd int, arTail string, expr *string, offset *int) {
-	arExpr := (*expr)[posStart:posEnd]
-	al := len(arExpr)
-	// arCond = resolve(arExpr)			// take care of possible function macros
-	arCond := fmt.Sprintf("%s%s", arExpr, arTail)
+func replaceExpr(posStart int, posEnd int, arHead, arTail string, exprP *string, offsetP *int) {
+	al := posEnd - posStart
+	arCond := arHead + (*exprP)[posStart:posEnd] + arTail
 	bl := len(arCond)
-	*expr = substr(*expr, posStart, al, arCond)
-	*offset -= al - bl
- fmt.Printf("	posStart = %d posEnd = %d arExpr = %q al = %d arCond = %q bl = %d offset = %d\n", posStart, posEnd, arExpr, al, arCond, bl, *offset)
+	*exprP = substr(*exprP, posStart, al, arCond)
+	*offsetP -= al - bl
+	if *opt_X { fmt.Printf("replaceExpr: posStart = %d posEnd = %d al = %d arCond = %q bl = %d *exprP = %q *offsetP = %d\n", posStart, posEnd, al, arCond, bl, *exprP, *offsetP) }
 } // replaceExpr
 
 /***********************************************************************
  *
- *	Generate a precompiler constant expression for #if macro or #elif macro
- *	suitable for input to genIf()
+ *  Generate a boolean expression for the conditional directives #if #ifdef
+ *  #ifndef as well as #elif. Compile the code with 'govaluate' and eval it.
  *
- *	#ifdef and #ifndef are handled by concatenating "defined " or "!defined "
- *	with 'macro' and setting 'def' = true in the call to parseIf().
- *	In that case 'macro' must be a single directive name which is either
- *	defined or not - if macro is an expression or a number an Error is reported.
+ *  #ifdef and #ifndef are handled by concatenating "defined " or "!defined "
+ *  with 'macro' and setting 'def' = true in the call to evalIf().
+ *  In that case 'macro' must be a single directive name which is either
+ *  defined or not - if macro is an expression or a number an Error is reported.
  *
- *	Syntax errors with logical operators && and || as well as conditional
- *	operators == != <= etc are reported early before GO compilation.
+ *  Syntax errors with logical operators && and || as well as conditional
+ *  operators == != <= etc are reported early before 'govaluate' compilation.
  *
- *	Syntax errors with all other arithmetic operators, parentheses or
- *	other symbols are ignored here. They are reported by the GO compile.
- *	Such errors should be rare because arithmetic is not a common part
- *	of conditinal pre-compiler directives - but they are handled correctly.
+ *  Syntax errors with all other arithmetic operators, parentheses or
+ *  other symbols are ignored here. They are reported by 'govaluate'.
+ *
+ *  Alternatively just modify 'int' expression to 'bool' expression for
+ *    IF (expr) {{              ==> IF (expr != 0) {{
+ *  and
+ *    [ expr1 ? expr2 : expr3 ] ==> [ expr1 != 0 ? expr2 : expr3 ]
  *
  ***********************************************************************/
 
-func parseIf(macro string, def bool) string {
+func evalIf(macro string, def bool, eval bool) (int, string) {
 	expr      := macro
 	macroLen  := len(macro)
-	if *opt_T { fmt.Printf("//1 %d: parseIf(%s)\n", lineNo, macro) }
+	if *opt_T { fmt.Printf("//1 %d: evalIf('%s' %v)\n", lineNo, macro, eval) }
 	remove_comment(&macro)						// take out individual C comments TODO check if necessary
-	if *opt_T { fmt.Printf("//2 %d: parseIf(%s)\n", lineNo, macro) }
- fmt.Printf("//2 %d	%s length = %d\n", lineNo, macro, macroLen)
-	pos       := 0
-	pose      := 0
-	posePrev  := 0
-//	posLstart := 0
+	if *opt_T { fmt.Printf("//2 %d: evalIf('%s' %v)\n", lineNo, macro, eval) }
+	if *opt_X { fmt.Printf("//2 %d	%s length = %d, %v\n", lineNo, macro, macroLen, eval) }
+	var pos, pose, prevPose, offset int
 	posEstart := 0
-	offset    := 0
+	posTstart := 0
+	iNext     := 0
+	iOffset   := 0
+	posNext   := 0
 	atom      := ""
 	atomPrev  := ""
-	wordNum := false
-	condOp  := false
-	logicOp := false
 	state     := 'L'						// initial state
-	//	reEvalIf: (\w+|&&|\|\||[=!<>]=|<<?|>>?|~)
-	for _, posPair := range reEvalIf.FindAllStringIndex(macro, -1) {
-		//	(
-		//		\w+		|	# word identifier or integer number
-		//		&&		|	# && logical and
-		//		\|\|	|	# || logical or
-		//		[=!<>]=	|	# == != <= or >= conditionals
-		//		<<?		|	# < conditional or << operator
-		//		>>?		|	# > conditional or >> operator
-		//		~			# C complement operator "~" changed to GO "^"
-		//	)
-		posePrev = pose						// start of white space after previous atom
-		atomPrev = atom
-		pos      = posPair[0]
-		pose     = posPair[1]
-		atom     = macro[ pos : pose ]
-		wordNum  = false
-		condOp   = false
-		logicOp  = false
-		/***********************************************************************
-		 *	State machine to parse boolean expressions for #if etc and to generate
-		 *	equivalant GO code. All defined variables should have a numerical string
-		 *	value or return the constant bool string "true" if preceded by 'defined'.
-		 *	All undefined variables return the arithmetic string "0" or "false" if
-		 *	preceded by defined.
-		 *	bool GO expr	expression
-		 *	true			defined A	// if A is defined with -D or -P or #define
-		 *	false			defined B	// if B has not been defined
-		 *	!false			!defined B
-		 *	2 != 0			X			// if X has been defined with -D X=2
-		 *	2 + 3 != 0		X + Y		// if Y has been defined with -D Y=3
-		 *	2 <= 4			X <= Z		// if Z has been defined with -D Z=4
-		 *	2 != 0 && 3 != 0	X && Y
-		 *	2 < 4 || 3 > 4		X < Z || Y > Z
-		 *	!(2 < ^4 || 3 > 4)	!(X < ~Z || Y > Z)
-		 *	Spaces, all operators and parentheses - in fact all symbols except
-		 *	words which are replaced by their defined value and the C operator
-		 *	"~", which is replaced by the GO operator "^" - are copied exactly.
-		 *	No parentheses are added - that causes problems with unary operators.
-		 ***********************************************************************/
-		if reWordNum.MatchString(atom) {
-			wordNum = true
-		} else if atom == "&&" || atom == "||" {
-			logicOp = true
-		} else if atom == "==" || atom == "!=" || atom == "<" || atom == "<=" || atom == ">" || atom == ">=" {
-			condOp = true
-		} else if atom == "~" {
-			expr = substr(expr, pos + offset, 1, "^")	// change C logical negate to GO code
-		}
-		if state == 'L' {
-			if atom == "defined" {
-				loc := reDefined.FindStringIndex(expr)
-				dl := loc[1] - loc[0]
-				expr = substr(expr, loc[0], dl, "")		// remove first "defined/s*"
-				offset -= dl
-				state = 'D'
-			} else if wordNum {
-				posEstart = posePrev + offset			// start of an arithmetic expression with current offset
-				replaceAtom(atom, pos, &expr, &offset)
-				state = 'E'
-			} else if logicOp || condOp {
-				lnErr = append(lnErr, fmt.Sprintf("//* Error: wrong token %q directly after %q in #if etc\n", atom, atomPrev))
-				ret++
+	ternFlg   := false
+	ternCnt   := 0
+  Rescan:
+	for {
+		pose     = 0
+		//	reEvalIf: (!\s*defined|[a-z_A-Z]\w*|([+-]\s*)?\d+|&&|\|\||[\?:\(\)]|[=!<>]=|<<?|>>?)
+		for i, posPair := range reEvalIf.FindAllStringIndex(macro, -1) {
+			//	(
+			//		!\s*defined		|	# special word defined with logical !
+			//		[a-z_A-Z]\w*	|	# word identifier (includes defined without !)
+			//		([+-]\s*)?\d+	|	# integer number with optional sign
+			//		&&				|	# && logical and
+			//		\|\|			|	# || logical or
+			//		[\?:\(\)]		|	# ternary operators ? : and parentheses
+			//		[=!<>]=			|	# == != <= or >= conditionals
+			//		<<?				|	# < conditional or << operator
+			//		>>?					# > conditional or >> operator
+			//	)
+			prevPose = pose						// start of white space after previous atom
+			pose  = posPair[1]
+			if i < iNext {
+				continue						// skip tokens in text already scanned
 			}
-		} else if state == 'D' {
-			if atom == "defined" {						// must test before word check
-				lnErr = append(lnErr, "//* Error: \"#ifdef defined\" or \"#if defined defined\"\n")
-				ret++
-			} else if reWord.MatchString(atom) {
-				var boolString string
-				al := len(atom)
-				if _, ok := defs[atom]; ok {
-					boolString = "true"
-				} else {
-					boolString = "false"
+			atomPrev = atom
+			pos      = posPair[0]
+			atom     = macro[ pos : pose ]
+			wo      := false
+			nu      := false
+			wordNum := false
+			logicOp := false
+			ternOp  := false
+			condOp  := false
+			if *opt_Z { fmt.Printf("'%c' %2d  atom = %-5s posPair = %-3v macro = %q iN = %d iO = %d ternCnt = %d ternFlg = %v\n", state, i, atom, posPair, macro, iNext, iOffset, ternCnt, ternFlg) }
+			/***********************************************************************
+			 *  State machine to parse and evaluate a boolean expression for #if etc.
+			 *  {{{{{{{
+			 *                                                /--\ "defined"  \
+			 *                                           +---+   | number cond } error
+			 *                                        /->| D |<--/ && || ? :  /
+			 *                                       /   +---+
+			 *                                      /      |
+			 *                            "defined"/       | word
+			 *                                    /        |
+			 *                   cond && || ? :  /         |
+			 *                      } error     /          |
+			 *                        /--\     /  &&       V  /--\ word   \
+			 *                        |   +---+   ||     +---+   | number  } error
+			 *                        \-->| L |<---------| F |<--/ cond : /
+			 *       START--------------->+---+<--\      +---+-----------------\
+			 *                              | ^    \                            \
+			 *                       word   |  \    \-----------\                \
+			 *                       number |   \                \               |
+			 *        /---------------\     |   | &&              \ &&           |
+			 *       /  /-------\ ?    \ ?  |   | ||              | ||           |
+			 *       | /         \   /--\---|---|------\ cond     |              |
+			 *       V V number  |  /    \  V  /       V   number |  /--\        |
+			 *    />+---+ word +---+  :   +---+ cond +---+ word +---+   | cond : |
+			 *   /  | G |----->| H |----->| E |----->| M |----->| N |<--/} error |
+			 *  / />+---+      +---+      +---+      +---+      +---+---\        |
+			 *  | | ^    \     ^    \ &&  ^    \     ^    \     ^    \   \       |
+			 *  | | |    |     |    | ||  |    |     |    |     |    |   |       |
+			 *  | | \----/     \----/ }er \----/     \----/     \----/   | ?     | ?
+			 *  | |cond && ||   word       : word  cond && ||    word    |       |
+			 *  \ \? :} error   number     number  ? :} error    number  /       /
+			 *   \ \----------------------------------------------------/       /
+			 *    \------------------------------------------------------------/
+			 *
+			 *    *=========================================================*
+			 *    |  atom \ state   |  L |  D |  F |  E |  G |  H |  M |  N |
+			 *    *=========================================================*
+			 *    |  (!\s*)?defined |  D | er |  - |  - |  - |  - |  - |  - |
+			 *    |  word   wo      |  E |  F | er |  E |  H |  H |  N |  N |
+			 *    |  number nu      |  E | er | er |  E |  H |  H |  N |  N |
+			 *    +-----------------+----+----+----+----+----+----+----+----+
+			 *    |  &&     logicOp | er | er |  L |  L | er | er | er |  L |
+			 *    |  ||             | er | er |  L |  L | er | er | er |  L |
+			 *    +-----------------+----+----+----+----+----+----+----+----+
+			 *    |  ?      ternOp  | er | er |  G |  G | er | er | er |  G |
+			 *    |  :              | er | er | er |  E | er |  E | er | er |
+			 *    +-----------------+----+----+----+----+----+----+----+----+
+			 *    |  < <= ..condOp  | er | er | er |  M | er |  M | er | er |
+			 *    *=========================================================*
+			 *
+			 *  All defined variables should have a numerical string value or return
+			 *  the constant bool string "true" if preceded by the word "defined".
+			 *  A defined variable whose value has not been assigned returns "1".
+			 *  All undefined variables return the arithmetic string "0" or "false" if
+			 *  preceded by "defined".
+			 *    bool expr       expression
+			 *  true            defined A   // if A is defined with -D or -P or #define
+			 *  false           defined B   // if B has not been defined
+			 *  !false          !defined B
+			 *  2 != 0          X           // if X has been defined with -D X=2
+			 *  2 + 3 != 0      X + Y       // if Y has been defined with -D Y=3
+			 *  2 <= 4          X <= Z      // if Z has been defined with -D Z=4
+			 *  2 != 0 && 3 != 0        X && Y
+			 *  2 < 4 || 3 > 4          X < Z || Y > Z
+			 *  !(2 < ~4 || 3 > 4)      !(X < ~Z || Y > Z)
+			 *  (X < Y ? X : Y) != 0    X < Y ? X : Y
+			 *  ((X < Y ? X : Y)) > 2   (X < Y ? X : Y) > 2
+			 *  Spaces, all operators and parentheses - in fact all symbols except
+			 *  words, which are replaced by their defined value, are copied exactly.
+			 *  Parenthese are placed around a ternary expression, because ternary
+			 *  expressions have lower precedence than conditionals.
+			 *  Care is taken to make leading unary operators ! and - part of the
+			 *  atoms following them. These can only be !defined and -123 (a number).
+			 ***********************************************************************/
+			if reWord.MatchString(atom) {
+				wo      = true
+				wordNum = true
+			} else if reNum.MatchString(atom) {
+				nu      = true
+				wordNum = true
+			} else if atom == "&&" || atom == "||" {
+				logicOp = true
+			} else if atom == "?" || atom == ":" {
+				ternOp = true
+			} else if atom == "==" || atom == "!=" || atom == "<" || atom == "<=" || atom == ">" || atom == ">=" {
+				condOp = true
+			}
+			if state == 'L' {
+				if loc := reDefined.FindStringIndex(expr); loc != nil {
+					if expr[loc[0]] == '!' {
+						loc[0]++							// retain leading !
+					}
+					dl := loc[1] - loc[0]
+					expr = substr(expr, loc[0], dl, "")		// remove first "\s*defined/s*"
+					offset -= dl
+					state = 'D'
+				} else if wordNum {
+					posEstart = prevPose + offset			// start of an arithmetic expression with current offset
+					posTstart = posEstart
+					if wo {
+						if replaceAtom(atom, pos, &posNext, &macro, &expr, &offset, i + iOffset, &iNext, eval) {
+							continue Rescan
+						}
+					}
+					state = 'E'
+				} else if logicOp || condOp || ternOp {
+					pushError(&ret, fmt.Sprintf("//* Error: wrong token %q directly after %q in #if %s\n", atom, atomPrev, macro))
 				}
-				bl := len(boolString)
-				expr = substr(expr, pos + offset, al, boolString)
-				offset -= al - bl
-				state = 'F'
-			} else if logicOp || condOp || wordNum {	// number only - word already excluded
-				lnErr = append(lnErr, fmt.Sprintf("//* Error: wrong token %q in \"defined %s\" in #if etc\n", atom, atom))
-				ret++
+			} else if state == 'D' {
+				if atom == "defined" {						// must test before word check
+					pushError(&ret, fmt.Sprintf("//* Error: \"#ifdef defined\" or \"#if defined defined\" in #if %s\n", macro))
+				} else if wo {
+					var boolString string
+					al := len(atom)
+					if _, ok := defs[atom]; ok {
+						boolString = "<< >>"				// true  - must be 2 tokens for rescan
+					} else {
+						boolString = ">> <<"				// false - to replace 'defined Word'
+					}
+					bl := len(boolString)
+					expr = substr(expr, pos + offset, al, boolString)
+					offset -= al - bl
+					state = 'F'
+				} else if nu || logicOp || condOp || ternOp {
+					pushError(&ret, fmt.Sprintf("//* Error: wrong token %q in \"defined %s\" in #if %s\n", atom, atom, macro))
+				}
+			} else if state == 'F' {
+				if def {
+					pushError(&ret, fmt.Sprintf("//* Error: expression token %q illegal in #ifdef or #ifndef %s\n", atom, macro))
+				} else if logicOp {
+					state = 'L'
+				} else if atom == "?" {
+					ternFlg = true
+					ternCnt++
+					state = 'G'
+				} else if condOp || wordNum || atom == ":" {
+					pushError(&ret, fmt.Sprintf("//* Error: wrong token %q after \"defined %s\" in #if %s\n", atom, atomPrev, macro))
+				}
+			} else if state == 'E' {
+				iOffset = 0
+				if logicOp && ternCnt == 0 {
+					if ternFlg {
+						replaceExpr(posTstart, prevPose + offset, "(", ") != 0", &expr, &offset)
+						iOffset = 4
+						ternFlg = false
+					} else {
+						replaceExpr(posEstart, prevPose + offset, "", " != 0", &expr, &offset)
+						iOffset = 2
+					}
+					state = 'L'
+				} else if atom == "?" {
+					replaceExpr(posEstart, prevPose + offset, "", " != 0", &expr, &offset)
+					iOffset = 2
+					ternFlg = true
+					ternCnt++
+					state = 'G'
+				} else if atom == ":" {
+					if ternCnt > 0 {
+						ternCnt--						// remain in state 'E' for ":"
+					} else {
+						pushError(&ret, fmt.Sprintf("//* Error: too many \":\" tokens in #if %s\n", macro))
+					}
+				} else if condOp {
+					state = 'M'
+				} else if wo {							// remain in state 'E' for word or number
+					if replaceAtom(atom, pos, &posNext, &macro, &expr, &offset, i + iOffset, &iNext, eval) {
+						continue Rescan
+					}
+				}
+			} else if state == 'G' {
+				if wordNum {
+					posEstart = prevPose + offset		// start of an arithmetic expression with current offset
+					if wo {
+						if replaceAtom(atom, pos, &posNext, &macro, &expr, &offset, i + iOffset, &iNext, eval) {
+							continue Rescan
+						}
+					}
+					state = 'H'
+				} else if logicOp || condOp || ternOp {
+					pushError(&ret, fmt.Sprintf("//* Error: wrong token %q directly after %q in #if %s\n", atom, atomPrev, macro))
+				}
+			} else if state == 'H' {
+				if atom == ":" {
+					if ternCnt > 0 {
+						ternCnt--
+					} else {
+						pushError(&ret, fmt.Sprintf("//* Erron: too many \":\" tokens in #if %s\n", macro))
+					}
+					state = 'E'
+				} else if atom == "?" {
+					replaceExpr(posEstart, prevPose + offset, "", " != 0", &expr, &offset)
+					iOffset = 2
+					ternFlg = true
+					ternCnt++
+					state = 'G'
+				} else if condOp {
+					state = 'M'
+				} else if wo {							// remain in state 'H' for word or number
+					if replaceAtom(atom, pos, &posNext, &macro, &expr, &offset, i + iOffset, &iNext, eval) {
+						continue Rescan
+					}
+				} else if logicOp {
+					pushError(&ret, fmt.Sprintf("//* Error: wrong token %q directly after %q in #if %s\n", atom, atomPrev, macro))
+				}
+			} else if state == 'M' {
+				if wordNum {
+					if wo {
+						if replaceAtom(atom, pos, &posNext, &macro, &expr, &offset, i + iOffset, &iNext, eval) {
+							continue Rescan
+						}
+					}
+					state = 'N'
+				} else if logicOp || condOp || ternOp {
+					pushError(&ret, fmt.Sprintf("//* Error: wrong token %q directly after %q in #if %s\n", atom, atomPrev, macro))
+				}
+			} else if state == 'N' {
+				if logicOp && ternCnt == 0 {
+					state = 'L'
+				} else if atom == "?" {
+					ternFlg = true
+					ternCnt++
+					state = 'G'
+				} else if wo {							// remain in state 'N' for word or number
+					if replaceAtom(atom, pos, &posNext, &macro, &expr, &offset, i + iOffset, &iNext, eval) {
+						continue Rescan
+					}
+				} else if condOp || atom == ":" {
+					pushError(&ret, fmt.Sprintf("//* Error: wrong token %q after conditional expression in #if %s\n", atom, macro))
+				}
 			}
-		} else if state == 'F' {
-			if logicOp && !def {
-				state = 'L'
-			} else if condOp || wordNum || def {
-				lnErr = append(lnErr, fmt.Sprintf("//* Error: wrong token %q after \"defined %s\" in #if etc\n", atom, atomPrev))
-				ret++
-			}
-		} else if state == 'E' {
-			if logicOp {
-				replaceExpr(posEstart, posePrev, " != 0", &expr, &offset)
-				state = 'L'
-			} else if condOp {
-				state = 'M'
-			} else if wordNum {
-				replaceAtom(atom, pos, &expr, &offset)
-			}
-		} else if state == 'M' {
-			if wordNum {
-				replaceAtom(atom, pos, &expr, &offset)
-				state = 'N'
-			} else if logicOp || condOp {
-				lnErr = append(lnErr, fmt.Sprintf("//* Error: wrong token %q directly after %q in #if etc\n", atom, atomPrev))
-				ret++
-			}
-		} else if state == 'N' {
-			if logicOp {
-				replaceExpr(posEstart, posePrev, "", &expr, &offset)
-				state = 'L'
-			} else if wordNum {
-				replaceAtom(atom, pos, &expr, &offset)
-			} else if condOp {
-				lnErr = append(lnErr, fmt.Sprintf("//* Error: wrong token %q after conditional expression in #if etc\n", atom))
-				ret++
-			}
+			/***********************************************************************
+			 *  atom "<<" and ">>" as well as all other symbols not found by this
+			 *  scan are not modified. If any of those symbols form an incorrect
+			 *  boolean expression it is reported by the 'govaluate' compile stage.
+			 ***********************************************************************/
+			if *opt_X { fmt.Printf("evalIf:	'%c' [ %d : %d ]	offset = %d	%q\n\t%s\n", state, pos, pose, offset, atom, expr) }
+			if *opt_Z { fmt.Printf("                                         expr  = %q\n", expr) }
 		}
-		/***********************************************************************
-		 *	atom "~" changed to "^" as well as "<<" and ">>" are not modified
-		 *	like all other symbols not found by this scan. If any of those
-		 *	symbols form bad GO code it is reported by the GO compile stage.
-		 ***********************************************************************/
- fmt.Printf("parseIf:	'%c' [ %d : %d ]	offset = %d	%q\n\t%s\n", state, pos, pose, offset, atom, expr)
+		break Rescan
 	}
+	if *opt_Z { fmt.Printf("'%c'                                      macro = %q iN = %d iO = %d ternCnt = %d ternFlg = %v\n", state, macro, iNext, iOffset, ternCnt, ternFlg) }
 	if state == 'E' {
-		replaceExpr(posEstart, pose+offset, " != 0", &expr, &offset)
-	} else if state == 'N' {
-		replaceExpr(posEstart, pose+offset, "", &expr, &offset)
+		if ternFlg {
+			replaceExpr(posTstart, pose + offset, "(", ") != 0", &expr, &offset)
+			ternFlg = false
+		} else {
+			replaceExpr(posEstart, pose + offset, "", " != 0", &expr, &offset)
+		}
 	} else if state == 'L' || state == 'D' || state == 'M' {
-		lnErr = append(lnErr, "//* Error: incomplete boolean expression in #if etc\n")
-		ret++
-	}
-	if *opt_T { fmt.Printf("//3 %d: parseIf(%s) ==> %q\n", lineNo, macro, expr) }
- fmt.Printf("//3 %d:	%s\n\t%s\n", lineNo, macro, expr)
-	return string(expr)						// modified to const boolean expression
-} // parseIf
-
-/***********************************************************************
- *	Generate GO code for the conditional directives #if #ifdef #ifndef
- *	as well as #elif #else and #endif
- *
- *	Care is taken that nested #if #endif groups are handled correctly
- *
- *	'condition' must be a string containing a GO constant boolean
- *	expression such as:
- *		true					// #ifdef A or #if defined A
- *		!false					// #ifndef A or #if ! defined A
- *		false || 4 != 0			// #if defined X || Y
- *		32767 == 32767 && true	// #elif INT_MAX == 32767 && defined (LONG16)
- *	'condition' is not used for #else and #endif
- *  'sel'       is a bit selector which nomimates ifx elif else or endif
- *	'text'      is the text line ontaining the conditional directive for -a
- *	            comment output
- ***********************************************************************/
-
-func genIf(condition string, sel selector, text string) {
-	if *opt_a || *opt_Y {
-		fmt.Fprintf(genFile,		//          balance {
-`} else {
-	for FOR := 0; FOR < %d; FOR++ {
-		fmt.Print("\n")
-	}
-`		, lineNo - blockStart)		//          balance }
-	}
-	fmt.Fprint(genFile, "}\n")
-	if sel & (endif) != 0 {
-		fmt.Fprint(genFile, "IFprev = IFstack[len(IFstack)-2]\n")
-		fmt.Fprint(genFile, "IF = IFprev\n")
-		fmt.Fprint(genFile, "IFstack = IFstack[:len(IFstack)-1]\n")
-	}
-	if *opt_a {
-		if sel & (ifx) != 0 {
-			fmt.Fprint(genFile, "if !IF { IFblock++ }\n")
+		pushError(&ret, "//* Error: incomplete boolean expression in #if etc\n")
+	}		// can also terminate correctly in state 'N' and state 'F' with a boolean constant
+	if *opt_T { fmt.Printf("//3 %d: evalIf(%s) ==> %q\n", lineNo, macro, expr) }
+	/********************************************************************
+	 *  << >> is changed to true  - this allows 'true' to be used as a variable
+	 *  >> << is changed to false - this allows 'false' to be used as a variable
+	 *******************************************************************/
+	expr = reTrue.ReplaceAllLiteralString(expr, "true")
+	expr = reFalse.ReplaceAllLiteralString(expr, "false")
+	if *opt_Z { fmt.Printf("                                         expr  = %q\n", expr) }
+	if *opt_X { fmt.Printf("//3 %d:	%s\n\t%s\n", lineNo, macro, expr) }
+	if ret == 0 && eval {
+		/********************************************************************
+		 *  if no errors in the above analysis
+		 *  use 'govaluate' to compile and evaluate the boolean expression
+		 *******************************************************************/
+		if expression, errExp := govaluate.NewEvaluableExpression(expr); errExp == nil {
+			if result, errEval := expression.Evaluate(nil); errEval == nil {
+				if *opt_Z { fmt.Printf("go-repl> %v\n", result) }
+				if result.(bool) {				// above analysis ensures bool - else panic
+					return 2, expr				// true
+				} else {
+					return -1, expr				// false
+				}
+			} else {
+				pushError(&ret, fmt.Sprintf("//* Error: goevaluate error %q in boolean expression %q in #if etc\n", errEval, expr))
+			}
+		} else {
+			pushError(&ret, fmt.Sprintf("//* Error: compile error %q in boolean expression %q in #if etc\n", errExp, expr))
 		}
-		fmt.Fprintf(genFile, "if IFblock == 0 { fmt.Print(\"//***** %s\\n\") } else { fmt.Print(\"\\n\") }\n", text)
-		if sel & (endif) != 0 {
-			fmt.Fprint(genFile, "if IFblock > 0 { IFblock-- }\n")
-		}
-	} else if *opt_Y {
-		fmt.Fprint(genFile, "\tfmt.Print(\"\\n\")\n")
 	}
-	if sel & (ifx) != 0 {
-		fmt.Fprint(genFile, "IFprev = IF\n")
-	}
-	if sel & (elif | elsx) != 0 {
-		fmt.Fprint(genFile, "if IF { IFprev = false }\n")
-	}
-	if sel & (ifx | elif) != 0 {
-		fmt.Fprintf(genFile, "IF = IFprev && (%s)\n", condition)
-	}
-	if sel & (ifx) != 0 {
-		fmt.Fprint(genFile, "IFstack = append(IFstack, IF)\n")
-	}
-	if sel & (elsx) != 0 {
-		fmt.Fprint(genFile, "IF = IFprev\n")
-	}
-	if sel & (elif | elsx) != 0 {
-		fmt.Fprint(genFile, "IFstack[len(IFstack)-1] = IF\n")
-	}
-	if (*opt_T) {
-		fmt.Fprint(genFile, "\tfmt.Printf(\"IFprev = %5v IF = %5v IFstack = %v\\n\", IFprev, IF, IFstack)\n")
-	}
-	fmt.Fprint(genFile, "if IF {\n")
-	blockStart = lineNo + 1
-} // genIf
+	return -1, expr									// false on error or not eval
+} // evalIf
 
 /***********************************************************************
  *
- *	Take out individual C comments out of ref
+ *  Take out individual C comments out of ref
  *
  ***********************************************************************/
 
@@ -3022,19 +3675,56 @@ func remove_comment(ref *string) {
 
 /***********************************************************************
  *
- *	Generate a line to file 'genName' for execution as a GO file
+ *  Generate a line to file 'genName' for execution as a GO file
  *
  ***********************************************************************/
 
-func genLine(tx string) {
-	if *opt_T { fmt.Printf("//* %3d: %s\n", lineNo , tx) }
-	tx = reParenSlash.ReplaceAllString(tx, "\\$1")	// precede " and \ by extra \
-	fmt.Fprintf(genFile, "\tfmt.Print(\"%s\\n\")\n", tx)
+func genLine(tx, tl string) {
+	if opt_m_M_Y && blankLines > 0 { // blankLines is at least 1 because it is a directive
+		blanks()				// print blank lines now
+	}
+	if *opt_T { fmt.Printf("//* %3d: %q %q\n", lineNo , tx, tl) }
+	tx = reQuoteSlash.ReplaceAllString(tx, "\\$1")	// precede " and \ by extra \
+	fmt.Fprintf(genFile, "\tfmt.Print(\"%s%s\")\n", tx, tl)	// tl is either "\\n" or "" for unfinished line
+	genFlag = tl == ""
 } // genLine
 
 /***********************************************************************
  *
- *	Print a group of blank lines (only when *opt_m *opt_M or *opt_Y)
+ *  Append text to genSlice and set LFflag
+ *
+ ***********************************************************************/
+
+func genSliceAppend(tx string) {
+	genSlice = append(genSlice, tx)
+	LFflag = true
+	if *opt_Z { fmt.Fprintf(genFile, "//= LFflag = true at in genSliceAppend(%q)\n", tx) }
+} // genSliceAppend
+
+/***********************************************************************
+ *
+ *  Generate a line containing expressions to file 'genName' for execution as a GO file
+ *
+ ***********************************************************************/
+
+func genSliceOut(tl string) {
+	if opt_m_M_Y && blankLines > 0 { // blankLines is at least 1 because it is a directive
+		blanks()				// print blank lines now
+	}
+	if FORline != "" {
+		fmt.Fprint(genFile, FORline)
+		FORline = ""
+	}
+	if *opt_T { fmt.Printf("//* %3d: %q %q\n", lineNo , genSlice, tl) }
+	tx := strings.Join(genSlice, ", ")
+	fmt.Fprintf(genFile, "\tfmt.Print(%s%s)\n", tx, tl)	// tl is either ", \"\\n\"" or "" for unfinished line
+	genSlice = make([]string, 0, cap(genSlice))
+	genFlag = tl == ""
+} // genSliceOut
+
+/***********************************************************************
+ *
+ *  Print a group of blank lines (only when *opt_m *opt_M or *opt_Y)
  *
  ***********************************************************************/
 
@@ -3042,7 +3732,7 @@ func blanks() {
 	if *opt_T { fmt.Println("//*", lineNo, ":	blankLines =", blankLines) }
 	if blankLines < 8 || *opt_Y {		// yacc does not understand # line_no //
 		for n := 0; n < blankLines; n++ {
-			fmt.Fprintf(genFile, "\tfmt.Print(\"\\n\")\n") // output block of 7 or less blank lines as is
+			fmt.Fprint(genFile, "\tfmt.Print(\"\\n\")\n") // output block of 7 or less blank lines as is
 		}
 	} else {
 		tx := fmt.Sprintf("# %d \\\"%s\\\"", lineNo, argIn) // # 23 "file"
@@ -3053,15 +3743,88 @@ func blanks() {
 
 /***********************************************************************
  *
- *	Emulate the Perl substr() function
+ *  Expand a comment text with the value of the control variable cv
+ *
+ ***********************************************************************/
+
+func expandCtrlVar(cv string) string {
+	cvType, ok := FORctrlVar[cv]
+	if !ok {
+		return cv								// cv not found - no change
+	}
+	if cvType == "string" {
+		return fmt.Sprintf("(%s=%%[%d]q)", cv, FORctrlIndex[cv])
+	}
+	return fmt.Sprintf("(%s=%%[%d]d)", cv, FORctrlIndex[cv])
+} // expandCtrlVar
+
+/***********************************************************************
+ *
+ *  Edit a forLine comment for opt_a
+ *
+ ***********************************************************************/
+
+func opt_aEdit(commentP *string, reject string) string {
+	var ctrlVarParams string
+	if *opt_a {
+		FORctrlIndex = make(map[string]int)
+		i := 1
+		ctrlVars := make([]string, 0, len(FORctrlVar))
+		for cv, _ := range FORctrlVar {
+			if cv != "int" && cv != reject {
+				ctrlVars = append(ctrlVars, cv)
+				ctrlVarParams += ", "+cv		// build comma separated parameter list
+				FORctrlIndex[cv] = i			// in the same order as index i
+				i++
+			}
+		}
+		if len(ctrlVars) > 0 {
+			*commentP = rePercent.ReplaceAllLiteralString(*commentP, "%%")
+			s := strings.Join(ctrlVars, "|")
+			reCtrlVar := regexp.MustCompile("\\b("+s+")\\b")
+			if reCtrlVar.MatchString(*commentP) {
+				*commentP = reCtrlVar.ReplaceAllStringFunc(*commentP, expandCtrlVar)
+			} else {
+				ctrlVarParams = ""
+			}
+		}
+	}
+	return ctrlVarParams
+} // opt_aEdit
+
+/***********************************************************************
+ *
+ *  Print a comment for opt_a
+ *
+ ***********************************************************************/
+
+func opt_aComment(comment, params string) {
+	if *opt_a {
+		blankLines--
+		if genFlag {
+			genLine("", "\\n")	// this clears genFlag = false
+		}
+		if len(params) > 0 {
+			comment = reQuoteSlash.ReplaceAllString(comment, "\\$1")	// precede " and \ by extra \
+			fmt.Fprintf(genFile, "\tfmt.Printf(\"//***** %s\\n\"%s)\n", comment, params)
+		} else {
+			genLine("//***** "+comment, "\\n")
+		}
+	}
+} // opt_aComment
+
+/***********************************************************************
+ *
+ *  Emulate the Perl substr() function
  *  substr(expr, offset, length, replacement)
  *
  ***********************************************************************/
 
 func substr(expr string, offset, length int, replacement string) string {
+	if *opt_X { fmt.Printf("substr: expr   = %q offset = %d length = %d replacement = %q\n", expr, offset, length, replacement) }
 	x := []rune(expr)
 	x = append(x[:offset], append([]rune(replacement), x[offset+length:]...)...)
-// fmt.Printf("substr: expr = `%s` offset = %d length = %d replacement = %q return = `%s`\n", expr, offset, length, replacement, string(x[:]))
+	if *opt_X { fmt.Printf("substr: return = %q\n", string(x[:])) }
 	return string(x[:])
 } // substr
 
@@ -3071,7 +3834,7 @@ func substr(expr string, offset, length int, replacement string) string {
 
 =head1 NAME
 
-immac - the immediate-C array and macro pre-compiler
+immac - the immediate-C array and macro pre-compiler (GO version)
 
 =head1 SYNOPSIS
 
@@ -3123,7 +3886,8 @@ specified with the -o <output> option. Error messages are included
 in the output file.
 
 The B<immac> compiler can also produce an optional log file with
-the -l option, which can be run as a Perl script to test 'FOR loop'
+the -l option, which should have the extension .go (for the GO
+verson if immac). This can be used with 'go run' to test 'FOR loop'
 generation. This produces better error messages.
 
 The B<immac> compiler can be used to test for iCa language constructs
@@ -3132,6 +3896,38 @@ control statements or B<%%define> macro definitions, the source file
 is an iCa language file.  Isolated [index expressions] without at
 least one FOR IF ELSE or B<%%define> are not sufficient to classify
 a file as an iCa language file.
+
+=head1 ALTERNATIVE MACRO PROCESSING
+
+B<immac> may be called with the options -m, -M and -Y.  All these
+alternatives do not translate iCa language constructs.
+
+B<immac -m> is just a macro processor handling B<#define>, B<#undef>,
+-D, -U, B<#include>, B<#if> etc, which makes it an alternative for
+B<cpp> mainly used to pre-process C code. Every attempt has been made
+to make B<immac -m> equivalent to B<cpp>. B<immac -m> is called by
+the iC compiler B<immcc> in the internal C compile phase when iC I/O
+variables in C code are replaced.
+
+B<immac -M> is an alternative macro processor handling B<%define>,
+B<%undef>, -D, -U, B<%include>, B<%if> etc, which is called by the iC
+compiler B<immcc> to resolve possible % macro's in iC code (version
+3). B<#>directives are left untouched. If B<immac> is called with an iC
+(.ic) input file, the -M option is set internally.
+
+A third variation B<immac -Y>  is used to handle conditional grammar
+rules in yacc or bison with B<%if> etc. B<%define> lines are left
+untouched because they may be interpretd by bison.
+
+For B<immac -m> B<immac -M> and B<immac -Y> macros can be pre-defined
+in the command line with the -D option (just like cpp). For B<immac
+-Y> this is the only way to define a macro.
+
+    immac -m -D LENGTH=8     vvv.c
+    immac -M -D LENGTH=8     www.ic
+    immac -Y -D BOOT_COMPILE xxx.y
+
+The -U option is also available in these 3 cases.
 
 =head1 EXIT STATUS
 
@@ -3143,7 +3939,7 @@ iCa file and 0 otherwise.
 
 =head1 SPECIFICATION
 
-The immediate C language extension is as follows:
+The immediate C with arrays language extensions are as follows:
 
 immediate array variables are defined by appending an expression
 enclosed in square brackets to the array name eg. array[N+10]
@@ -3152,65 +3948,64 @@ unless the expression in the square brackets is a constant
 expression eg. array[4+10], the line containing the expression
 must be contained in a FOR block as follows:
 
-    FOR (int N = 0; N < 8; N++) {{
+    FOR (N = 0; N < 8; N++) {{
         array[N+10],
     }}
 
 B<immac> uses the FOR control statement to repeatedly output iC or
-C statements contained in a block bounded by twin braces {{ ... }}
-B<immac> used to use single braces just like blocks defining a function
-block in iC or blocks in C. In rare cases, the braces used for iC/C
-code would get mixed up with the braces marking an iCa FOR block. To
-overcome this, twin braces were introduced.  It was also found, that
-the iCa language was easier to read, if control variables used in a FOR
-loop were upper case.  This is only a recomendation. the B<immax>
-converter will convert old iCa code to the new dialect.
+C statements contained in a block bounded by twin braces {{ ... }}.
+It was found, that the iCa language was easier to read, if control
+variables used in a FOR loop were upper case (recommended) and twin
+braces were used (mandatory).  (Version 2 used single braces).
 
 Another variant is to use the following "perlish" syntax using lists
 or the Perl .. operator to generate lists, which produces the same
 output as the first example:
 
-    FOR int N (0 .. 7) {{
+    FOR N (0 .. 7) {{
         array[N+10],
     }}
 
-The 'int' type specifier of the control variable is optional - it
-may be used in both variants to make the syntax look more natural.
+An optional type-specifier 'int' before a FOR loop control variable
+is ignored. This usage is deprecated because the contol variable may
+also be type 'string'. A Warning is issued.
 
 With Perl type lists it is possible to use strings as well as numbers
-as values for the loop variable. In iCa such strings in a FOR control
-list can be bare words, although they may be enclosed in double quotes
-- they are required when strings are used in an expression. These
-string values may of course not be used with arithmetic operators
-in index expressions, but the Perl concatenation operator '.' can
-sometimes be used effectively. Three variants are shown:
+as values for the FOR loop control variable. In iCa such strings in
+a FOR control list must be enclosed in double quotes. These string
+values may of course not be used with arithmetic operators in index and
+square bracket expressions, but the concatenation operator '.'  can be
+used effectively with lists of string variables:
 
-    FOR N (aa, ab, ac, ad) {{ xyz_[N], }}
- or alternatively
     FOR N ("aa", "ab", "ac", "ad") {{ ["xyz_".N], }}
- or even
-    FOR N ("aa" .. "ad") {{ xyz_[N], }}
- will all generate
+ will generate
     xyz_aa, xyz_ab, xyz_ac, xyz_ad,
+
+Lists of integers may also be used, in which case the control variable
+is an 'int' and may only be used with arithmetic operators on square
+bracket expressions:
 
     FOR N (0, 3, 4, 10, 5) {{ array[N+1], }}
  will generate
     array1, array4, array5, array11, array6,
 
-In the above instances only the control variable 'N' as well as numeric
+Lists of strings and integers may not be mixed. Numeric digits in
+parenthesis are a string.
+
+In the above examples only the control variable 'N' as well as numeric
 values and string constants may be used in index expressions of the
-block. 'FOR' blocks may be nested.  In that case all the control
+'FOR' block. 'FOR' blocks may be nested.  In that case all the control
 variables in enclosing nested blocks may be used.
 
-All immediate C lines in the block may contain bracketed index
+All immediate C lines in the block may contain square bracketed
 expressions, but they do not need to (they will of course not vary).
 The lines in a  'FOR' block are repeated a number of times controlled
 by the 'FOR' control line.
 
-It must be remembered, that the control variable is either a numeric
-interger or a string.  In the Perl code, 'use integer' has been
-called, so integer division always applies - the following is valid
-for numeric control variables:
+It must be remembered, that a FOR loop control variable is either
+a numeric integer or a string.  Integer division always applies to
+integers. In the generated GO code arithmetic expression variables
+are type 'int'.  The following is valid for numeric control variables:
 
     FOR (N = 0; N < 16; N++) {{
        QX[N/8].[N%8] = IB[N];
@@ -3246,11 +4041,11 @@ Array names which finish with a numeral will have a 'y' inserted
 before the the first index
     eg: b8[0]      is replaced by b8y0
 
-A line terminated by a back-slash '\' both inside or outside a
+A line terminated by a backslash '\' both inside or outside a
 'FOR loop' generates that line without a terminating LF '\n'.
 This allows the generation of lists in a single line.  Normally a
 LF is inserted on the termination of the 'FOR loop' unless the
-final brace is also followed by a back-slash '\' - then the line
+final brace is also followed by a backslash '\' - then the line
 is not terminated by a LF '\n'.
 
 Back-slash handling is still supported, but it is much easier to
@@ -3391,34 +4186,6 @@ using the same rules as cpp. The word 'defined' in an B<%%if> or
 B<%%elif> expression has the usual cpp meaning - it is set to 1 (true)
 if defined else 0 (false). Identifiers in such an expression which are
 not defined in a previous B<%%define> or -P are also set to 0 (false).
-
-=head1 ALTERNATIVE MACRO PROCESSING
-
-B<immac -m> is just a macro processor handling B<#define>, B<#undef>,
--D, -U, B<#include>, B<#if> etc, which makes it an alternative for
-B<cpp> mainly used to pre-process C code. Every attempt has been made
-to make B<immac -m> equivalent to B<cpp>.
-
-B<immac -M> is an alternative macro processor handling B<%define>,
-B<%undef>, -D, -U, B<%include>, B<%if> etc, which is called by
-the iC compiler B<immcc> to resolve macro's in iC code (version
-3). B<#>directives are left untouched. If B<immac> is called with an iC
-(.ic) input file, the -M option is set internally.
-
-A third variation B<immac -Y>  is used to handle conditional grammar
-rules in yacc or bison with B<%if> etc. B<%define> lines are left
-untouched because they may be interpretd by bison.
-
-For B<immac -m> B<immac -M> and B<immac -Y> macros can be pre-defined
-in the command line with the -D option (just like cpp). For B<immac
--Y> this is the only way to define a macro.
-
-    immac -m -D LENGTH=8     vvv.c
-    immac -M -D LENGTH=8     www.ic
-    immac -Y -D BOOT_COMPILE xxx.y
-
-The -U option is also available in these cases.  All these alternatives
-do not translate iCa language constructs.
 
 =head1 AUTHOR
 

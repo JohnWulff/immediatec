@@ -6,7 +6,7 @@
  *******************************************************************/
 
 static const char	iC_compiler[] =
-"$Revision: icc_2.6-6-ge1cef2e-dirty $ -O7";
+"$Revision: icc_3.7-dirty $ -O7";
 
 #include	<icg.h>
 

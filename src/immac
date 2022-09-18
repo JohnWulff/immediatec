@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2020  John E. Wulff
+#       Copyright (C) 2000-2020  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -10,7 +10,7 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file
 #
-#	immac
+#       immac
 #
 #   Pre-compiler to convert "immediate C with arrays" (iCa) source files.
 #
@@ -80,60 +80,49 @@
 #           print $FOR if $FOR;
 #   There are no other Perl variables used in the generated eval code.
 #
-#   This means that #define #if etc macros in C literal blocks will be
-#   written just like in C and passed unchanged to the generated C code.
-#
-#   Two constructs available in the PERL version of immac prior to Jan 2022
+#   Several constructs available in the PERL version of immac prior to Jan 2022
 #   have been dropped:
-#	ELSIF	// is very Perlish and can easily be replaced by ELSE IF.
-#	FOR S ("aa" .. "ad") {{ // very difficult to implement in GO and
-#				// was never used in thousands of my examples.
+#       -S and -N flags. immac is now always strict requiring twin braces.
+#       'use strict' and 'no strict' were a mistake in the PERL version because
+#       they are part of the iC language and must be copied to the iC file.
+#       -L option. All lines go to the generated GO file, which is log file.
+#       ELSIF   // is very Perlish and can easily be replaced by ELSE IF.
+#       FOR S ("aa" .. "ad") {{ // is very difficult to implement in GO and
+#                               // was never used in thousands of my examples.
 #
+#   The standard C style FOR loop to generate integer lists is:
+#       FOR (I = 1; I <= 4; I++)        // list of integers (type of I is int)
 #   The only specifically PERL constructs being retained are:
-#	FOR S ("aa", "ab", "ac", "ad")	// list of parenthesised strings
-#	FOR S (aa, ab, ac, ad)		// list of bare word strings
-#	FOR I (1, 2, 3, 4)		// list of integers
-#	FOR I (1 .. 4)			// list of integers using .. operator
+#       FOR S ("aa", "ab", "12", "-3")  // list of parenthesised strings
+#       FOR S (aa, ab, ac, ad)          // list of bare word strings (deprecated)
+#       FOR I (1, -2, 3, +4)            // list of integers
+#       FOR I (1 .. 4)                  // list of integers using .. operator
 #   They are very useful and easy to implement in GO.
 #   List elements in parentheses or bare words containing non-numeric
 #   characters or non-leading sign characters are strings of type char*.
 #   List elements containing only numeric characters or a leading sign are
 #   integers of type int.
-#   If all elements of a list are integers, the type of the control variable
-#   and the list elements are int, otherwise they are strings (type char*),
-#   unless the control variable is preceded by the keyword int or the newly
-#   introduced keyword char*, which have precedence. (Keeps C like syntax).
-#   The only case where a type specification for a FOR control variable is
-#   manditory is for a list of bare word integers to be used as strings:
-#	FOR char* S (1, 2, 3, 4)	// list of strings "1", "2", "3", "4"
-#	FOR char* S (1 .. 4)		// same list of strings (both deprecated)
-#   The simpler and clearer way to achieve this is to write:
-#	FOR S ("1", "2", "3", "4")	// list of strings "1", "2", "3", "4"
-#	FOR S ("1" .. "4")		// same list of strings (special case)
-#   This means the type specifiers 'int' and 'char*' are completely optional
-#   and only help as a comment in the iCa code for better understainging. This
-#   was also the case for 'int' in the pre Jan 2022 versions of immac.
-#   A control variable declared as int for a list containing strings is an error.
 #
-#   The standard C style FOR loop to generate integer lists is:
-#	FOR (int I = 1; I <= 4; I++)	// list of integers, equivalent to
-#	FOR (I = 1; I <= 4; I++)	// list of integers (default is int)
-#   The control variable in this construct may never be typed as char*, because
-#   it is used immediateley in the comparison and incrementing arithmetic
-#   expressions.
+#   The optional type-specifier 'int' before a FOR loop control variable
+#   is ignored. This usage is deprecated because the contol variable may
+#   also be type 'string'. A Warning is now issued.
+#
 #   Integer control variables may only be used in integer arithmetic expressions.
 #   String type char* control variables may only be used with the concatination
 #   operator '.' in expressions (borrowed from Perl).
 #   NOTE: String variables and concatenation are only used in the iCa language,
 #         never in iC.
 #
-#  Input and output filnames must be restricted to the following
-#  POSIX Portable Filename Character Set consisting of:
-#	A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
-#	a b c d e f g h i j k l m n o p q r s t u v w x y z
-#	0 1 2 3 4 5 6 7 8 9 . _ -
-#  Directory seperators for Linux/Unix or Windows are:
-#	/ \
+#   Input and output filnames must be restricted to the following
+#   POSIX Portable Filename Character Set consisting of:
+#       A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+#       a b c d e f g h i j k l m n o p q r s t u v w x y z
+#       0 1 2 3 4 5 6 7 8 9 . _ -
+#   Directory separator for Linux/Unix is:  /
+#   Directory separator for Windows is:     \
+#
+#   This means that #define #if etc macros in C literal blocks will be
+#   written just like in C and passed unchanged to the generated C code.
 #
 ########################################################################
 
@@ -170,10 +159,9 @@ Usage:
     -D <macro> predefine <macro> evaluated only with -m, -M, -Y or <in.ic>
     -U <macro> undefine <macro> evaluated only with -m, -M, -Y or <in.ic>
     -a         output FOR IF ELSE ELSIF and %%define lines as comments
-    -S         forces @<<<< to only accept twin braces in FOR ... {{ }}
-			$named
-    -N         negates use strict pragmas       (only for debugging)
-    -L         output all lines to the log file (only for debugging)
+    -N         allow single braces in FOR ... { } (only for old code) and
+               allow 'int' before FOR loop control variable without Warning
+    -L         output all lines to the log file      (only for debugging)
     -T         extra Trace output
     -h         this help text
     <in.ica>   iCa source file with array definitions (default: stdin)
@@ -186,15 +174,14 @@ Usage:
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac 1.33 $
+$Id: immac 1.34 $
 .
 
-use vars qw($opt_a $opt_S $opt_N $opt_L $opt_o $opt_l $opt_e);
+use vars qw($opt_a $opt_N $opt_L $opt_o $opt_l $opt_e);
 use vars qw(@opt_I @opt_P @opt_D @opt_U $opt_t $opt_m $opt_M $opt_Y $opt_T $opt_h);
 use Getopt::Long qw(:config no_ignore_case bundling);
 GetOptions (
     'a'   => \$opt_a,
-    'S'   => \$opt_S,
     'N'   => \$opt_N,
     'L'   => \$opt_L,
     'o=s' => \$opt_o,
@@ -215,6 +202,11 @@ if ($opt_h) {
     write STDERR; exit 2;	# -h, ouput Usage only
 }
 
+my $sFlag = 0;
+unless ($opt_N) {
+    $sFlag = 1;			# default is strict option - no longer any way to change that in iCa code
+}
+
 ########################################################################
 #
 #   iCa keywords with their translation to Perl code (and length and control)
@@ -231,20 +223,20 @@ my %iCaKey = (
 ########################################################################
 #
 #   Coding of iC, iCa and C keyword hash values for possible future use
-#		track with builtins[] in init.c
-#	0x001	imm or immC iC type modifier
-#	0x002	iC type
-#	0x004	iC pragma
-#	0x008	iC keyword
-#	0x010	iC clocked built-in function
-#	0x020	iC unclocked built-in bit function
-#	0x030	iC clocked built-in bit function
-#	0x050	iC clocked built-in arithmetic function
-#	0x070	iC clocked built-in bit or arithmetic function
-#	0x090	iC clocked built-in clock function
-#	0x0b0	iC clocked built-in timer function
-#	0x100	iCa keyword
-#	0x200	C keyword
+#               track with BuiltIn b[] in init.c
+#       0x001   imm or immC iC type modifier
+#       0x002   iC type
+#       0x004   iC pragma
+#       0x008   iC keyword
+#       0x010   iC clocked built-in function
+#       0x020   iC unclocked built-in bit function
+#       0x030   iC clocked built-in bit function
+#       0x050   iC clocked built-in arithmetic function
+#       0x070   iC clocked built-in bit or arithmetic function
+#       0x090   iC clocked built-in clock function
+#       0x0b0   iC clocked built-in timer function
+#       0x100   iCa keyword
+#       0x200   C keyword
 #   currently only the fact that the hash entry is defined is used
 #
 ########################################################################
@@ -265,15 +257,15 @@ my %keywords = (
     ST		=>	0x030,	# monoflop with timed reset
     SRT		=>	0x030,	# monoflop with reset and timed reset
     SH		=>	0x050,	# sample and hold
-    SHR		=>	0x030,	# sample and hold with reset
-    SHR_	=>	0x050,	# sample and hold with simple reset
-    SHSR	=>	0x030,	# sample and hold with set/reset
-    SHSR_	=>	0x050,	# sample and hold with simple set/reset
+    SHR		=>	0x070,	# sample and hold with reset
+    SHR_	=>	0x070,	# sample and hold with simple reset
+    SHSR	=>	0x070,	# sample and hold with set/reset
+    SHSR_	=>	0x070,	# sample and hold with simple set/reset
     LATCH	=>	0x020,
-    DLATCH	=>	0x020,
+    DLATCH	=>	0x030,
     RISE	=>	0x030,	# pulse on digital rising edge
     CHANGE	=>	0x070,	# pulse on anlog or digital change
-    CHANGE2	=>	0x070,	# alternate CHANGE on anlog change
+    CHANGE2	=>	0x050,	# alternate CHANGE on anlog change
     CLOCK	=>	0x090,	# CLOCK with 1 or 2 inputs
     CLOCK2	=>	0x090,	# alternate CLOCK with 2 inputs
     TIMER	=>	0x0b0,	# TIMER with preset off 0
@@ -334,7 +326,7 @@ my %keywords = (
     '...'	=>	0x0,	# pseudo keyword around which spaces are kept
 );
 
-my $si = 1;			# initial value of sense indicator	output	%else or %elif not allowed
+my $si = 1;			# initial value of sense indicator      output  %else or %elif not allowed
 
 my %defs = ();
 my %clDefs = ();
@@ -422,7 +414,7 @@ my $CdirectiveRegex = $opt_m ?		# both %%directives and %#directives are exclude
     qr/^\s*(%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b/o :
 		      $opt_Y ?		# additionally %define %undef %include are excluded - %define only (no %if)
     qr/^\s*((%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)|%(define|undef|include))\b/o :
-		      # Else none	# %directives, #directives and %# directives are excluded - only %%directives
+		      # Else none       # %directives, #directives and %# directives are excluded - only %%directives
     qr/^\s*(%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b/o ;
 
 my $commandLineFlag = 0;
@@ -451,7 +443,7 @@ if (@opt_P) {
 	}
 	if ($r) {
 	    $ret = $r;
-	    goto CloseFiles;		# found Error	# proceed with Warning
+	    goto CloseFiles;		# found Error   # proceed with Warning
 	}
     }
 }
@@ -481,7 +473,7 @@ if ($opt_m_M_Y) {			# -D -U only processed for <in>.ic iC files or if -m -M or -
 	    }
 	    if ($r) {
 		$ret = $r;
-		goto CloseFiles;	# found Error	# proceed with Warning
+		goto CloseFiles;	# found Error   # proceed with Warning
 	    }
 	}
     }
@@ -543,29 +535,29 @@ exit $ret;
 
 ########################################################################
 #
-#	Process one file
+#       Process one file
 #
 #
 #   Square bracket handling
 #
-#	FOR (N = 5; ...		x is a bare word; presumably a C variable
+#       FOR (N = 5; ...         x is a bare word; presumably a C variable
 #
-#   iCa:  []	[2]	[N]	[N+2]	  [x]	[2+x]	[N+x]	[N+2+x]
-#   eval: []	@{[2]}	@{[$N]}	@{[$N+2]} [x]	[2+x]	[$N+x]	[$N+2+x]
-#   iC:	  []*	2	5	7	  [x]*	[2+x]*	[5+x]*	[5+2+x]*
-#   C:	  []	2	5	7	  [x]	[2+x]	[5+x]	[5+2+x]
-#	* iC error message (will also produce error if compiled by immcc)
+#   iCa:  []    [2]     [N]     [N+2]     [x]   [2+x]   [N+x]   [N+2+x]
+#   eval: []    @{[2]}  @{[$N]} @{[$N+2]} [x]   [2+x]   [$N+x]  [$N+2+x]
+#   iC:   []*   2       5       7         [x]*  [2+x]*  [5+x]*  [5+2+x]*
+#   C:    []    2       5       7         [x]   [2+x]   [5+x]   [5+2+x]
+#       * iC error message (will also produce error if compiled by immcc)
 #
 #   There is no difference in expanding square bracket expressions in iC or C.
 #   The only difference is the output of error messages for iC code in 3 cases:
-#	1)	an empty square bracket pair
-#	2)	a bare word encountered in a square bracket pair
-#	3)	a square bracket inside an embedded square bracket pair
+#       1)      an empty square bracket pair
+#       2)      a bare word encountered in a square bracket pair
+#       3)      a square bracket inside an embedded square bracket pair
 #   These 3 cases are OK in C code and produce good C.
 #
-#   iCa:  [[]]	 [[2]]	[[N]]	[[N+2]]	[[N]+x]	[[N+2]+x] [[N]+2+x] [[N]+2+[N+1]]
-#   iC:	  [[]]*	 [2]*	[5]*	[7]*	[5+x]*	[7+x]*	  [5+2+x]*  [5+2+6]*
-#   C:	  [[]]*	 [2]	[5]	[7]	[5+x]	[7+x]	  [5+2+x]   [5+2+6]
+#   iCa:  [[]]   [[2]]  [[N]]   [[N+2]] [[N]+x] [[N+2]+x] [[N]+2+x] [[N]+2+[N+1]]
+#   iC:   [[]]*  [2]*   [5]*    [7]*    [5+x]*  [7+x]*    [5+2+x]*  [5+2+6]*
+#   C:    [[]]*  [2]    [5]     [7]     [5+x]   [7+x]     [5+2+x]   [5+2+6]
 #
 #   The inside of an embedded square bracket pair is treated like iC code
 #   ie. empty, bare words and more square brackets are not allowed.
@@ -582,16 +574,16 @@ exit $ret;
 #   error messages will still indicate the source of the error in iC listing.
 #
 #   $sqNest
-#	+= 1	every opening square bracket
-#	-= 1	every closing square bracket until 0 (error if more)
+#       += 1    every opening square bracket
+#       -= 1    every closing square bracket until 0 (error if more)
 #   $square bit encoding which is used when square brackets close
-#	0	outside square brackets
-#	|= 1	number or translated loop variable or finishing string
-#	|= 2	completed and expanded 2nd level nested square brackets
-#	&=~2	this bit is cleared when another nested [ is encountered
-#	|= 4	bare word unless $state == "S" - string is type 1 constant
-#	|= 8	after closing square bracket if sqNest != 0
-#	 = 0	after closing square bracket if sqNest == 0
+#       0       outside square brackets
+#       |= 1    number or translated loop variable or finishing string
+#       |= 2    completed and expanded 2nd level nested square brackets
+#       &=~2    this bit is cleared when another nested [ is encountered
+#       |= 4    bare word unless $state == "S" - string is type 1 constant
+#       |= 8    after closing square bracket if sqNest != 0
+#        = 0    after closing square bracket if sqNest == 0
 #
 #   The innermost square bracket pair is expanded to @{[expression]}
 #   if $square == 1 when the closing square bracket is encountered.
@@ -601,7 +593,7 @@ exit $ret;
 #   should be rare, since index expressions are usually not complicated.
 #   The Perl eval error message is easy to interpret to fix the iCa code.
 #
-#   Save $state in $sqState on opening square bracket and set to "A".
+#   Save $state in $sqSave on opening square bracket and set to "A".
 #   Restore $state with matching closing square bracket. This allows
 #   correct handling of strings in square brackets in comments and strings.
 #   iC Example: ["abc".N] generates abc0 abc1 ... (meaningless for C indices).
@@ -620,9 +612,9 @@ exit $ret;
 #   matching of the correct closing FOR brace.
 #
 #   To overcome this problem the new dialect of iCa uses double braces:
-#	FOR (N = 0; N < 4; N++) {{
-#	   a[N] ...
-#	}}
+#       FOR (N = 0; N < 4; N++) {{
+#          a[N] ...
+#       }}
 #   Independent brace counting of the double braces is easy and leads to
 #   clean translation code. An added advantage is, that visually the
 #   boundaries of iCa FOR blocks are obvious and double braces have the
@@ -640,13 +632,13 @@ exit $ret;
 #   must always be alternte %{ and %} braces - even if only some of them
 #   are in a FOR block.
 #
-#	%{
-#	    FOR CARRAY_NAME ("aa", "bb", "cc") {{
-#	int	[CARRAY_NAME][[10]];	// expanding C array declaration
-#	%}
-#	%{
-#	    }}	// unmatched FOR loop end in old iCa dialect
-#	%}
+#       %{
+#           FOR CARRAY_NAME ("aa", "bb", "cc") {{
+#       int     [CARRAY_NAME][[10]];    // expanding C array declaration
+#       %}
+#       %{
+#           }}  // unmatched FOR loop end in old iCa dialect
+#       %}
 #
 #   Brace counting of single braces must still be done to determine the
 #   boundaries between iC and C code. The start of C code embedded in iC
@@ -655,18 +647,18 @@ exit $ret;
 #   by single brace counting and may turn out to be wrong in rare cases.
 #   The only other use of braces in iC is for the body of function blocks.
 #
-#	if (IX0.2) {		/* start of C code */
-#	    if (IB0 != aa0[[0]]) {
-#		aa0[[0]] = IB0;
-#		printf("aa0[[0]] = %d\n", aa0[[0]]);
-#	FOR N (1 .. 2) {{	// unmatched FOR loop
-#	    }
-#	    else if (IB[N] != aa[N][[0]]) {
-#		aa[N][[0]] = IB[N];
-#		printf("aa[N][[0]] = %d\n", aa[N][[0]]);
-#	}}			// FOR loop end - fails in old iCa dialect
-#	    }
-#	}			/* end of C code */
+#       if (IX0.2) {            /* start of C code */
+#           if (IB0 != aa0[[0]]) {
+#               aa0[[0]] = IB0;
+#               printf("aa0[[0]] = %d\n", aa0[[0]]);
+#       FOR N (1 .. 2) {{       // unmatched FOR loop
+#           }
+#           else if (IB[N] != aa[N][[0]]) {
+#               aa[N][[0]] = IB[N];
+#               printf("aa[N][[0]] = %d\n", aa[N][[0]]);
+#       }}                      // FOR loop end - fails in old iCa dialect
+#           }
+#       }                       /* end of C code */
 #
 #   Both the literal block example and the C example would be much more
 #   sensibly coded by keeping the first closing brace above the FOR loop
@@ -679,19 +671,19 @@ exit $ret;
 #   Here is a rather obscure example of (apparently) unmatched braces in
 #   C code when expanding the initialisation of a C array in a FOR loop.
 #
-#	int aa[] = {\		// can be written thus:	int aa[] = ["{"]\
-#	    FOR (N = 0; N <= 3; N++) {{
-#	 [N][N < 3 ? ", " : " };"]\
-#	    }}
+#       int aa[] = {\           // can be written thus: int aa[] = ["{"]\
+#           FOR (N = 0; N <= 3; N++) {{
+#        [N][N < 3 ? ", " : " };"]\
+#           }}
 #
-#   This expands to:	int	aa[] = { 0, 1, 2, 3 };
+#   This expands to:    int     aa[] = { 0, 1, 2, 3 };
 #
 #   The first alternative does not work with the old iCa dialect. The
 #   second alternative of enclosing the constant string "{" in square
 #   brackets, which evaluates simply to { and matches both braces in
 #   parentheses, worked with the old iCa dialect, when string constants
 #   in square bracket index expressions were introduced. It was this case,
-#   which forced the re-design of the immac pre-processor.	      - }}
+#   which forced the re-design of the immac pre-processor.            - }}
 #
 #   Expansion of square bracket expressions is identical for C and iC -
 #   only the error messages differ in iC. Thus nesting errors for single
@@ -708,7 +700,7 @@ sub process_file {
     my ($identifier, %identifiers, $atom, @atoms, @block, $offset, $lookfor, $pos, $pos1, $prevPos, $prevAtom);
     my ($translate, $def, $macro, @nlTabs, $control, $finBlock, $inBlock, $braceCount, $evalBlock, $comment, @ids, $id, $idPop, $el);
     my ($ARtranslate, $lfFlag, $spOfs, $Cdirective, $directive, $mWarn, $FORline, $FORend, $compound, $state0, $st0Save, $state, $error);
-    my (%forHash, $len, $tran, $sqNest, $sqNestSv, $sqStart, $sqSave, $square, @sqE, $sqP, $sqS, $comStart);
+    my (%forHash, $len, $tran, $sqNest, $sqNestSv, $sqStart, $sqSave, $square, $cVar, @sqE, $sqP, $sqS, $comStart);
     my ($forFlag, $forEnd, $iesFlag, $save, $twinCount, $count, $rest, $listLine, $SQline, $endPos);
     my ($commentOut, $commentEndPos, $commentEndEnd, $commentLfFlag, $comment2nd);
     @block = ();
@@ -791,15 +783,6 @@ sub process_file {
 		}
 	    }					# treat final directive line as a blank line
 	    ########################################################################
-	    #   use or no strict
-	    ########################################################################
-	    if (not $opt_N and
-		/\b(use|no)\s+(\w+)(\s*,\s*(\w+))?\s*;/ and
-		($2 eq "strict" or defined $4 and $4 eq "strict")) {
-		$opt_S = $1 eq "use" ? 1 : 0;		# override command line -S option
-		print "opt_S = '$opt_S'\n" if $opt_T and not $opt_l;
-	    }
-	    ########################################################################
 	    #   Collect lines for the first part of a FOR control statement up to the
 	    #   opening braces and present the complete line for further processing.
 	    #   This needs to be done here to remove comments between FOR and opening
@@ -812,7 +795,7 @@ sub process_file {
 	    #   The same applies for IF ELSE or ELSIF control statements.
 	    #
 	    #   NOTE: no brace counting is necessary - only look for next opening
-	    #   brace(s) after a FOR IF ELSE or ELSIF.			{ balance
+	    #   brace(s) after a FOR IF ELSE or ELSIF.                  { balance
 	    ########################################################################
 	    if (not $opt_m_M_Y and
 		(m/(\bFOR\b|\bIF\b|\bELSE\b|\bELSIF\b|}|\[|\])/ or $FORline or $FORend or $SQline)) {
@@ -958,15 +941,15 @@ sub process_file {
 		$macro =~ s!\s*(//.*)?$!!;		# delete C++ comment and trailing blanks
 		if ($def =~ m/^(%%|[%#])if(\w*)$/) {	# %%if, %if or #if...
 		    ########################################################################
-		    # $si =  +1  initial value of sense indicator	output    %else or %elif not allowed
-		    # $si == +2  #ifdef defined #ifndef !defined #if 1	output    %else or %elif allowed
-		    # $si == -1  #ifdef !defined #ifndef defined #if 0	no output %else or %elif allowed
-		    # $si == +2  #elif 1 after false   ($si < 0)	output    %else or %elif allowed
-		    # $si == -1  #elif 0 after false   ($si < 0)	no output %else or %elif allowed
-		    # $si == -2  #elif X after true    ($si > 0)	no output %else or %elif allowed
-		    # $si ==  0  #else (no inversion)  if $si == -2	no output %else or %elif not allowed
-		    # $si == +1  #else after false     if $si != -2	output    %else or %elif not allowed
-		    # $si ==  0  #else after true                    	no output %else or %elif not allowed
+		    # $si =  +1  initial value of sense indicator       output    %else or %elif not allowed
+		    # $si == +2  #ifdef defined #ifndef !defined #if 1  output    %else or %elif allowed
+		    # $si == -1  #ifdef !defined #ifndef defined #if 0  no output %else or %elif allowed
+		    # $si == +2  #elif 1 after false   ($si < 0)        output    %else or %elif allowed
+		    # $si == -1  #elif 0 after false   ($si < 0)        no output %else or %elif allowed
+		    # $si == -2  #elif X after true    ($si > 0)        no output %else or %elif allowed
+		    # $si ==  0  #else (no inversion)  if $si == -2     no output %else or %elif not allowed
+		    # $si == +1  #else after false     if $si != -2     output    %else or %elif not allowed
+		    # $si ==  0  #else after true                       no output %else or %elif not allowed
 		    ########################################################################
 		    push(@stk, $si);			# remember current sense indicator
 		    if ($si > 0) {			# actually test sense of previous level
@@ -1207,7 +1190,7 @@ use strict 'refs';
 		########################################################################
 		@atoms = ();
 		@nlTabs = ();
-		$control = $sqNest = $square = $offset = 0;
+		$control = $sqNest = $square = $cVar = $offset = 0;
 		while (m/
 			    (			# $1 leading backslah pairs
 				(\\\\)*		# $2
@@ -1279,6 +1262,7 @@ use strict 'refs';
 				substr($_, $pos + $offset, $len) = $translate;
 				$offset += length($translate) - $len;
 				$square |= 0x1 if $sqNest;	# translation in square brackets (iC Ok)
+				$cVar = 1;			# control variable allows C square bracket expansion
 			    } elsif ($sqNest) {		# not in FOR line
 				unless ($state eq "S") {
 				    $square |= 0x4;	# bare word in square brackets (iC error / C Ok)
@@ -1310,12 +1294,12 @@ use strict 'refs';
 			    $sqP = $pos;		# note position of first bracket in a possibly nested block
 			}
 			$sqStart = $pos + $offset;	# save for changes to innermost bracket pair
-			$square &= ~0x2;		# possible start of another embedded bracket pair
+			$square &= ~0x6;		# possible start of another embedded bracket pair
 		    } elsif ($atom eq "]") {
 			if ($sqNest) {
 			    $sqS = "???";
 			    $sqS = substr($comment, $sqP, $pos-$sqP+1) if $comment;	# for error messages
-			    if ($square == 0x1) {			#   1			iC/C Ok - expand
+			    if ($square == 0x1 and (not defined $compound or $cVar)) {	# 1   iC/C && cVAR Ok - expand
 				substr($_, $pos + $offset, 1) = "]}";	# end of bracket pair with expression
 				while (my $ref = pop @nlTabs) {	# extract last first
 				    my ( $nlP, $nlA ) = @$ref;
@@ -1326,6 +1310,7 @@ use strict 'refs';
 				}				# in reverse order to keep offsets correct
 				substr($_, $sqStart, 1) = "\@{[";	# start of bracket pair - eval in Perl
 				$offset += 3;			# offset += 2 - 1 + 3 - 1
+				$cVar = 0;
 			    }
 			    if (--$sqNest) {
 				if ($square == 0x1) {
@@ -1336,10 +1321,7 @@ use strict 'refs';
 			    } else {
 				print "$.:$pos:$square	$_" if $opt_T and not $opt_l;
 				if ($sqSave !~ m/C/ and not $opt_t) {
-				    if ($square > 0x8) {	# the following are not errors in a comment or -t
-					push(@lnErr, "//* Error: Index expression $sqS in C or iC code has invalid nesting. File $argv, line $.\n");
-					$r++;		# error return
-				    } elsif ($square == 0x8) {
+				    if ($square == 0x8) {
 					push(@lnErr, "//* Error: Empty nested index expression $sqS in iC or C code. File $argv, line $.\n");
 					$r++;		# error return
 				    } elsif (not defined $compound) {	# empty [] and nested [[3]] now allowed in iC code
@@ -1410,6 +1392,10 @@ use strict 'refs';
 					    goto retry;
 					}
 					if ($identifier eq "int") {
+					    if ($sFlag) {
+						push(@lnErr, "//* Warning: type specifier 'int' is deprecated - ignored\n");
+						$w++;		# warning found
+					    }
 					    substr($_, $pos + $offset, 4) = '';
 					    $offset -= 4;	# delete "int " from perl eval code
 					    $aix++;		# skip over "int"
@@ -1487,7 +1473,7 @@ use strict 'refs';
 					$offset -= 1;		# applies to next atom, not this one
 				    } else {
 					$forHash{ $braceCount++ } = 1;	# accept old dialect anyway
-					if ($opt_S) {
+					if ($sFlag) {
 					    push(@lnErr, "//* Error: strict: FOR line requires '{{'\n");
 					    $r++;		# error return
 					}
@@ -1511,7 +1497,7 @@ use strict 'refs';
 				push(@lnErr, "### CLOSE_BRACE: $argv line $.: $atom \$compound = '$compound', \$braceCount = '$braceCount', \$twinCount = '@{[$twinCount-0x100]}'\n") if $opt_T and not $opt_l;
     use warnings;
 				if (defined $forHash{ $braceCount }) {
-				    if ($opt_S) {
+				    if ($sFlag) {
 					push(@lnErr, "//* Error: strict: FOR line requires '}}'\n");
 					$r++;			# error return
 				    }
@@ -1693,7 +1679,7 @@ use strict 'refs';
 			s/"/\\"/g;			# {{ - protect interpolated " in string
 			s/\]}\[/]}"."[/g;		# insert something between @{[]}[ - needed for Perl interpretation
 			chomp;
-			if (s/\\\\$//) {
+			if (s/\s*\\\\$//) {		# is line terminated by a back slash ? (remove it and spaces before it)
 			    if ($spOfs and		# this line is not terminated by a LF
 				s/^(\s*)(\s)/ /) {	# repeat with single space unless there were none
 				my $space = $1 . ($2 eq "\t" ? "       " : "");
@@ -1798,7 +1784,7 @@ use strict 'refs';
 		    s/"/\\"/g;			# protect interpolated " in string
 		    s/\]}\[/]}"."[/g;		# insert something between ]}[ - needed for Perl interpretation
 		    chomp;
-		    if (s/\\\\$//) {		# is line terminated by a back slash ? (remove it)
+		    if (s/\s*\\\\$//) {		# is line terminated by a back slash ? (remove it and spaces before it)
 			$_ = "\$FOR .= \"$_\";\n";	# yes - output line without LF in the FOR loop when eval'd
 			$lfFlag = 1;		# terminate the last line in the block with LF
 		    } else {
@@ -1882,18 +1868,18 @@ use strict 'refs';
 
 ########################################################################
 #
-#	Scan %define or -P macro and save it in %defs{X} where
-#	X(a, b) (a * b)   will be converted to [ (#1 * #2), 2 ]
-#	Y(len)  (len * 8) will be converted to [ (#1 * 8) , 1 ]
-#	Z       32        will be converted to [ 32       , 0 ]
-#	DEF               will be converted to [ 1        , 0 ]
+#       Scan %define or -P macro and save it in %defs{X} where
+#       X(a, b) (a * b)   will be converted to [ (#1 * #2), 2 ]
+#       Y(len)  (len * 8) will be converted to [ (#1 * 8) , 1 ]
+#       Z       32        will be converted to [ 32       , 0 ]
+#       DEF               will be converted to [ 1        , 0 ]
 #
-#	the actual macro translation is [0] element of the array
-#	argument count is               [1] element of the array
+#       the actual macro translation is [0] element of the array
+#       argument count is               [1] element of the array
 #
-#	Called for -P command line macro definitions and %define
+#       Called for -P command line macro definitions and %define
 #
-#	If no macros at all are defined scalar @defs == 0.
+#       If no macros at all are defined scalar @defs == 0.
 #
 ########################################################################
 
@@ -2082,10 +2068,10 @@ sub resolve_line {
 #
 #   Two types of macros are resolved:
 #
-#	Object like macros which look like a C style word.
+#       Object like macros which look like a C style word.
 #
-#	Function like macros where the word is followd by comma separated
-#	arguments in parentheses.
+#       Function like macros where the word is followd by comma separated
+#       arguments in parentheses.
 #
 #   Do not resolve macros, which have already been resolved once in a
 #   previous recursion to avoid infinite recursion. (see info cpp)
@@ -2134,7 +2120,7 @@ sub resolve {
 		while ($tail =~ m/
 		    (			# $1
 			\(	|	#    opening parentheses
-			,	|	#    comma	
+			,	|	#    comma
 			\)	|	#    closing parentheses
 			\/[*\/]	|	#    start of C or C++ comment
 			\*\/	|	#    end of C comment
@@ -2334,8 +2320,8 @@ use warnings;
 	$r++;				# eval error return
     }
     @$Rblock = ();			# end of this eval block
-    if ($FOR ne '') {
-	$FOR =~ s/,(\s*;)/$1/g;		# remove comma from ,; in generated code
+    if ($FOR ne '' and not $opt_m_M_Y) {
+	$FOR =~ s/,(\s*;)/$1/g;		# remove comma from ,; in generated iCa code
 	print $FOR;			# actual output of this eval block
     }					# ignore empty output from eval - is algorithmically ok
     print LOG "print \$FOR if \$FOR;\n" if $opt_l;
@@ -2427,7 +2413,7 @@ __END__
 
 =head1 NAME
 
-immac - the immediate-C array and macro pre-compiler
+immac - the immediate-C array and macro pre-compiler (Perl version)
 
 =head1 SYNOPSIS
 
@@ -2456,9 +2442,11 @@ B<immac> [-tmaSNLTh][ -o <out>][ -l <log>][ -e <err>][ -I <path> ...]
     -D <macro> predefine <macro> evaluated only with -m, -M or <in.ic>
     -U <macro> undefine <macro> evaluated only with -m, -M or <in.ic>
     -a         output FOR IF ELSE ELSIF and %define lines as comments
-    -S         forces immac to only accept twin braces in FOR ... {{ }}
-    -N         negates use strict pragmas       (only for debugging)
-    -L         output all lines to the log file (only for debugging)
+    -S         only accept twin braces in FOR ... {{ }}        (default)
+               and no 'int' before FOR loop control variable
+    -N         allow single braces in FOR ... { }   (only for old code)
+               and allow 'int' before FOR loop control variable
+    -L         output all lines to the log file      (only for debugging)
     -T         extra Trace output
     -h         this help text
     <in.ica>   iCa source file with array definitions (default: stdin)
@@ -2511,7 +2499,7 @@ unless the expression in the square brackets is a constant
 expression eg. array[4+10], the line containing the expression
 must be contained in a FOR block as follows:
 
-    FOR (int N = 0; N < 8; N++) {{
+    FOR (N = 0; N < 8; N++) {{
 	array[N+10],
     }}
 
@@ -2529,12 +2517,13 @@ Another variant is to use the following "perlish" syntax using lists
 or the Perl .. operator to generate lists, which produces the same
 output as the first example:
 
-    FOR int N (0 .. 7) {{
+    FOR N (0 .. 7) {{
 	array[N+10],
     }}
 
-The 'int' type specifier of the control variable is optional - it
-may be used in both variants to make the syntax look more natural.
+The 'int' type specifier before the control variable is deprecated and
+is no longer supported in the GO version and may only be used in the
+Perl version with the -N option (not strict).
 
 With Perl type lists it is possible to use strings as well as numbers
 as values for the loop variable. In iCa such strings in a FOR control
