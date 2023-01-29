@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.84 $";
+"@(#)$Id: ict.c 1.87 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -3490,7 +3490,7 @@ receiveWatchOrRestore(char * cp1)
 	value = atoi(++cp1);
 	if (index > sTend - sTable || value > 3) {	/* check index is in range, value is correct */
 	  RWRerror:
-	    fprintf(iC_errFP, "Oops: %s: receiveWatchOrRestore: index %d > sTend - sTable %d, value %d > 3\n",
+	    fprintf(iC_errFP, "Oops: %s: receiveWatchOrRestore: index %d > sTend - sTable %ld, value %d > 3\n",
 		iC_iccNM, index, sTend - sTable, value);
 	    continue;			/* ignore this watch/ignore point - check why it failed */
 	}

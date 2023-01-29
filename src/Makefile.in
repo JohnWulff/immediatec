@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.81 $
+# @(#)$Id: Makefile.in 1.84 $
 
 #######################################################################
 #
@@ -87,6 +87,7 @@ binprefix =
 
 # Where the installed libraries go.
 libdir = @libdir@
+libdir64 = @libdir@64
 libprefix =
 
 # Where the installed includes go.
@@ -365,6 +366,11 @@ endif
 	@${INSTALL_PROGRAM} $(srcdir)/AuxTools/Mdiff      ${bindir}/${binprefix}Mdiff
 	@${INSTALL_DATA} $(srcdir)/libict.a      ${libdir}/${libprefix}libict.a
 	@if [ -f $(srcdir)/libict.so ]; then ${INSTALL_PROGRAM} $(srcdir)/libict.so ${libdir}/${libprefix}libict.so.1.$(REV); sudo /sbin/ldconfig ${libdir}; cd ${libdir}/; sudo ln -sf ${libprefix}libict.so.1.$(REV) ${libprefix}libict.so; cd -; fi
+ifneq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
+	@if [ ! -d ${libdir64} ]; then mkdir -p ${libdir64}; fi
+	@if [ -f $(srcdir)/libict.so ]; then ${INSTALL_PROGRAM} $(srcdir)/libict.so ${libdir64}/${libprefix}libict.so.1.$(REV); sudo /sbin/ldconfig ${libdir64}; cd ${libdir64}/; sudo ln -sf ${libprefix}libict.so.1.$(REV) ${libprefix}libict.so; cd -; fi
+	@${INSTALL_DATA} $(srcdir)/libict.a      ${libdir64}/${libprefix}libict.a
+endif
 	@${INSTALL_DATA} $(srcdir)/icg.h         ${includedir}/${includeprefix}icg.h
 	@${INSTALL_DATA} $(srcdir)/immcc.1.gz    ${mandir}/man1/${manprefix}immcc.1.gz
 	@${INSTALL_DATA} $(srcdir)/immax.1.gz    ${mandir}/man1/${manprefix}immax.1.gz
