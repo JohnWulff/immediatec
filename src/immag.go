@@ -109,7 +109,7 @@ import (
 	"github.com/Knetic/govaluate"
 )
 
-const ID_immag_go = "$Id: immag.go 1.2 $"
+const ID_immag_go = "$Id: immag.go 1.3 $"
 const DEF  = true
 const EVAL = true
 
@@ -2593,9 +2593,6 @@ func main() {
 		outputError(lineText)					// possible error or warning in previous line
 		if l := len(inFileStk) - 1; l >= 0 {
 			inFileC.Close()						// EOF of an include file reached
-			if len(siStk) > 0 || si != 1 {
-				pushError(&ret, fmt.Sprintf("//* end of #include %s #if ... #endif not matched - si = %d\n", argIn, si))
-			}
 			fi := inFileStk[l]
 			inFileStk = inFileStk[:l]			// pop current file info
 			argIn   = fi.name

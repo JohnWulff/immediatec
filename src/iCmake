@@ -25,7 +25,11 @@ fi
 
 case `uname -m` in
     *x86_64* | *ppc64* | *s390x* )
-	LIB="/usr/local/lib64/"
+	if [ -d "/usr/local/lib64/" ]; then
+	    LIB="/usr/local/lib64/"
+	else
+	    LIB="/usr/local/lib/"
+	fi
 	;;
     *armv* )
 	LIB="/usr/local/lib/"
@@ -113,7 +117,7 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake 1.54 $' >&2
+  echo '	$Id: iCmake 1.55 $' >&2
 }
 
 lwsock32=""
