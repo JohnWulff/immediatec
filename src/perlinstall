@@ -24,21 +24,29 @@
 #
 #	Option -r restores original scripts from backups *.hires
 #
+#	Also write and remove the ini file ~/.iC/iCmake.ini - JW 2023.02.10
+#
 ########################################################################
 
+name=${0##*/}
 usage ()
 {
-    echo "Usage:	${0##*/}" >&2
+    echo "Usage:	$name" >&2
     echo '		return the correct @INC path to install perl-modules' >&2
     echo '		error return if no @INC path found' >&2
-    echo "Or:	${0##*/} [-trh] [<srcdir>]" >&2
-    echo '	-t	test and modify perlscripts if Time::HiRes not installed' >&2
-    echo '	-r	restore modified perlscripts to use Time::HiRes' >&2
-    echo '		default source directory <srcdir> is .' >&2
-    echo '	-h	this help text' >&2
-    echo '	$Id: perlinstall,v 1.11 2009/08/21 06:08:40 jw Exp $' >&2
+    echo "Or:	$name -t [<srcdir>] <libdir>" >&2
+    echo '		test and modify perlscripts if Time::HiRes not installed' >&2
+    echo '		write the correct library path to ~/.iC/iCmake.ini' >&2
+    echo "Or:	$name -r [<srcdir>]" >&2
+    echo '		restore modified perlscripts to use Time::HiRes' >&2
+    echo '		rm -f ~/.iC/iCmake.ini' >&2
+    echo "Or:	$name -h" >&2
+    echo '		this help text' >&2
+    echo '	default source directory <srcdir> is .' >&2
+    echo '	$Id: perlinstall 1.12 $' >&2
 }
 
+## echo "DEBUG: $name '$1' '$2' '$3'" >&2
 srcdir='.'
 t=''
 r=''
@@ -65,16 +73,6 @@ if [ -d "$1" ]; then
     shift
 fi
 
-for d in $(perl -e 'print "@INC\n"'); do
-    if [ "$d" != '.' ] && [ -d "$d" ]; then
-	perlPath=$d;	# should always find direcory
-	temp="${perlPath#*site_perl}"
-	if [ "$perlPath" != "$temp" ]; then
-	    break;	# stop on the first site_perl entry
-	fi
-    fi
-done
-
 if [ -n "$t" ]; then
     if ! ${srcdir}/iCserver -h 2> /dev/null; then
 	# iCserver returned false, TIME_HIRES is not installed - modify
@@ -86,6 +84,19 @@ if [ -n "$t" ]; then
 	    chmod 555 $script
 	done
     fi
+    # create the ~/.iC ini directory during 'make install'
+    if [ ! -d "${HOME}/.iC" ]; then
+	mkdir "${HOME}/.iC"
+    fi
+    # obtain the library path of the installed iC libraries from the last argument
+    if [ -d "$1" ]; then
+	libdir=$1
+    else
+	echo "$name: -t was not called correctly with 2nd argument '$1'" >&2
+	exit 2
+    fi
+    # write the ini file containing the library path of the installed iC libraries
+    echo $libdir > "${HOME}/.iC/iCmake.ini"
 elif [ -n "$r" ]; then
     # makes sure that repeated install and restore works
     for hires in ${srcdir}/*.hires; do
@@ -95,9 +106,25 @@ elif [ -n "$r" ]; then
 	    mv -f $hires $script
 	fi
     done
-elif [ -n "$perlPath" ]; then
-    echo $perlPath
+    # remove the ini file containing the library path of the installed iC libraries
+    rm -f "${HOME}/.iC/iCmake.ini"
 else
-    echo 'NO /usr/lib/perl5/site_perl/5*/i586-linux - installation failed' >&2
-    exit 1
+    # obtain perlPath from @INC
+    for d in $(perl -e 'print "@INC\n"'); do
+	if [ "$d" != '.' -a -d "$d" ]; then
+	    perlPath=$d;	# should always find direcory
+	    temp="${perlPath#*site_perl}"
+	    if [ "$perlPath" != "$temp" ]; then
+		break;	# stop on the first site_perl entry
+	    fi
+	fi
+    done
+    if [ -n "$perlPath" ]; then
+	## echo "DEBUG: $name: perlPath = '$perlPath'" >&2
+	# return perlPath to calling 'make install'
+	echo $perlPath
+    else
+	echo "$name: no /usr/lib/perl5/site_perl/5*/i586-linux - installation failed" >&2
+	exit 1
+    fi
 fi

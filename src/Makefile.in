@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.81 $
+# @(#)$Id: Makefile.in 1.82 $
 
 #######################################################################
 #
@@ -146,14 +146,14 @@ ict:	$(srcdir)/Makefile icc.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O
 	$(CC) $(LDFLAGS) -o ict icc.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(LOBJ) icbegin.a $(EL)
 
 goserver:	$(srcdir)/Makefile $(srcdir)/../pkg/*/tcpcomm.a $(srcdir)/goserver.go
-    ifneq ($(GO),)
+ifneq ($(GO),)
 	$(GO) build $(srcdir)/goserver.go
-    endif
+endif
 
 ../pkg/*/tcpcomm.a:	$(srcdir)/Makefile $(srcdir)/tcpcomm/tcpcomm.go
-    ifneq ($(GO),)
+ifneq ($(GO),)
 	$(GO) install $(srcdir)/tcpcomm
-    endif
+endif
 
 immag:	$(srcdir)/Makefile $(srcdir)/immag.go
     ifneq ($(GO),)
@@ -331,10 +331,24 @@ strict:
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
 	@if ${srcdir}/AuxTools/Mdiff -kLel -I'(eval' ${srcdir}/Test0/STRICT/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
 
+########################################################################
+# Some Linux distributions, in particular openSUSE, set libdir to /usr/local/lib64
+# for 64 bit hardware. The generated libraries libict.a and libict.so are
+# installed in that directory by 'make install' via $libdir as coded below.
+# Other Linux distribitions, in particular Linux Mint leave libdir as /usr/local/lib
+# and 'make install' installs the generated libraries in that directory,
+# independent of the hardware.
+# Make libdir, as 'configure' sets it, available to all iC apps - in particular to
+# iCmake - via the the ini file ~/.iC/iCmake.ini by writing that file in
+# 'perlinstall -t $(srcdir) $(libdir)' called below when executing 'make install'.
+# Remove ~/.iC/iCmake.ini in 'perlinstall -r', which is called in 'make uninstall'.
+# Since this Makefile.in is provided to only make and install the various parts of the
+# iC system it is sufficient to modify the calls of perlinstall here. JW 2023.02.10
+########################################################################
 install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/goserver.1.gz $(srcdir)/immag.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
-	@$(srcdir)/perlinstall -t $(srcdir)
-	@${INSTALL} -d ${bindir} ${libdir} ${includedir} ${mandir}/man1
+	@${INSTALL} -d ${bindir} ${libdir} ${includedir} ${mandir}/man1 ${mandir}/man3
 	@${INSTALL_PROGRAM} $(srcdir)/iCmsg.pm  `$(srcdir)/perlinstall`/iCmsg.pm
+	@$(srcdir)/perlinstall -t $(srcdir) $(libdir)
 	@${INSTALL_PROGRAM} $(srcdir)/immcc      ${bindir}/${binprefix}immcc
 	@${INSTALL_PROGRAM} $(srcdir)/pplstfix   ${bindir}/${binprefix}pplstfix
 	@${INSTALL_PROGRAM} $(srcdir)/immax      ${bindir}/${binprefix}immax
@@ -343,13 +357,8 @@ install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir
 	@${INSTALL_PROGRAM} $(srcdir)/iClive     ${bindir}/${binprefix}iClive
 	@${INSTALL_PROGRAM} $(srcdir)/iCmake     ${bindir}/${binprefix}iCmake
 	@${INSTALL_PROGRAM} $(srcdir)/iCman      ${bindir}/${binprefix}iCman
-ifeq ($(GO),go)
-	@${INSTALL_PROGRAM} $(srcdir)/goserver   ${bindir}/${binprefix}iCserver
-	@${INSTALL_PROGRAM} $(srcdir)/immag      ${bindir}/${binprefix}immac
-else
-	@${INSTALL_PROGRAM} $(srcdir)/iCserver   ${bindir}/${binprefix}iCserver
-	@${INSTALL_PROGRAM} $(srcdir)/immac      ${bindir}/${binprefix}immac
-endif
+	@if [ -f $(srcdir)/goserver ]; then ${INSTALL_PROGRAM} $(srcdir)/goserver ${bindir}/${binprefix}iCserver; else ${INSTALL_PROGRAM} $(srcdir)/iCserver ${bindir}/${binprefix}iCserver; fi
+	@if [ -f $(srcdir)/immag ]; then ${INSTALL_PROGRAM} $(srcdir)/immag ${bindir}/${binprefix}immac; else ${INSTALL_PROGRAM} $(srcdir)/immac ${bindir}/${binprefix}immac; fi
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
 	@${INSTALL_PROGRAM} $(srcdir)/iCpiFace          ${bindir}/${binprefix}iCpiFace
 	@sudo ln -sf ${bindir}/${binprefix}iCpiFace     ${bindir}/${binprefix}iCpiGPIO
@@ -364,7 +373,7 @@ endif
 	@${INSTALL_PROGRAM} $(srcdir)/iCrfid     ${bindir}/${binprefix}iCrfid
 	@${INSTALL_PROGRAM} $(srcdir)/AuxTools/Mdiff      ${bindir}/${binprefix}Mdiff
 	@${INSTALL_DATA} $(srcdir)/libict.a      ${libdir}/${libprefix}libict.a
-	@if [ -f $(srcdir)/libict.so ]; then ${INSTALL_PROGRAM} $(srcdir)/libict.so ${libdir}/${libprefix}libict.so.1.$(REV); sudo /sbin/ldconfig ${libdir}; cd ${libdir}/; sudo ln -sf ${libprefix}libict.so.1.$(REV) ${libprefix}libict.so; cd -; fi
+	@if [ -f $(srcdir)/libict.so ]; then ${INSTALL_PROGRAM} $(srcdir)/libict.so ${libdir}/${libprefix}libict.so.1.$(REV); sudo /sbin/ldconfig ${libdir}; cd ${libdir}; sudo ln -sf ${libprefix}libict.so.1.$(REV) ${libprefix}libict.so; cd - > /dev/null; fi
 	@${INSTALL_DATA} $(srcdir)/icg.h         ${includedir}/${includeprefix}icg.h
 	@${INSTALL_DATA} $(srcdir)/immcc.1.gz    ${mandir}/man1/${manprefix}immcc.1.gz
 	@${INSTALL_DATA} $(srcdir)/immax.1.gz    ${mandir}/man1/${manprefix}immax.1.gz
@@ -373,13 +382,8 @@ endif
 	@${INSTALL_DATA} $(srcdir)/iClive.1.gz   ${mandir}/man1/${manprefix}iClive.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCmake.1.gz   ${mandir}/man1/${manprefix}iCmake.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCman.1.gz    ${mandir}/man1/${manprefix}iCman.1.gz
-ifeq ($(GO),go)
-	@${INSTALL_DATA} $(srcdir)/goserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz
-	@${INSTALL_DATA} $(srcdir)/immag.1.gz    ${mandir}/man1/${manprefix}immac.1.gz
-else
-	@${INSTALL_DATA} $(srcdir)/iCserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz
-	@${INSTALL_DATA} $(srcdir)/immac.1.gz    ${mandir}/man1/${manprefix}immac.1.gz
-endif
+	@if [ -f $(srcdir)/goserver.1.gz ]; then ${INSTALL_DATA} $(srcdir)/goserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz; else ${INSTALL_DATA} $(srcdir)/iCserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz; fi
+	@if [ -f $(srcdir)/immag.1.gz ]; then ${INSTALL_DATA} $(srcdir)/immag.1.gz ${mandir}/man1/${manprefix}immac.1.gz; else ${INSTALL_DATA} $(srcdir)/immac.1.gz ${mandir}/man1/${manprefix}immac.1.gz; fi
 	@${INSTALL_DATA} $(srcdir)/iCpiFace.1.gz ${mandir}/man1/${manprefix}iCpiFace.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCpiPWM.1.gz  ${mandir}/man1/${manprefix}iCpiPWM.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCtherm.1.gz  ${mandir}/man1/${manprefix}iCtherm.1.gz
@@ -393,7 +397,7 @@ endif
 	@${INSTALL_DATA} $(srcdir)/../man/man3/pigpiod_if.3.gz ${mandir}/man3/${manprefix}pigpiod_if.3.gz
 
 uninstall:
-	$(srcdir)/perlinstall -r $(srcdir)
+	@$(srcdir)/perlinstall -r $(srcdir)
 	sudo rm -f `$(srcdir)/perlinstall`/iCmsg.pm
 	sudo rm -f ${bindir}/${binprefix}immcc
 	sudo rm -f ${bindir}/${binprefix}pplstfix

@@ -17,27 +17,21 @@
 #
 ########################################################################
 
+name=${0##*/}
 if echo $PATH | grep -q intel_cc; then
     CC=icc
 else
     CC=gcc
 fi
 
-case `uname -m` in
-    *x86_64* | *ppc64* | *s390x* )
-	if [ -d "/usr/local/lib64/" ]; then
-	    LIB="/usr/local/lib64/"
-	else
-	    LIB="/usr/local/lib/"
-	fi
-	;;
-    *armv* )
-	LIB="/usr/local/lib/"
-	;;
-    * )
-	LIB="/usr/local/lib/"
-	;;
-esac
+if [ -f "${HOME}/.iC/iCmake.ini" ]; then
+    read LIB < ${HOME}/.iC/iCmake.ini
+    if [ ! -d $LIB -o ! -f "$LIB/libict.a" ]; then
+	echo "$name: iC system is configured with incorrect LIB '$LIB'" >&2; exit 125
+    fi
+else
+    echo "$name: iC system is not configured and installed" >&2; exit 126
+fi
 
 ldir=" -I/usr/local/include -L$LIB"
 ICC=immcc
@@ -46,7 +40,7 @@ IAC=immac
 usage ()
 {
   echo 'Usage:' >&2
-  echo '  '${0##*/}' [-[l|o<exe>|i|t|c|b|n]sfgASpRaLjIJ6xqNzh][ -v[<N>]][ -w<dir>]' >&2
+  echo "  $name [-[l|o<exe>|i|t|c|b|n]sfgASpRaLjIJ6xqNzh][ -v[<N>]][ -w<dir>]" >&2
   echo '         [ -k<lim>][ -d<opt>][ -O<level>][ -Dmacro[=defn]...][ -Umacro...]' >&2
   echo '         { -L<lx>][ -Cmacro[=defn]...][ -Vmacro...][ -Pmacro[=defn]...]' >&2
   echo '         [ -W[no-]<warn>...] file ...' >&2
@@ -117,7 +111,7 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake 1.55 $' >&2
+  echo '	$Id: iCmake 1.56 $' >&2
 }
 
 lwsock32=""
@@ -135,7 +129,7 @@ v=""
 b=""
 #lib="-lict -lrt$lwsock32"
 lib="-lict$lwsock32"
-libfile="${LIB}libict.so"
+libfile="$LIB/libict.so"
 L=""
 d=" -d474"
 D=""
@@ -189,11 +183,11 @@ while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:yzh" opt; do
 	    first=$OPTARG
 	    base=${first%.*}
 	    if [ "$first" = "$base.ic" -o "$first" = "$base.ih" ]; then
-		echo "parameter error - target -o '$first' is probably an iC source" >&2
+		echo "$name: parameter error - target -o '$first' is probably an iC source" >&2
 		exit 1
 	    fi
 	else
-	    echo "parameter error - no target name for -o option" >&2
+	    echo "$name: parameter error - no target name for -o option" >&2
 	    exit 2
 	fi
 	;;
@@ -202,11 +196,11 @@ while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:yzh" opt; do
     c )	link=3; d="$A$S$N$R$k";;
     b ) link=4;;
     n ) link=5; d="$A$S$N$R$k";;
-    s ) lib="${LIB}libict.a$lwsock32"; libfile="${LIB}libict.a";;
+    s ) lib="$LIB/libict.a$lwsock32"; libfile="$LIB/libict.a";;
     L ) L="$L -$OPTARG";;
     f )	force=1;;
     e ) ef=" -lefence";;
-    g ) d="$d -g"; CFL="$CFL -g -pg"; lib="${LIB}libict.a$lwsock32"; libfile="${LIB}libict.a";;
+    g ) d="$d -g"; CFL="$CFL -g -pg"; lib="$LIB/libict.a$lwsock32"; libfile="$LIB/libict.a";;
     A )	if [ -z "$A" ]; then A=" -A"; d="$d$A"; fi;;
     S )	if [ -z "$S" ]; then S=" -S"; d="$d$S"; fi;;
     N )	if [ -z "$N" ]; then N=" -N"; d="$d$N"; fi;;
@@ -236,7 +230,7 @@ while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:yzh" opt; do
 	;;
     w ) OPTARG=${OPTARG%/}
 	if [ ! -d "$OPTARG/" ]; then
-	    echo "Error: -d '$OPTARG/' is not a directory" >&2
+	    echo "$name: -w '$OPTARG/' is not a directory" >&2
 	    exit 254;
 	fi
 	b="$OPTARG/"
@@ -257,7 +251,7 @@ while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:yzh" opt; do
     y ) nice="";;
     z )	z=1;;
     h )	usage; exit 0;;
-    \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
+    \?)	echo "$name: illegal option '-$OPTARG'" >&2; usage; exit 127;;
     esac
 done
 shift $(($OPTIND - 1))
@@ -358,7 +352,7 @@ for arg in $*; do
 	.c )	lk=3; d="$A$S$N$R$k";;
 	.ic )	;;
 	.ica )	;;
-	* )	echo "*** bad file extension '$ext' in '$arg'" >&2; usage; exit 127;;
+	* )	echo "$name: *** bad file extension '$ext' in '$arg'" >&2; usage; exit 127;;
 	esac
     fi
 
