@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.82 $
+# @(#)$Id: Makefile.in 1.83 $
 
 #######################################################################
 #
@@ -25,11 +25,13 @@
 #	to make const, remove all objects and make with OPT='-DTESTCONS'
 #	to make lmain, remove all objects and make with OPT='-DLMAIN -DYYDEBUG'
 #	to make iCpiFace, remove all objects and make with OPT='-DRASPBERRYPI -DTCP -DYYDEBUG'
+#	to make iCpiI2C, remove all objects and make with OPT='-DRASPBERRYPI -DTCP -DYYDEBUG'
 #	to make iCpiPWM, remove all objects and make with OPT='-DRASPBERRYPI -DPWM -DTCP -DYYDEBUG'
 #
 #	  makeAll       # makes 'immcc' 'libict.a' and 'libict.so' without YYDEBUG support
 #	  makeAll -rtm; # makes the auxiliary compilers with YYDEBUG support
-#	  makeAll -P;   # make iCpiFace real I/O program with YYDEBUG support
+#	  makeAll -P;   # make iCpiFace SIO digital I/O program with YYDEBUG support
+#	  makeAll -X;   # make iCpiI2C I2C digital I/O program with YYDEBUG support
 #	  makeAll -V;   # make iCpiPWM real serVo and PWM I/O program with YYDEBUG support
 #
 #	Do not rm comp.tab.c, gram.tab.c and lex.yy.c with make clean in case the target
@@ -117,11 +119,13 @@ COBJ =	comp.$(O) genr.$(O) init.$(O) symb.$(O) outp.$(O) gram.$(O) lexc.$(O) con
 LSRC =	$(srcdir)/link.c $(srcdir)/rsff.c $(srcdir)/scan.c
 LOBJ =	link.$(O) rsff.$(O) scan.$(O)
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
-PSRC =	$(srcdir)/rpi_rev.c $(srcdir)/rpi_gpio.c $(srcdir)/mcp23s17.c $(srcdir)/pifacecad.c
+PSRC =	$(srcdir)/rpi_rev.c $(srcdir)/rpi_gpio.c $(srcdir)/mcp23s17.c $(srcdir)/pifacecad.c $(srcdir)/mcp23017.c
 POBJ =	rpi_rev.$(O) rpi_gpio.$(O) mcp23s17.$(O) pifacecad.$(O)
+OOBJ =	rpi_rev.$(O) rpi_gpio.$(O) mcp23017.$(O)
 else
 PSRC =
 POBJ =
+OOBJ =
 endif
 compPREFIX = -piC
 consPREFIX = -pcn
@@ -188,10 +192,15 @@ lmain:	$(srcdir)/Makefile lmain.$(O) misc.$(O) gram.$(O) lexc.$(O) symb.$(O)
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
 #### Raspberry Pi apps ################################################
 
-#### iCpiFace real I/O for Raspberry Pi ###############################
+#### iCpiFace real SIO digital I/O for Raspberry Pi ###################
 
 iCpiFace:	$(srcdir)/Makefile iCpiFace.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(POBJ)
 	$(CC) $(LDFLAGS) -o iCpiFace iCpiFace.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(POBJ) $(EL)
+
+#### iCpiI2C real I2C digital I/O for Raspberry Pi ###################
+
+iCpiI2C:	$(srcdir)/Makefile iCpiI2C.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(OOBJ)
+	$(CC) $(LDFLAGS) -o iCpiI2C iCpiI2C.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(OOBJ) $(EL)
 
 #### iCgpioPUD adjust pull-up/down for GPIO's on Raspberry Pi #########
 ####  install with set user ID ########################################
@@ -199,7 +208,7 @@ iCpiFace:	$(srcdir)/Makefile iCpiFace.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(POBJ
 iCgpioPUD:	$(srcdir)/Makefile iCgpioPUD.$(O) bcm2835.$(O)
 	$(CC) $(LDFLAGS) -o iCgpioPUD iCgpioPUD.$(O) bcm2835.$(O) -lrt $(EL)
 
-#### iCpiPWM real serVo and PWM I/O for Raspberry Pi ##################
+#### iCpiPWM real serVo and PWM analog I/O for Raspberry Pi ###########
 ####  install with set user ID ########################################
 
 ${libdir}/${libprefix}libpigpio.a:	$(srcdir)/../lib/libpigpio.a
@@ -307,6 +316,14 @@ $(srcdir)/iCpiFace.1.gz:	$(srcdir)/iCpiFace.c $(srcdir)/scid.c
     endif
 	@gzip -f $(srcdir)/iCpiFace.1
 
+$(srcdir)/iCpiI2C.1.gz:	$(srcdir)/iCpiI2C.c $(srcdir)/scid.c
+    ifeq ($(TKGE803),true)
+	@pod2man -u -n iCpiI2C -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiI2C.1
+    else
+	@pod2man -n iCpiI2C -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiI2C.1
+    endif
+	@gzip -f $(srcdir)/iCpiI2C.1
+
 $(srcdir)/iCpiPWM.1.gz:	$(srcdir)/iCpiPWM.c $(srcdir)/scid.c
     ifeq ($(TKGE803),true)
 	@pod2man -u -n iCpiPWM -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiPWM.1
@@ -345,7 +362,7 @@ strict:
 # Since this Makefile.in is provided to only make and install the various parts of the
 # iC system it is sufficient to modify the calls of perlinstall here. JW 2023.02.10
 ########################################################################
-install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/goserver.1.gz $(srcdir)/immag.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
+install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/goserver.1.gz $(srcdir)/immag.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiI2C.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
 	@${INSTALL} -d ${bindir} ${libdir} ${includedir} ${mandir}/man1 ${mandir}/man3
 	@${INSTALL_PROGRAM} $(srcdir)/iCmsg.pm  `$(srcdir)/perlinstall`/iCmsg.pm
 	@$(srcdir)/perlinstall -t $(srcdir) $(libdir)
@@ -363,6 +380,7 @@ ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
 	@${INSTALL_PROGRAM} $(srcdir)/iCpiFace          ${bindir}/${binprefix}iCpiFace
 	@sudo ln -sf ${bindir}/${binprefix}iCpiFace     ${bindir}/${binprefix}iCpiGPIO
 	@${INSTALL_PROGRAM} -m 4755 $(srcdir)/iCgpioPUD ${bindir}/${binprefix}iCgpioPUD
+	@${INSTALL_PROGRAM} $(srcdir)/iCpiI2C           ${bindir}/${binprefix}iCpiI2C
 	@${INSTALL_PROGRAM} $(srcdir)/iCtherm           ${bindir}/${binprefix}iCtherm
 	@${INSTALL_DATA} $(srcdir)/../include/pigpio.h     ${includedir}/${includeprefix}pigpio.h
 	@${INSTALL_DATA} $(srcdir)/../include/pigpiod_if.h ${includedir}/${includeprefix}pigpiod_if.h
@@ -386,6 +404,7 @@ endif
 	@if [ -f $(srcdir)/immag.1.gz ]; then ${INSTALL_DATA} $(srcdir)/immag.1.gz ${mandir}/man1/${manprefix}immac.1.gz; else ${INSTALL_DATA} $(srcdir)/immac.1.gz ${mandir}/man1/${manprefix}immac.1.gz; fi
 	@${INSTALL_DATA} $(srcdir)/iCpiFace.1.gz ${mandir}/man1/${manprefix}iCpiFace.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCpiPWM.1.gz  ${mandir}/man1/${manprefix}iCpiPWM.1.gz
+	@${INSTALL_DATA} $(srcdir)/iCpiI2C.1.gz  ${mandir}/man1/${manprefix}iCpiI2C.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCtherm.1.gz  ${mandir}/man1/${manprefix}iCtherm.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCrfid.1.gz   ${mandir}/man1/${manprefix}iCrfid.1.gz
 	@${INSTALL_DATA} $(srcdir)/makeAll.1.gz  ${mandir}/man1/${manprefix}makeAll.1.gz
@@ -411,6 +430,7 @@ uninstall:
 	sudo rm -f ${bindir}/${binprefix}iCserver
 	sudo rm -f ${bindir}/${binprefix}iCpiFace
 	sudo rm -f ${bindir}/${binprefix}iCpiPWM
+	sudo rm -f ${bindir}/${binprefix}iCpiI2C
 	sudo rm -f ${bindir}/${binprefix}iCpiGPIO
 	sudo rm -f ${bindir}/${binprefix}iCgpioPUD
 	sudo rm -f ${bindir}/${binprefix}iCtherm
@@ -436,6 +456,7 @@ uninstall:
 	sudo rm -f ${mandir}/man1/${manprefix}iCserver.1.gz
 	sudo rm -f ${mandir}/man1/${manprefix}iCpiFace.1.gz
 	sudo rm -f ${mandir}/man1/${manprefix}iCpiPWM.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}iCpiI2C.1.gz
 	sudo rm -f ${mandir}/man1/${manprefix}iCtherm.1.gz
 	sudo rm -f ${mandir}/man1/${manprefix}iCrfid.1.gz
 	sudo rm -f ${mandir}/man1/${manprefix}makeAll.1.gz
@@ -447,7 +468,7 @@ uninstall:
 	sudo rm -f ${mandir}/man3/${manprefix}pigpiod_if.3.gz
 
 clean:
-	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/ConstObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/PiPWMObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/const $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/iCpiPWM $(srcdir)/goserver $(srcdir)/../pkg/*/tcpcomm.a $(srcdir)/immag $(srcdir)/*.1.gz
+	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/ConstObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/PiPWMObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/const $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/iCpiI2C $(srcdir)/iCpiPWM $(srcdir)/goserver $(srcdir)/../pkg/*/tcpcomm.a $(srcdir)/immag $(srcdir)/*.1.gz
 
 distclean: clean
 	rm -f $(srcdir)/Makefile $(srcdir)/comp.tab.c $(srcdir)/comp.tab.h $(srcdir)/comp.output $(srcdir)/gram.tab.c $(srcdir)/gram.tab.h $(srcdir)/gram.output $(srcdir)/lex.yy.c $(srcdir)/cons.tab.c $(srcdir)/cons.tab.h $(srcdir)/cons.output $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/pplstfix.log
@@ -499,6 +520,8 @@ ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
 
 iCpiFace.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h $(srcdir)/rpi_rev.h $(srcdir)/rpi_gpio.h $(srcdir)/mcp23s17.h $(srcdir)/pifacecad.h $(srcdir)/bcm2835.h
 
+iCpiI2C.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h $(srcdir)/rpi_rev.h $(srcdir)/rpi_gpio.h $(srcdir)/mcp23017.h $(srcdir)/bcm2835.h
+
 iCgpioPUD.$(O):	$(srcdir)/bcm2835.h
 
 ${includedir}/${includeprefix}pigpio.h:	$(srcdir)/../include/pigpio.h
@@ -511,6 +534,8 @@ rpi_rev.$(O):	$(srcdir)/rpi_rev.h
 rpi_gpio.$(O):	$(srcdir)/rpi_gpio.h
 
 mcp23s17.$(O):	$(srcdir)/mcp23s17.h $(srcdir)/pifacecad.h
+
+mcp23017.$(O):	$(srcdir)/mcp23017.h
 
 pifacecad.$(O):	$(srcdir)/pifacecad.h $(srcdir)/mcp23s17.h
 

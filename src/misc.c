@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c 1.21 $";
+"@(#)$Id: misc.c 1.22 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -109,52 +109,6 @@ gpioIO *	iC_gpL[2];		/* GPIO names/gates and channels */
 #include	<time.h>
 static struct timespec	ms200 = { 0, 200000000, };
 #endif	/* defined(LOAD) && ! defined(_WIN32) */
-
-/********************************************************************
- *
- *	Special code to support PiFace Control and Display.
- *	Display a string either directly on a PiFaceCAD
- *	or send it via TCP/IP on PFCAD4 to be displayed
- *	  displayString	formatted for display on a PiFaceCAD
- *	  channel	0 = direct display or > 0 && < 0xfff0 iCserver channel
- *
- *******************************************************************/
-
-void
-writePiFaceCAD(const char * displayString, unsigned short channel)
-{
-    char *	cp;
-    char	buf[101];
-
-    if (channel == 0) {
-#ifdef	RASPBERRYPI
-	pifacecad_lcd_clear();
-	pifacecad_lcd_write(displayString);	/* write direct to PiFaceCAD */
-#else	/* RASPBERRYPI */
-	fprintf(stderr, "ERROR: cannot write directly to PiFaceCAD\n");
-	iC_quit(SIGUSR1);
-#endif	/* RASPBERRYPI */
-    } else
-    if (channel < 0xfff0) {
-	cp = buf;
-	if (snprintf(buf, 100, "%hu:%s", channel, displayString) > 100) {
-	    buf[100] = '\0';			/* terminate in case of overflow (unlikely) */
-	}
-#if	YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0200) {
-	    fprintf(iC_outFP, "writePiFaceCAD: '%s'\n", buf);	/* terminate with a CR in case last line has none */
-	}
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
-	while ((cp = strchr(cp+1 , ',')) != NULL) {	/* no commas in channel: */
-	    *cp = '\036';			/* replace every comma by ASCII RS */
-	}
-	assert(iC_sockFN > 0);
-	iC_send_msg_to_server(iC_sockFN, buf);
-    } else {
-	fprintf(stderr, "ERROR: unable to register as PFCAD4 sender - is PiFaceCAD input correct ?\n");
-	iC_quit(SIGUSR1);
-    }
-} /* writePiFaceCAD */
 #ifdef	RASPBERRYPI
 
 /********************************************************************

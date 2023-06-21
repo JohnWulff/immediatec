@@ -1,5 +1,5 @@
 static const char pifacecad_c[] =
-"$Id: pifacecad.c,v 1.3 2015/03/18 01:30:36 jw Exp $";
+"$Id: pifacecad.c 1.4 $";
 /********************************************************************
  *
  *	Copyright (C) 2014  John E. Wulff
@@ -52,9 +52,14 @@ static const char pifacecad_c[] =
 #include <time.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <string.h>
+#include <assert.h>
+#include <icg.h>
 #include <mcp23s17.h>
+#include "tcpc.h"
 #include "pifacecad.h"
 
+#ifdef	RASPBERRYPI
 #define LCD_PORT	GPIOB
 #ifdef	TRACE 
 
@@ -545,3 +550,50 @@ static void sleep_ns(long nanoseconds)
     if (iC_debug & 040) fprintf(iC_outFP, "\tzz %ld ns", nanoseconds);
 #endif	/* TRACE */
 }
+#endif	/* RASPBERRYPI */
+
+/********************************************************************
+ *
+ *	Special code to support PiFace Control and Display.
+ *	Display a string either directly on a PiFaceCAD
+ *	or send it via TCP/IP on PFCAD4 to be displayed
+ *	  displayString	formatted for display on a PiFaceCAD
+ *	  channel	0 = direct display or > 0 && < 0xfff0 iCserver channel
+ *
+ *******************************************************************/
+
+void
+writePiFaceCAD(const char * displayString, unsigned short channel)
+{
+    char *	cp;
+    char	buf[101];
+
+    if (channel == 0) {
+#ifdef	RASPBERRYPI
+	pifacecad_lcd_clear();
+	pifacecad_lcd_write(displayString);	/* write direct to PiFaceCAD */
+#else	/* RASPBERRYPI */
+	fprintf(stderr, "ERROR: cannot write directly to PiFaceCAD\n");
+	iC_quit(SIGUSR1);
+#endif	/* RASPBERRYPI */
+    } else
+    if (channel < 0xfff0) {
+	cp = buf;
+	if (snprintf(buf, 100, "%hu:%s", channel, displayString) > 100) {
+	    buf[100] = '\0';			/* terminate in case of overflow (unlikely) */
+	}
+#if	YYDEBUG && !defined(_WINDOWS)
+	if (iC_debug & 0200) {
+	    fprintf(iC_outFP, "writePiFaceCAD: '%s'\n", buf);	/* terminate with a CR in case last line has none */
+	}
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+	while ((cp = strchr(cp+1 , ',')) != NULL) {	/* no commas in channel: */
+	    *cp = '\036';			/* replace every comma by ASCII RS */
+	}
+	assert(iC_sockFN > 0);
+	iC_send_msg_to_server(iC_sockFN, buf);
+    } else {
+	fprintf(stderr, "ERROR: unable to register as PFCAD4 sender - is PiFaceCAD input correct ?\n");
+	iC_quit(SIGUSR1);
+    }
+} /* writePiFaceCAD */
