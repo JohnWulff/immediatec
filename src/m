@@ -37,7 +37,7 @@ usage()
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m 1.25 $' >&2
+    echo '$Id: m 1.26 $' >&2
 }
 
 name=${0##*/}

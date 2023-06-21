@@ -62,7 +62,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll 1.48 $' >&2
+    echo '	$Id: makeAll 1.49 $' >&2
 }
 
 makeLib ()
