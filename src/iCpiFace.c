@@ -243,7 +243,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.16 $\n"
+"Version	$Id: iCpiFace.c 1.17 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -1306,14 +1306,18 @@ main(
 			    fprintf(iC_errFP, "ERROR: %s: Cannot open GPIO %d for input: %s\n", iC_progname, gpio, strerror(errno));
 			}
 			/********************************************************************
-			 *  Execute the SUID root progran iCgpioPUD(gpio, pud) to set pull-up/down
+			 *  Execute the SUID root progran iCgpioPUD(gpio, pud) to set pull-up
+			 *  to 3.3 volt. It is not recommended to connect a GPIO input to 5 volt,
+			 *  although I have never had a problem doing so. JW 2023-07-04
+			 *  Previously (before version 1.17) the following was done:
 			 *    for normal   input (logic 0 = low)  set pull down pud = 1
 			 *    for inverted input (logic 0 = high) set pull up   pud = 2
-			 *  Different bits for one GPIO IEC variable can be normal or inverted
+			 *  That required pulling the input high for normal input, which is
+			 *  awkward, especially if you should only use 3.3 volt, not 5 volt.
+			 *  Now it is always pull up  pud = 2. GPIO inputs are activated by
+			 *  pulling them down to 0 volts, which is the same as PiFace inputs.
 			 *******************************************************************/
-			iC_gpio_pud(gpio, gep->Ginv & iC_bitMask[bit] ?
-			    BCM2835_GPIO_PUD_UP :	/* inverted input bit */
-			    BCM2835_GPIO_PUD_DOWN);	/* normal input bit */
+			iC_gpio_pud(gpio, BCM2835_GPIO_PUD_UP);
 		    }
 		    if (gep->gpioFN[bit] > iC_maxFN) {
 			iC_maxFN = gep->gpioFN[bit];
