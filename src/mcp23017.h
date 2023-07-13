@@ -17,7 +17,7 @@
 #ifndef MCP23017_H
 #define MCP23017_H
 static const char mcp23017_h[] =
-"$Id: mcp23017.h 1.1 $";
+"$Id: mcp23017.h 1.2 $";
 
 #include	<stdio.h>
 #include	<stdint.h>
@@ -66,20 +66,26 @@ static const char mcp23017_h[] =
 #define CMD_WRITE	0x40
 #define CMD_READ	0x41
 
+// GPIO Ports
+#define GPIO_A      0x00
+#define GPIO_B      0x01
+
 enum	conf		{ detect, data, concentrate };
 
 extern FILE *		iC_outFP;			/* listing file pointer */
 extern FILE *		iC_errFP;			/* error file pointer */
 extern short		iC_debug;
-#ifdef	TRACE 
+#ifdef	TRACE
 
 extern int	id;		/* used to indent traces if (iC_debug & 04) */
 extern char	sp[];
 #endif	/* TRACE */
 
-extern int		setupI2C(int i2cSel);
-extern int		setupMCP23017(int spiFd, enum conf config, uint8_t devId, uint8_t iocBits, uint8_t inputA, uint8_t inputB);
-extern void		writeByte(int spiFd, int devId, uint8_t reg, uint8_t data);
-extern uint8_t		readByte(int spiFd, int devId, uint8_t reg);
+extern int	   setupI2C(int i2cSel);
+extern int	   setupMCP23017(int i2cFd, enum conf config, uint8_t devId, uint8_t iocBits,
+			         uint8_t inputA, uint8_t inputB, uint8_t invA, uint8_t invB);
+extern void	   writeByte(int spiFd, int devId, uint8_t reg, uint8_t data);
+extern uint8_t	   readByte(int spiFd, int devId, uint8_t reg);
+extern const char* getI2cDevice(int channel);
 
 #endif	/* MCP23017_H */

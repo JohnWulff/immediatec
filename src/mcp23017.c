@@ -1,5 +1,5 @@
 static const char mcp23017_c[] =
-"$Id: mcp23017.c 1.1 $";
+"$Id: mcp23017.c 1.2 $";
 /********************************************************************
  *
  *	Copyright (C) 2023  John E. Wulff
@@ -55,7 +55,7 @@ static const char *	i2cdev[10] = {
  *	i2cSel	0     = /dev/i2c-0 direct I2C channel bypassing PCA9548A
  *	i2cSel	1 - 8 = /dev/i2c-11 to /dev/i2c-18 multiplexed I2C channels
  *	i2cSel	9     = /dev/i2c-1 direct I2C channel bypassing PCA9548A
- *	return	i2cFd
+ *	return	i2cFd or -1 if channel not active
  *
  *******************************************************************/
 
@@ -66,10 +66,9 @@ setupI2C(int i2cSel)
     unsigned long	funcs;
 
     assert(i2cSel >= 0 && i2cSel < 10);
-    if (iC_debug & 0200) fprintf(iC_outFP, "*** i2cSel = %d i2cChannel = %s\n", i2cSel, i2cdev[i2cSel]);
+    if (iC_debug & 0200) fprintf(iC_outFP, "*** i2cSel = [%d] i2cChannel = [%s]\n", i2cSel, i2cdev[i2cSel]);
     // open
     if ((i2cFd = open(i2cdev[i2cSel], O_RDWR)) < 0) {
-        fprintf(iC_errFP, "setupI2C: ERROR: Could not open I2C device %s\n", i2cdev[i2cSel]);
         return -1;
     }
     // check functionality of the I2C channel - will ignore multiplexed devices if PCA9548A is not present
@@ -104,6 +103,8 @@ setupI2C(int i2cSel)
  *	   IOCON_MIRROR	INTA and INTB pins are internally connected
  *	inputA		0 bits configure output, 1 bits configure input for GPIOA
  *	inputB		0 bits configure output, 1 bits configure input for GPIOB
+ *	invA		0 bits configure active HI, 1 bits configure active LO for IPOLA
+ *	invB		0 bits configure active HI, 1 bits configure active LO for IPOLB
  *	return	i2cFd
  *
  *  NOTE: IODIRA and IODIRB are set for output (0x00) unless inputA or inputB
@@ -115,7 +116,8 @@ setupI2C(int i2cSel)
  *******************************************************************/
 
 int
-setupMCP23017(int i2cFd, enum conf config, uint8_t devId, uint8_t iocBits, uint8_t inputA, uint8_t inputB)
+setupMCP23017(int i2cFd, enum conf config, uint8_t devId, uint8_t iocBits,
+	      uint8_t inputA, uint8_t inputB, uint8_t invA, uint8_t invB)
 {
     uint8_t	i;
     uint8_t	iocon_init = (IOCON_SEQOP | iocBits);	/* Sequential operation disabled, Address always enabled */
@@ -124,43 +126,58 @@ setupMCP23017(int i2cFd, enum conf config, uint8_t devId, uint8_t iocBits, uint8
     assert((devId & ~0x07) == 0x20);
     writeByte(i2cFd, devId, IOCON, iocon_init);
     if ((i = readByte(i2cFd, devId, IOCON)) != iocon_init) {
-	return -1;
+        if (iC_debug & 0200) fprintf(iC_outFP, "MCP23017 [0x%02x] NOT present (i = [0x%02x] iocon_init = [0x%02x])\n", devId, i, iocon_init);
+        return -1;
     } else {
-	if (iC_debug & 0200) fprintf(iC_outFP, "MCP23017 %02x present (i = 0x%02x iocon_init = 0x%02x\n", devId, i, iocon_init);
+        if (iC_debug & 0200) fprintf(iC_outFP, "MCP23017 [0x%02x] present (i = [0x%02x] iocon_init = [0x%02x])\n", devId, i, iocon_init);
     }
 
     if (config != detect) {
-	writeByte(i2cFd, devId, IODIRA, inputA);	/* Port A -> Outputs or Inputs */
-	if (inputA) {
-	    writeByte(i2cFd, devId, GPINTENA, inputA);	/* Enable interrupts for inputs */
-	    if (config == data) {
-		writeByte(i2cFd, devId, INTCONA, 0x00);	/* data - compare changes in input to previous value */
-	    } else {	/* concentrate */
-		writeByte(i2cFd, devId, DEFVALA, inputA);	/* concentrator MCP23017 */
-		writeByte(i2cFd, devId, INTCONA, inputA);	/* compare changes in input to DEFVALA */
-	    }
-	    writeByte(i2cFd, devId, GPPUA, inputA);	/* Enable pull-ups for inputs */
-	    readByte(i2cFd, devId, INTCAPA);		/* clear a possible INTA interrupt */
-	}
-	writeByte(i2cFd, devId, OLATA, 0x00);		/* Set all actual outputs off */
+        writeByte(i2cFd, devId, IODIRA, inputA);	/* Port A -> Outputs or Inputs */
+        if (inputA) {
+            writeByte(i2cFd, devId, GPINTENA, inputA);	/* Enable interrupts for inputs */
+            if (config == data) {
+                writeByte(i2cFd, devId, INTCONA, 0x00);	/* data - compare changes in input to previous value */
+                writeByte(i2cFd, devId, IPOLA, invA);	/* data - input bit polarity */
+            } else {	/* concentrate */
+                writeByte(i2cFd, devId, DEFVALA, inputA);	/* concentrator MCP23017 */
+                writeByte(i2cFd, devId, INTCONA, inputA);	/* compare changes in input to DEFVALA */
+            }
+            writeByte(i2cFd, devId, GPPUA, inputA);	/* Enable pull-ups for inputs */
+            readByte(i2cFd, devId, INTCAPA);		/* clear a possible INTA interrupt */
+        }
+        writeByte(i2cFd, devId, OLATA, 0x00);		/* Set all actual outputs off */
 
-	writeByte(i2cFd, devId, IODIRB, inputB);	/* Port B -> Outputs or Inputs */
-	if (inputB) {
-	    writeByte(i2cFd, devId, GPINTENB, inputB);	/* Enable interrupts for inputs */
-	    if (config == data) {
-		writeByte(i2cFd, devId, INTCONB, 0x00);	/* data - compare changes in input to previous value */
-	    } else {	/* concentrate */
-		writeByte(i2cFd, devId, DEFVALB, inputB);	/* concentrator MCP23017 */
-		writeByte(i2cFd, devId, INTCONB, inputB);	/* compare changes in input to DEFVALB */
-	    }
-	    writeByte(i2cFd, devId, GPPUB, inputB);	/* Enable pull-ups for inputs */
-	    readByte(i2cFd, devId, INTCAPB);		/* clear a possible INTB interrupt */
-	}
-	writeByte(i2cFd, devId, OLATB, 0x00);		/* Set all actual outputs off */
+        writeByte(i2cFd, devId, IODIRB, inputB);	/* Port B -> Outputs or Inputs */
+        if (inputB) {
+            writeByte(i2cFd, devId, GPINTENB, inputB);	/* Enable interrupts for inputs */
+            if (config == data) {
+                writeByte(i2cFd, devId, INTCONB, 0x00);	/* data - compare changes in input to previous value */
+                writeByte(i2cFd, devId, IPOLB, invA);	/* data - input bit polarity */
+            } else {	/* concentrate */
+                writeByte(i2cFd, devId, DEFVALB, inputB);	/* concentrator MCP23017 */
+                writeByte(i2cFd, devId, INTCONB, inputB);	/* compare changes in input to DEFVALB */
+            }
+            writeByte(i2cFd, devId, GPPUB, inputB);	/* Enable pull-ups for inputs */
+            readByte(i2cFd, devId, INTCAPB);		/* clear a possible INTB interrupt */
+        }
+        writeByte(i2cFd, devId, OLATB, 0x00);		/* Set all actual outputs off */
     }
 
     return i2cFd;
 } /* setupMCP23017 */
+
+/********************************************************************
+ *
+ *	Support routine for debug tracing
+ *
+ *******************************************************************/
+
+const char *
+getI2cDevice(int channel) {
+    assert((channel >= 0) && (channel < 10));
+    return i2cdev[channel];
+}
 
 /********************************************************************
  *

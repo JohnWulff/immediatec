@@ -31,10 +31,15 @@
  *	Each MCP23017 has 16 bit I/Os in two 8 bit registers A and B. Each
  *	bit I/O can be either an input or an output or not used at all.
  *
+ *	If no PCA9548A I2C Mux/Switch is used, a maximum 0f 7 MCP23017
+ *	controllers can be handled on /dev/i2c-1 for a newer Raspberry Pi
+ *	or on /dev/i2c-0 for a very old Raspberry Pi. 
+ *
  *	To concentrate the interrupts from INTA and INTB of all 8 groups
  *	of MCP23017 controllers a special MCP23017 is used at address 0x27
- *	of /dev/i2c-18. The INTA and INTB output of this MCP are mirrored
- *	and are connected to GPIO 27 for interrupt handling.
+ *	of /dev/i2c-18 (or /dev/i2c-1 or /dev/i2c-0 without mux).
+ *	The INTA and INTB output of this MCP are mirrored and are connected
+ *	to GPIO 27 for interrupt handling.
  *
  *	All GPIO pins on a Raspberry Pi A, B, B+, 3B+ or 4 may be selected
  *	as either input bits or output bits independent of whether MCP23017s
@@ -77,7 +82,7 @@ typedef struct iec {
     unsigned int qi   : 1;		/* 0 = IX; 1 = QX */
     unsigned int g    : 1;		/* 0 = Register A; 1 = Register B */
     unsigned int n    : 3;		/* 0 = devAdr 0x20; 1 = 0x21; ... 7 = ox27 */
-    unsigned int c    : 3;		/* 0 = /dev/int-11; 1 = /dev/int-12; ... 7 = /dev/int-18 */
+    unsigned int c    : 4;		/* 0 = /dev/int-0; 1 = /dev/int-11; ... 8 = /dev/int-18; 9 = /dev/int-1 */
 } iec;
 
 /********************************************************************
@@ -141,12 +146,13 @@ typedef struct	mcpIO {
  *      and output QX for the selected Port by qi = 0; input IX by qi = 1
  *******************************************************************/
 
-static mcpIO *	mcpL[64];		/* array of pointers to MCP23017 info *mcpP */
+static mcpIO *	mcpL[80];		/* array of pointers to MCP23017 info *mcpP */
 					/* -1     MCP23017 not found */
 					/* NULL   MCP23017 found but not configured */
 					/* *mcpP  MCP23017 info configured */
-static	int	i2cFdA[8] =		/* file descriptors for open I2C channels */
-	    { -1, -1, -1, -1, -1, -1, -1, -1 };
+static	int	i2cFdA[10] =		/* file descriptors for open I2C channels */
+		{ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+static	int	devList[] = { 8, 9, 0 };
 static int	i2cFdCnt   = 0;		/* number of open I2C channels */
 static int	gpio27FN = -1;		/* /sys/class/gpio/gpio27/value I2C file number */
 
@@ -338,6 +344,7 @@ static int	ioChannels = 0;		/* dynamically allocated size of Channels[] */
 static long long ownUsed = 0LL;
 char		iC_stdinBuf[REPLY];	/* store a line of STDIN - used by MCP23017CAD input */
 static int	mcpCnt;
+static int	concCh;
 static int	concFd;
 static long	convert_nr(const char * str, char ** endptr);
 static int	termQuit(int sig);		/* clear and unexport RASPBERRYPI stuff */
@@ -369,6 +376,7 @@ main(
     int			len;
     int			value;
     int			sig;
+    int			i;
     int			n;
     int			c;
     int			m;
@@ -646,11 +654,11 @@ main(
 	 *  GPIO 27 is used during I2C and MCB23017  setup, but is left unchanged
 	 * if no MCP23017s is found.
 	 *
-	 *  If no MCP23017s are found proceed with opt_G set. An error will then occur
+	 *  If no MCP23017s are found proceed with opt -G set. An error will then occur
 	 *  only if an argument requesting MCP23017 IO (Innn or Qnnn) is found.
 	 *
-	 *  Initialisation of /dev/i2cdev0.0 and/or /dev/i2cdev0.1 for I2C
-	 *  modes and read/writeBytes
+	 *  Initialisation of /dev/i2c-0 or /dev/i2c-1 as well as /dev/i2c-11 to
+	 *  /dev/i2c-18 if mux rporesent for I2C modes and read/writeBytes
 	 *
 	 *  Test for the presence of a MCP23017 by writing to the IOCON register and
 	 *  checking if the value returned is the same. If not, there is no MCP23017
@@ -661,11 +669,9 @@ main(
 	 *
 	 *******************************************************************/
 	value = mcpCnt = 0;
-	for (ch = 0; ch < 8; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
-	    if ((fd = setupI2C(ch+1)) < 0) {
-		fprintf(stdout, "ERROR: %s: failed to init I2C communication on channel %d: %s\n",
-		    iC_progname, 11+ch, strerror(errno));
-		exit(1);
+	for (ch = 0; ch < 10; ch++) {		/* scan /dev/ic2-0, /dev/i2c-18 to */
+	    if ((fd = setupI2C(ch)) < 0) {	/* /dev/ic2-11 and /dev/i2c-1 */
+		continue;
 	    }
 	    i2cFdCnt++;				/* flags that at least one I2C channel is valid */
 	    m = 0;
@@ -675,27 +681,13 @@ main(
 		 *******************************************************************/
 		cn = ch << 3 | ns;
 		if (cn != 077) {
-		    if (setupMCP23017(fd, detect, 0x20+ns, IOCON_ODR, 0x00, 0x00) < 0) {
+		    if (setupMCP23017(fd, detect, 0x20+ns, IOCON_ODR, 0x00, 0x00, 0x00, 0x00) < 0) {
 			mcpL[cn] = (void *) -1;
-			continue;			/* no MCP23017 at this address */
+			continue;		/* no MCP23017 at this address */
 		    }
 		    mcpL[cn] = NULL;
-		    m++;				/* count active MCP23017s in this I2C channel */
+		    m++;			/* count active MCP23017s in this I2C channel */
 		    mcpCnt++;			/* count all active MCP23017s */
-		} else {
-		    /********************************************************************
-		     *  Configure last MCP23017 for input interrupt concentration
-		     *  unless -G option for RPi GPIO only
-		     *******************************************************************/
-		    uint8_t in = iC_opt_G ? 0x00 : 0xff;	/* block concentrator interrupts for opt -G */
-		    if (setupMCP23017(fd, concentrate, CONCDEV, IOCON_MIRROR, in, in) < 0) {
-			fprintf(iC_errFP, "ERROR: %s: no concentrator MCP23017 found at ch 18 dev 0x27\n",
-			    iC_progname);
-			errorFlag++;
-		    }
-		    concFd = fd;
-		    m++;				/* keep concFd open */
-		    if (iC_debug & 0200) fprintf(iC_outFP, "concentrator MCP23017 at ch 18 dev 0x27 configured\n");
 		}
 	    }
 	    if (m == 0) {
@@ -706,7 +698,30 @@ main(
 	}
 	if (mcpCnt && !iC_opt_G) {
 	    /********************************************************************
-	     *  MCP23017s found
+	     *  Configure last MCP23017 in one of the channels /dev/i2c-18 /dev/i2c-1
+	     *  or /dev/i2c-0 in that order for input interrupt concentration
+	     *  unless -G option for RPi GPIO only
+	     *******************************************************************/
+	    for (i = 0; i < 3; i++) {
+		ch = devList[i];
+		cn = ch << 3 | 7;
+		if (mcpL[cn] == NULL) {
+		    concCh = ch;		/* MCP is available at a concentrator location */
+		    concFd = i2cFdA[ch];
+		    if (setupMCP23017(concFd, concentrate, CONCDEV, IOCON_MIRROR, 0xff, 0xff, 0x00, 0x00) < 0) {
+			continue;
+		    }
+		    if (iC_debug & 0200) fprintf(iC_outFP, "concentrator MCP23017 at channel %s dev 0x%02x configured\n",
+			getI2cDevice(ch), CONCDEV);
+		    goto concentratorFound;
+		}
+	    }
+	    fprintf(iC_errFP, "ERROR: %s: no concentrator MCP23017 found at dev 0x%02x in any channel\n",
+		iC_progname, CONCDEV);
+	    exit(-2);
+	  concentratorFound:
+	    /********************************************************************
+	     *  MCP23017s found and concntrator configured.
 	     *  Check if GPIO 27 required by MCP23017 has been used in another app
 	     *******************************************************************/
 	    gpioMask = 0x0800000cLL;		/* gpio 2,3,27 */
@@ -855,8 +870,8 @@ main(
 		    cngEnd   = Channels[channel == USHRT_MAX ? 1 : channel].cngqi;
 		    if (iC_debug & 0200) fprintf(iC_outFP, "%s%cX%u%u%u-%cX%u%u%u,0x%02x%s\n",
 			invFlag ? "~" : "",
-			QI[cngStart.qi], cngStart.c+1, cngStart.n, cngStart.g+ofs,
-			QI[cngEnd.qi], cngEnd.c+1, cngEnd.n, cngEnd.g+ofs,
+			QI[cngStart.qi], cngStart.c, cngStart.n, cngStart.g+ofs,
+			QI[cngEnd.qi], cngEnd.c, cngEnd.n, cngEnd.g+ofs,
 			mask, iids);
 		    directFlag |= MC | DR;
 		    break;
@@ -978,7 +993,7 @@ main(
 		    fprintf(iC_outFP, "%s", invFlag ? "~" : "");
 		    for (ch = 0; ch <= channel; ch++) {
 			fprintf(iC_outFP, "%cX%u%u%u,",
-			    QI[Channels[ch].cngqi.qi], Channels[ch].cngqi.c+1,
+			    QI[Channels[ch].cngqi.qi], Channels[ch].cngqi.c,
 			    Channels[ch].cngqi.n, Channels[ch].cngqi.g+ofs);
 		    }
 		    fprintf(iC_outFP, "0x%02x%s\n", mask, iids);
@@ -1000,7 +1015,7 @@ main(
 		    nqi = qi ? 0 : 1;			/* ~qi */
 		    cn = c << 3 | n;			/* index into mcpL[] array */
 		    mcp = mcpL[cn];
-		    snprintf(temp, TSIZE, "%cX%u%u%u%s", QI[qi], c+1, n, g+ofs, iids);
+		    snprintf(temp, TSIZE, "%cX%u%u%u%s", QI[qi], c, n, g+ofs, iids);
 		    if (mcp == (void *) -1) {
 			fprintf(iC_errFP, "ERROR: %s: '%s' MCP23017 %s does not exist\n", iC_progname, *argp, temp);
 			errorFlag++;
@@ -1177,7 +1192,7 @@ main(
     /********************************************************************
      *  End of MCP23017 detection
      *******************************************************************/
-    for (ch = 0; ch < 8; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
+    for (ch = 0; ch < 10; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
 	if (i2cFdA[ch] == -1) {
 	    continue;				/* no MCP23017s on this I2C channel */
 	}
@@ -1194,7 +1209,6 @@ main(
 	    assert(fd > 0);
 	    devId = mcp->mcpAdr;
 	    assert(devId == 0x20 + ns);
-	    if (iC_debug & 0200) fprintf(iC_outFP, "=== ch = %d ns = %d cn = %02o fd = %d devId = 0x%2x\n", ch, ns, cn, fd, devId);
 	    /********************************************************************
 	     *  Any MCP23017 that has been configured has 4 possible IECs
 	     *    s[0][0] is mcpDetails for a possible output QXcng for Port A
@@ -1208,11 +1222,11 @@ main(
 	     *  IODIR and IPOL registers (output and no logic inversion) and can
 	     *  be written without testing if the mcpDetails have a name pointer.
 	     *******************************************************************/
-	    if (setupMCP23017(fd, data, devId, IOCON_ODR, mcp->s[0][1].bmask, mcp->s[1][1].bmask) < 0) {
+	    if (setupMCP23017(fd, data, devId, IOCON_ODR,
+			      mcp->s[0][1].bmask, mcp->s[1][1].bmask,
+			      mcp->s[0][1].inv,   mcp->s[1][1].inv) < 0) {
 		assert(0);			/* no MCP23017 at this address ?? was previously detected */
 	    }
-	    writeByte(fd, devId, IPOLA, mcp->s[0][1].inv);	/* Port A input bit polarity - TODO merge to setupMCP23017 */
-	    writeByte(fd, devId, IPOLB, mcp->s[1][1].inv);	/* Port B input bit polarity */
 	}
     }
     /********************************************************************
@@ -1327,12 +1341,13 @@ main(
     len = snprintf(regBuf, regBufLen, "N%s", iC_iccNM);	/* name header */
     cp = regBuf + len;
     regBufLen -= len;
+    m = 0;
     if (mcpCnt) {
 	/********************************************************************
 	 *  Generate registration string made up of all active MCP23017 I/O names
 	 *  There are either 2 input or 2 output names or both per active MCP23017
 	 *******************************************************************/
-	for (ch = 0; ch < 8; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
+	for (ch = 0; ch < 10; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
 	    if (i2cFdA[ch] == -1) {
 		continue;			/* no MCP23017s on this I2C channel */
 	    }
@@ -1353,6 +1368,7 @@ main(
 			    len = snprintf(cp, regBufLen, ",%c%s", RS[qi], np);
 			    cp += len;		/* input send name or output receive name */
 			    regBufLen -= len;
+			    m++;
 			}
 		    }
 		}
@@ -1369,7 +1385,12 @@ main(
 	    len = snprintf(cp, regBufLen, ",%c%s", RS[qi], np);
 	    cp += len;				/* input send name or output receive name */
 	    regBufLen -= len;
+	    m++;
 	}
+    }
+    if (m == 0) {
+	fprintf(iC_errFP, "ERROR: %s: No MCP or GPIO IEC variables were registered - nothing to do\n", iC_progname);
+	iC_quit(QUIT_TERMINAL);		/* quit normally */
     }
     /********************************************************************
      *  Send registration string made up of all active I/O names - TODO support registration strings > 1400 bytes
@@ -1401,7 +1422,7 @@ main(
 	/********************************************************************
 	 *  iC channels for MCP23017 acknowledgments
 	 *******************************************************************/
-	for (ch = 0; ch < 8; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
+	for (ch = 0; ch < 10; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
 	    if (i2cFdA[ch] == -1) {
 		continue;			/* no MCP23017s on this I2C channel */
 	    }
@@ -1516,7 +1537,7 @@ main(
 	    fprintf(iC_outFP, "Allocation for %d MCP23017%s, global instance = \"%s\"\n",
 		mcpCnt, mcpCnt == 1 ? "" : "s", iC_iidNM);
 	    fprintf(iC_outFP, "	 IEC inst	    bits	      channel\n");
-	    for (ch = 0; ch < 8; ch++) {	/* scan /dev/ic2-11 to /dev/i2c-18 */
+	    for (ch = 0; ch < 10; ch++) {	/* scan /dev/ic2-11 to /dev/i2c-18 */
 		if (i2cFdA[ch] == -1) {
 		    continue;			/* no MCP23017s on this I2C channel */
 		}
@@ -1526,7 +1547,7 @@ main(
 		    if (mcp == (void *) -1 || mcp == NULL) {
 			continue;		/* no MCP23017 at this address or not matched by an IEC */
 		    }
-		    fprintf(iC_outFP, "M%2d:%2x\n", ch+11, ns+0x20);
+		    fprintf(iC_outFP, "MCP %s 0x%02x\n", getI2cDevice(ch), ns+0x20);
 		    for (gs = 0; gs < 2; gs++) {
 			for (qi = 0; qi < 2; qi++) {
 			    mcpDetails *	mdp;
@@ -1592,7 +1613,7 @@ main(
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_micro) iC_microPrint("I2C initialise", 0);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-	for (ch = 0; ch < 8; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
+	for (ch = 0; ch < 10; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
 	    if (i2cFdA[ch] == -1) {
 		continue;			/* no MCP23017s on this I2C channel */
 	    }
@@ -1759,8 +1780,12 @@ main(
 					 *  Direct output to an MCP23017 Port
 					 *******************************************************************/
 					writeByte(mdp->i2cFN, mdp->mcpAdr, OLAT[mdp->g], (val & mdp->bmask) ^ mdp->inv);
-					if (iC_debug & 0100) fprintf(iC_outFP, "M: %s:	%hu:%d	> MCP %d:%x%c - %s\n",
-						iC_iccNM, channel, val, mdp->name[2]-'0'+11, mdp->mcpAdr, AB[mdp->g], mdp->name);
+					if (iC_debug & 0100) {
+					    fprintf(iC_outFP, "M: %s:	%hu:%d	> MCP %s:%x%c - %s\n",
+						    iC_iccNM, channel, val,
+						    strrchr(getI2cDevice(mdp->name[2]-'0'), '-')+1,
+						    mdp->mcpAdr, AB[mdp->g], mdp->name);
+					}
 				    } else {
 					fprintf(iC_errFP, "WARNING: %s: %hu:%d no output registered for MCP???\n",
 					    iC_iccNM, channel, val);	/* should not happen */
@@ -1812,11 +1837,16 @@ main(
 		    for (g = 0; g < 2; g++) {
 			diff = ~readByte(concFd, CONCDEV, GPIO[g]) & 0xff;	/* concentrator MCP A/B points to I2C channel */
 			while (diff) {
-			    bit = iC_bitIndex[diff];	/* returns rightmost bit 0 - 7 for values 1 - 255 (avoid 0) */
-			    mask  = iC_bitMask[bit];	/* returns hex 01 02 04 08 10 20 40 80 */
-			    cn = bit << 3;		/* start if I2C channel selected by bit from concentrator MCP */
-			    for (n = 0; n < 8; n++) {
-				mcp = mcpL[cn+n];	/* test every MCP on this I2C channel */
+			    if (concCh == 8) {
+				ch = iC_bitIndex[diff];	/* returns rightmost bit 0 - 7 for values 1 - 255 (avoid 0) */
+				mask  = iC_bitMask[ch];	/* returns hex 01 02 04 08 10 20 40 80 */
+			    } else {
+				ch = concCh;		/* no PCA9548A Mux */
+				mask = diff;		/* scan only the one I2C channel */
+			    }
+			    cn = ch << 3;		/* start if I2C channel selected by bit from concentrator MCP */
+			    for (ns = 0; ns < 8; ns++) {
+				mcp = mcpL[cn+ns];	/* test every MCP on this I2C channel */
 				if (mcp != (void*)-1 && mcp != NULL) {
 				    fd  = mcp->i2cFN;	/* configured MCP found in I2C channel */
 				    ma  = mcp->mcpAdr;
@@ -1834,12 +1864,17 @@ main(
 						cp += len;
 						regBufLen -= len;
 						if (iC_debug & 0300) {
-						    len = snprintf(op, ol, " MCP %d:%x%c - %s", bit+11, ma, AB[g], mdp->name); /* source name */
+						    len = snprintf(op, ol, " MCP %s:%x%c - %s",
+								   strrchr(getI2cDevice(ch), '-')+1,
+								   ma, AB[g], mdp->name); /* source name */
 						    op += len;
 						    ol -= len;
 						}
 					    } else if (iC_debug & 0100) {
-						fprintf(iC_outFP, "M: %s: %d input on unregistered MCP23017 %d:%x%c\n", iC_iccNM, val, bit+11, ma, AB[g]);
+						fprintf(iC_outFP, "M: %s: %d input on unregistered MCP23017 %s:%x%c\n",
+							iC_iccNM, val,
+							strrchr(getI2cDevice(ch), '-')+1,
+							ma, AB[g]);
 					    }
 					    mdp->val = val;		/* store change for comparison */
 					}
@@ -1957,7 +1992,6 @@ main(
 	    iC_quit(SIGUSR1);		/* error quit */
 	}
     }
-		    iC_quit(QUIT_TERMINAL);		/* TODO remove */
 } /* main */
 
 /********************************************************************
@@ -2020,7 +2054,7 @@ scanIEC(const char * format, int * ieStartP, int * ieEndP, char * tail, unsigned
 	    return 5;				/* goto illFormed */
 	}
 	sel.mdp = NULL;				/* clear all bits in the bit field */
-	sel.cngqi.c = ch = cng[0] - '1';
+	sel.cngqi.c = ch = cng[0] - '0';
 	sel.cngqi.n = ns = cng[1] - '0';
 	sel.cngqi.g = gs = cng[2] - '0' - ofs;
 	assert(*iqe == 'I' || *iqe == 'Q');
@@ -2045,10 +2079,10 @@ scanIEC(const char * format, int * ieStartP, int * ieEndP, char * tail, unsigned
 	    return 6;				/* goto endOneArg */
 	}
 	if (sl > 3 ||
-	    ch < 0 || ch > 7 ||
+	    ch < 0 || ch > 9 ||
 	    gs < 0 || ns > 7 ||
 	    gs < 0 || gs > 1 ||
-	    (ch == 7 && ns == 7)) {
+	    (ch == concCh && ns == 7)) {
 	    fprintf(iC_errFP, "ERROR: %s: '%s' with offset %d does not address a data MCP23017 register\n", iC_progname, *argp, ofs);
 	    errorFlag++;
 	    return 6;				/* goto endOneArg */
@@ -2137,7 +2171,7 @@ storeIEC(unsigned short channel, iecS sel)
 	    case 1: fprintf(iC_outFP, "storeIEC: Channels[%d] <== %p\n", channel, sel.gep);
 		break;
 	    case 2: fprintf(iC_outFP, "storeIEC: Channels[%d] <== %cX%d%d%d\n",
-			channel, QI[sel.cngqi.qi], sel.cngqi.c+1, sel.cngqi.n, sel.cngqi.g+ofs);
+			channel, QI[sel.cngqi.qi], sel.cngqi.c, sel.cngqi.n, sel.cngqi.g+ofs);
 		break;
 	    case 3: fprintf(iC_outFP, "storeIEC: Channels[%d] <== GPIO %cX\n",
 			channel, QI[sel.cngqi.qi]);
@@ -2278,7 +2312,7 @@ termQuit(int sig)
 	     *  Shutdown all active MCP23017s leaving interrupts off and open drain
 	     *  Clear active MCP23017 outputs
 	     *******************************************************************/
-	    for (ch = 0; ch < 8; ch++) {	/* scan /dev/ic2-11 to /dev/i2c-18 */
+	    for (ch = 0; ch < 10; ch++) {	/* scan /dev/ic2-11 to /dev/i2c-18 */
 		if (i2cFdA[ch] == -1) {
 		    continue;			/* no MCP23017s on this I2C channel */
 		}
@@ -2288,16 +2322,16 @@ termQuit(int sig)
 		    if (mcp == (void *) -1 || mcp == NULL) {
 			continue;		/* no MCP23017 at this address */
 		    }
-		    setupMCP23017(mcp->i2cFN, data, mcp->mcpAdr, IOCON_ODR, 0x00, 0x00);
+		    setupMCP23017(mcp->i2cFN, data, mcp->mcpAdr, IOCON_ODR, 0x00, 0x00, 0x00, 0x00);
 		}
 	    }
 	    if (concFd > 0) {
-		setupMCP23017(concFd, data, CONCDEV, IOCON_ODR, 0x00, 0x00);	/* concentrator MCP */
+		setupMCP23017(concFd, data, CONCDEV, IOCON_ODR, 0x00, 0x00, 0x00, 0x00);	/* concentrator MCP */
 	    }
 	    /********************************************************************
 	     *  Close selected i2cdev devices
 	     *******************************************************************/
-	    for (ch = 0; ch < 8; ch++) {	/* scan /dev/ic2-11 to /dev/i2c-18 */
+	    for (ch = 0; ch < 10; ch++) {	/* scan /dev/ic2-11 to /dev/i2c-18 */
 		if (i2cFdA[ch] > 0) {
 		    close(i2cFdA[ch]);		/* close connection to I2C channels*/
 		}
