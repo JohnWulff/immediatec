@@ -319,7 +319,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2023 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiI2C.c 1.2 $\n"
+"Version	$Id: iCpiI2C.c 1.4 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -669,8 +669,8 @@ main(
 	 *
 	 *******************************************************************/
 	value = mcpCnt = 0;
-	for (ch = 0; ch < 10; ch++) {		/* scan /dev/ic2-0, /dev/i2c-18 to */
-	    if ((fd = setupI2C(ch)) < 0) {	/* /dev/ic2-11 and /dev/i2c-1 */
+	for (ch = 0; ch < 10; ch++) {		/* scan /dev/i2c-0, /dev/i2c-18 to */
+	    if ((fd = setupI2C(ch)) < 0) {	/* /dev/i2c-11 and /dev/i2c-1 */
 		continue;
 	    }
 	    i2cFdCnt++;				/* flags that at least one I2C channel is valid */
@@ -1192,7 +1192,7 @@ main(
     /********************************************************************
      *  End of MCP23017 detection
      *******************************************************************/
-    for (ch = 0; ch < 10; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
+    for (ch = 0; ch < 10; ch++) {		/* scan /dev/i2c-11 to /dev/i2c-18 */
 	if (i2cFdA[ch] == -1) {
 	    continue;				/* no MCP23017s on this I2C channel */
 	}
@@ -1347,7 +1347,7 @@ main(
 	 *  Generate registration string made up of all active MCP23017 I/O names
 	 *  There are either 2 input or 2 output names or both per active MCP23017
 	 *******************************************************************/
-	for (ch = 0; ch < 10; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
+	for (ch = 0; ch < 10; ch++) {		/* scan /dev/i2c-11 to /dev/i2c-18 */
 	    if (i2cFdA[ch] == -1) {
 		continue;			/* no MCP23017s on this I2C channel */
 	    }
@@ -1422,7 +1422,7 @@ main(
 	/********************************************************************
 	 *  iC channels for MCP23017 acknowledgments
 	 *******************************************************************/
-	for (ch = 0; ch < 10; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
+	for (ch = 0; ch < 10; ch++) {		/* scan /dev/i2c-11 to /dev/i2c-18 */
 	    if (i2cFdA[ch] == -1) {
 		continue;			/* no MCP23017s on this I2C channel */
 	    }
@@ -1537,7 +1537,7 @@ main(
 	    fprintf(iC_outFP, "Allocation for %d MCP23017%s, global instance = \"%s\"\n",
 		mcpCnt, mcpCnt == 1 ? "" : "s", iC_iidNM);
 	    fprintf(iC_outFP, "	 IEC inst	    bits	      channel\n");
-	    for (ch = 0; ch < 10; ch++) {	/* scan /dev/ic2-11 to /dev/i2c-18 */
+	    for (ch = 0; ch < 10; ch++) {	/* scan /dev/i2c-11 to /dev/i2c-18 */
 		if (i2cFdA[ch] == -1) {
 		    continue;			/* no MCP23017s on this I2C channel */
 		}
@@ -1613,7 +1613,7 @@ main(
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_micro) iC_microPrint("I2C initialise", 0);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-	for (ch = 0; ch < 10; ch++) {		/* scan /dev/ic2-11 to /dev/i2c-18 */
+	for (ch = 0; ch < 10; ch++) {		/* scan /dev/i2c-11 to /dev/i2c-18 */
 	    if (i2cFdA[ch] == -1) {
 		continue;			/* no MCP23017s on this I2C channel */
 	    }
@@ -1840,8 +1840,9 @@ main(
 			    if (concCh == 8) {
 				ch = iC_bitIndex[diff];	/* returns rightmost bit 0 - 7 for values 1 - 255 (avoid 0) */
 				mask  = iC_bitMask[ch];	/* returns hex 01 02 04 08 10 20 40 80 */
+				ch++;			/* 1 to 8 is /dev/i2c-11 to /dev/i2c-18 */
 			    } else {
-				ch = concCh;		/* no PCA9548A Mux */
+				ch = concCh;		/* no PCA9548A Mux; 0 is /dev/i2c-0, 9 is /dev/i2c-1 */
 				mask = diff;		/* scan only the one I2C channel */
 			    }
 			    cn = ch << 3;		/* start if I2C channel selected by bit from concentrator MCP */
@@ -2312,7 +2313,7 @@ termQuit(int sig)
 	     *  Shutdown all active MCP23017s leaving interrupts off and open drain
 	     *  Clear active MCP23017 outputs
 	     *******************************************************************/
-	    for (ch = 0; ch < 10; ch++) {	/* scan /dev/ic2-11 to /dev/i2c-18 */
+	    for (ch = 0; ch < 10; ch++) {	/* scan /dev/i2c-11 to /dev/i2c-18 */
 		if (i2cFdA[ch] == -1) {
 		    continue;			/* no MCP23017s on this I2C channel */
 		}
@@ -2331,7 +2332,7 @@ termQuit(int sig)
 	    /********************************************************************
 	     *  Close selected i2cdev devices
 	     *******************************************************************/
-	    for (ch = 0; ch < 10; ch++) {	/* scan /dev/ic2-11 to /dev/i2c-18 */
+	    for (ch = 0; ch < 10; ch++) {	/* scan /dev/i2c-11 to /dev/i2c-18 */
 		if (i2cFdA[ch] > 0) {
 		    close(i2cFdA[ch]);		/* close connection to I2C channels*/
 		}
