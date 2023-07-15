@@ -152,7 +152,7 @@ static mcpIO *	mcpL[80];		/* array of pointers to MCP23017 info *mcpP */
 					/* *mcpP  MCP23017 info configured */
 static	int	i2cFdA[10] =		/* file descriptors for open I2C channels */
 		{ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
-static	int	devList[] = { 8, 9, 0 };
+static	int	chList[] = { 8, 9, 0 };
 static int	i2cFdCnt   = 0;		/* number of open I2C channels */
 static int	gpio27FN = -1;		/* /sys/class/gpio/gpio27/value I2C file number */
 
@@ -319,7 +319,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2023 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiI2C.c 1.4 $\n"
+"Version	$Id: iCpiI2C.c 1.5 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -658,7 +658,7 @@ main(
 	 *  only if an argument requesting MCP23017 IO (Innn or Qnnn) is found.
 	 *
 	 *  Initialisation of /dev/i2c-0 or /dev/i2c-1 as well as /dev/i2c-11 to
-	 *  /dev/i2c-18 if mux rporesent for I2C modes and read/writeBytes
+	 *  /dev/i2c-18 if mux present for I2C modes and read/writeBytes
 	 *
 	 *  Test for the presence of a MCP23017 by writing to the IOCON register and
 	 *  checking if the value returned is the same. If not, there is no MCP23017
@@ -671,6 +671,9 @@ main(
 	value = mcpCnt = 0;
 	for (ch = 0; ch < 10; ch++) {		/* scan /dev/i2c-0, /dev/i2c-18 to */
 	    if ((fd = setupI2C(ch)) < 0) {	/* /dev/i2c-11 and /dev/i2c-1 */
+		for (ns = 0; ns < 8; ns++) {
+		    mcpL[ch << 3 | ns] = (void *) -1;	/* no MCPs in inactive channel */
+		}
 		continue;
 	    }
 	    i2cFdCnt++;				/* flags that at least one I2C channel is valid */
@@ -680,15 +683,13 @@ main(
 		 *  Detect data MCP23017's
 		 *******************************************************************/
 		cn = ch << 3 | ns;
-		if (cn != 077) {
-		    if (setupMCP23017(fd, detect, 0x20+ns, IOCON_ODR, 0x00, 0x00, 0x00, 0x00) < 0) {
-			mcpL[cn] = (void *) -1;
-			continue;		/* no MCP23017 at this address */
-		    }
-		    mcpL[cn] = NULL;
-		    m++;			/* count active MCP23017s in this I2C channel */
-		    mcpCnt++;			/* count all active MCP23017s */
+		if (setupMCP23017(fd, detect, 0x20+ns, IOCON_ODR, 0x00, 0x00, 0x00, 0x00) < 0) {
+		    mcpL[cn] = (void *) -1;	/* no MCP23017 at this address */
+		    continue;
 		}
+		mcpL[cn] = NULL;		/* MCP wired but not configured */
+		m++;				/* count active MCP23017s in this I2C channel */
+		mcpCnt++;			/* count all active MCP23017s */
 	    }
 	    if (m == 0) {
 		close(fd);				/* no active MCP23017s in this I2C channel */
@@ -703,12 +704,14 @@ main(
 	     *  unless -G option for RPi GPIO only
 	     *******************************************************************/
 	    for (i = 0; i < 3; i++) {
-		ch = devList[i];
+		ch = chList[i];
 		cn = ch << 3 | 7;
 		if (mcpL[cn] == NULL) {
 		    concCh = ch;		/* MCP is available at a concentrator location */
 		    concFd = i2cFdA[ch];
 		    if (setupMCP23017(concFd, concentrate, CONCDEV, IOCON_MIRROR, 0xff, 0xff, 0x00, 0x00) < 0) {
+			fprintf(iC_errFP, "ERROR: %s: no concentrator MCP23017 found at channel %s dev 0x%02x although previously detected\n",
+			    iC_progname, getI2cDevice(ch), CONCDEV);
 			continue;
 		    }
 		    if (iC_debug & 0200) fprintf(iC_outFP, "concentrator MCP23017 at channel %s dev 0x%02x configured\n",
@@ -716,9 +719,14 @@ main(
 		    goto concentratorFound;
 		}
 	    }
-	    fprintf(iC_errFP, "ERROR: %s: no concentrator MCP23017 found at dev 0x%02x in any channel\n",
+	    fprintf(iC_errFP, "ERROR: %s: no concentrator MCP23017 found at dev 0x%02x in any channel - cannot process I2C\n",
 		iC_progname, CONCDEV);
-	    exit(-2);
+	    if (writeUnlockCloseGpios() < 0) {
+		fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
+		    iC_progname);
+		errorFlag++;
+	    }
+	    iC_quit(SIGUSR1);		/* error quit */
 	  concentratorFound:
 	    /********************************************************************
 	     *  MCP23017s found and concntrator configured.
@@ -768,6 +776,11 @@ main(
 	     *******************************************************************/
 	    if (iC_debug & 0200) fprintf(iC_outFP, "### test gpio_export 27\n");
 	    if ((sig = gpio_export(27, "in", "falling", forceFlag, iC_fullProgname)) != 0) {
+		if (writeUnlockCloseGpios() < 0) {
+		    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
+			iC_progname);
+		    errorFlag++;
+		}
 		iC_quit(sig);			/* another program is using gpio 27 */
 	    }
 	    /********************************************************************
@@ -957,7 +970,10 @@ main(
 		    errorFlag++;
 		    /* fall through */
 		case 6: goto endOneArg;
-		default: assert(0);
+		default:
+		    fprintf(iC_errFP, "ERROR: %s: '%s' bad character in argument\n", iC_progname, *argp);
+		    errorFlag++;
+		    goto endOneArg;
 	    }
 	    /********************************************************************
 	     *  Use the IEC argument to extend MCP23017 or GPIO control structures
