@@ -1,5 +1,5 @@
 static const char mcp23017_c[] =
-"$Id: mcp23017.c 1.2 $";
+"$Id: mcp23017.c 1.3 $";
 /********************************************************************
  *
  *	Copyright (C) 2023  John E. Wulff
@@ -126,7 +126,6 @@ setupMCP23017(int i2cFd, enum conf config, uint8_t devId, uint8_t iocBits,
     assert((devId & ~0x07) == 0x20);
     writeByte(i2cFd, devId, IOCON, iocon_init);
     if ((i = readByte(i2cFd, devId, IOCON)) != iocon_init) {
-        if (iC_debug & 0200) fprintf(iC_outFP, "MCP23017 [0x%02x] NOT present (i = [0x%02x] iocon_init = [0x%02x])\n", devId, i, iocon_init);
         return -1;
     } else {
         if (iC_debug & 0200) fprintf(iC_outFP, "MCP23017 [0x%02x] present (i = [0x%02x] iocon_init = [0x%02x])\n", devId, i, iocon_init);

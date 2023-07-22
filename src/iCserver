@@ -144,7 +144,7 @@ Usage:
     registered iC apps.
 Copyright (C) 2000-2017  John E. Wulff    <immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.67 $
+$Id: iCserver 1.68 $
 .
 
 ########################################################################
@@ -787,7 +787,7 @@ sub allocate_equivalences {
 no warnings;
     my ($arg) = @_;
     my ($equiv, $group, $nn, $nm, $in, $ref, $ref1, $firstName, $name, $channel, $iecRef, @equivSet);
-    my ($base, $firstBase, $primBase, $primCh, $secCh, $refEq, $iq, $xbwlh, $outName, $dupFlag, $ch, $errFlag);
+    my ($base, $firstBase, $primBase, $primCh, $secCh, $refEq, $iq, $xbwlh, $dupFlag, $ch, $errFlag);
     $errFlag = 0;
     $AutoDelay = 2_000_000;	# 2 seconds for autovivify delay with equivalences
     foreach $equiv (split /[, ]+/, $arg) {
@@ -797,7 +797,7 @@ no warnings;
 	$name = '';
 	@equivSet = ();
 	$dupFlag = 0;
-	$outName = $xbwlh = $ref = $firstBase = $base = undef;
+	$xbwlh = $ref = $firstBase = $base = undef;
 	$primCh = $secCh = $ch = 0;
 	########################################################################
 	## The following are all part of a set of equivalence groups belonging to
@@ -810,16 +810,6 @@ no warnings;
 		$errFlag = 1;
 	    } else {
 		$iq = $1;
-		if ($iq eq "Q") {
-		    if ($outName) {
-			if ($outName ne $nn) {
-			    print STDERR "ERROR $named: '$nn' in '$equiv' is 2nd output IEC name after $outName - will not work!\n";
-			    $errFlag = 1;
-			}
-		    } else {
-			$outName = $nn;
-		    }
-		}
 		if (defined $xbwlh) {
 		    if ($xbwlh ne $2) {
 			print STDERR "ERROR $named: '$nn' in '$equiv' is not the same IEC type - will not work!\n";
@@ -1681,19 +1671,23 @@ Additional functionality in B<iCserver>.
     place for a channel, until a receiver has been registered for that
     channel and all other registrations have taken place.
 
-    Equivalencing two or more output addresses (Q...) in an iC
-    control application is an error. Both output addresses try to
+    Equivalencing two or more output addresses (Q...) in an iC control
+    application is usually an error. If both output addresses try to
     register as senders - this leads to two or more senders on the
     same channel. When the second or later output sender registers,
-    the error will be reported. A similar error will be reported
-    if a second external input device in an equivalence chain is
-    registered as a second sender. This would happen if both IX8 and
-    IX8-0 were started as iCboxes after the equivalence statement in
-    Example 2 above. In rare cases two outputs may be legitametely
-    equivalenced if an iC application uses a certain output name and
-    a real output with a different name must be used to accept that
-    output. This practice is highly deprecated, because transparency
-    in the documentation is lost.
+    the error will be reported. A similar error will be reported if a
+    second external input device in an equivalence chain is registered
+    as a second sender. This would happen if both IX8 and IX8-0 were
+    started as iCboxes after the equivalence statement in Example 2
+    above.
+
+    In rare cases two outputs may be legitametely equivalenced if
+    an iC application uses a certain output name and a real output
+    with a different name must be used to accept that output. This
+    is useful for iC drivers, eg iCpiI2C, whose IEC addresses are
+    fixed to represent a certain hardware address. When these must
+    drive output names in a control application which are different,
+    equivalencing output names comes to the rescue.
 
     Formally equivalences consist of two or more IEC base identifiers,
     optionally followed by '-' and a 1 to 3 digit instance specifier,

@@ -42,7 +42,7 @@ import (
 	"time"
 )
 
-const ID_goserver_go = "$Id: goserver.go 1.5 $"
+const ID_goserver_go = "$Id: goserver.go 1.6 $"
 const TCP_PORT = "8778" // default TCP port for iC system
 
 type eq struct {
@@ -220,7 +220,7 @@ func allocateEquivalences(arg string) {
 		}
 		var equivSet = make([][2]string, 0, 16)
 		var dupFlag bool
-		var outName, xbwlh, base string
+		var xbwlh, base string
 		var primCh, secCh, ch int
 		/********************************************************************
 		 *  The following are all part of a set of equivalence groups belonging to
@@ -237,16 +237,6 @@ func allocateEquivalences(arg string) {
 				errFlag = true
 			} else {
 				iq := m[1]
-				if iq == "Q" {
-					if outName != "" {
-						if outName != nn {
-							fmt.Fprintf(os.Stderr, "ERROR %s: %q in %q is 2nd output IEC name after outName - will not work!\n", named, nn, equiv)
-							errFlag = true
-						}
-					} else {
-						outName = nn
-					}
-				}
 				if xbwlh != "" {
 					if xbwlh != m[2] {
 						fmt.Fprintf(os.Stderr, "ERROR %s: %q in %q is not the same IEC type - will not work!\n", named, nn, equiv)
@@ -1890,19 +1880,23 @@ Additional functionality in B<iCserver>.
     place for a channel, until a receiver has been registered for that
     channel and all other registrations have taken place.
 
-    Equivalencing two or more output addresses (Q...) in an iC
-    control application is an error. Both output addresses try to
+    Equivalencing two or more output addresses (Q...) in an iC control
+    application is usually an error. If both output addresses try to
     register as senders - this leads to two or more senders on the
     same channel. When the second or later output sender registers,
-    the error will be reported. A similar error will be reported
-    if a second external input device in an equivalence chain is
-    registered as a second sender. This would happen if both IX8 and
-    IX8-0 were started as iCboxes after the equivalence statement in
-    Example 2 above. In rare cases two outputs may be legitametely
-    equivalenced if an iC application uses a certain output name and
-    a real output with a different name must be used to accept that
-    output. This practice is highly deprecated, because transparency
-    in the documentation is lost.
+    the error will be reported. A similar error will be reported if a
+    second external input device in an equivalence chain is registered
+    as a second sender. This would happen if both IX8 and IX8-0 were
+    started as iCboxes after the equivalence statement in Example 2
+    above.
+
+    In rare cases two outputs may be legitametely equivalenced if
+    an iC application uses a certain output name and a real output
+    with a different name must be used to accept that output. This
+    is useful for iC drivers, eg iCpiI2C, whose IEC addresses are
+    fixed to represent a certain hardware address. When these must
+    drive output names in a control application which are different,
+    equivalencing output names comes to the rescue.
 
     Formally equivalences consist of two or more IEC base identifiers,
     optionally followed by '-' and a 1 to 3 digit instance specifier,
