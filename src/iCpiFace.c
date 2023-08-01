@@ -243,7 +243,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.17 $\n"
+"Version	$Id: iCpiFace.c 1.18 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -1609,9 +1609,9 @@ main(
 	if (gpioCnt) {
 	    char *	iidPtr;
 	    char *	iidSep;
-	    fprintf(iC_outFP, "Allocation for %d GPIO element%s, global instance = \"%s\"\n",
+	    fprintf(iC_outFP, "Allocation for %d GPIO group%s, global instance = \"%s\"\n",
 		gpioCnt, gpioCnt == 1 ? "" : "s", iC_iidNM);
-	    fprintf(iC_outFP, "	Bit IEC	inst	gpio	channel\n\n");
+	    fprintf(iC_outFP, "	IEC bit	inst	gpio	iC channel\n\n");
 	    for (iq = 0; iq < 2; iq++) {
 		for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
 		    strcpy(buffer, gep->Gname);		/* retrieve name[-instance] */
@@ -1623,7 +1623,7 @@ main(
 		    }
 		    for (bit = 0; bit <= 7; bit++) {
 			if ((gpio = gep->gpioNr[bit]) != 0xffff) {	/* saved gpio number for this bit */
-			    fprintf(iC_outFP, "	%c%s.%hu	%s%s	%3hu	%3hu\n",
+			    fprintf(iC_outFP, "	%c%s.%hu	%s%s	%3hu	%5hu\n",
 				gep->Ginv & iC_bitMask[bit] ? '~' : ' ',
 				buffer, bit, iidSep, iidPtr, gpio, gep->Gchannel);
 			}
@@ -1815,7 +1815,7 @@ main(
 				     *  TCP/IP output for a PiFace or PiFaceCAD
 				     *******************************************************************/
 				    if (pfq->i.name) {				/* is output registered? */
-					if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%hu:%d P%d	> %s\n",
+					if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%hu:%d	> P%d %s\n",
 					    iC_iccNM, channel, (int)val, pfa, pfq->i.name);
 					if (pfa != 4 || pfp->intf != INTFA) {	/* PiFace */
 					    /********************************************************************
@@ -2100,7 +2100,7 @@ writeGPIO(gpioIO * gep, unsigned short channel, int val)
     unsigned short	bit;
 
     assert(gep && gep->Gname && *gep->Gname == 'Q');	/* make sure this is really a GPIO output */
-    if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%hu:%d G	> %s\n",
+    if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%hu:%d	> G %s\n",
 	iC_iccNM, channel, (int)val, gep->Gname);
     val ^= gep->Ginv;			/* normally write non-inverted data to GPIO output */
     diff = val ^ gep->Gval;		/* bits which are going to change */

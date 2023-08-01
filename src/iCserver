@@ -29,6 +29,7 @@ use warnings;
 
 my %Clients = ();	# indexed by $name - existence of registered N<name> client (duplicate clients)
 my %Channels = ();	# indexed by $name - points to correct channel of I/O S<name> and R<name> (duplicate channels)
+my %CDchannels = ();	# hashed by (string)channel - SC<name> SD<name> RC<name> RD<name>
 my %Equivalences = ();	# hashed by $base - points to equivalent names with same or different channel as base
 my %EquivBase = ();	# hashed by $name - points to base name of equivalenced names (even own name if base)
 my %ClientNames = ();	# hashed by $conn - points to client name for a connection
@@ -144,7 +145,7 @@ Usage:
     registered iC apps.
 Copyright (C) 2000-2017  John E. Wulff    <immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.68 $
+$Id: iCserver 1.69 $
 .
 
 ########################################################################
@@ -641,6 +642,7 @@ sub disconnect {
 	    %Clients = ();
 	    %Channels = ();
 	    %ClientNames = ();
+	    %CDchannels = ();
 	    @Sender = ();
 	    @SenderName = ();
 	    @SenderValue = ();
@@ -929,8 +931,8 @@ use warnings;
 ############################################################
 
 sub print_tail {
-    my ($start, $aref, $nref) = @_;
-    my ($i, $rcon, $rName, @rCons);
+    my ($start, $aref, $nref, $ch) = @_;
+    my ($i, $rcon, $rName, @rCons, $deb);
     $i = 0;
     @rCons = ();
     foreach $rcon (@{$aref}[$start .. $#{$aref}]) {
@@ -943,7 +945,8 @@ sub print_tail {
 	$i++;
     }
     $rName = @rCons ? join "\t", @rCons : "<no receivers>";
-    print "$rName\n";
+    $deb = $CDchannels{$ch} ? "\t[iClive]" : "";
+    print "$rName$deb\n";
 } # print_tail
 
 ############################################################
@@ -1002,14 +1005,14 @@ sub print_tables {
 	    }
 	    printf "%-3d %-15s %-15s %-11s ", $channel, $chName, $name, $value;
 	    $nref = $ReceiverNames[$channel];
-	    print_tail 0, $aref, $nref;
+	    print_tail 0, $aref, $nref, $channel;
 	}
 	if (exists $AltReceivers{$channel}) {
 	    $i = 0;
 	    foreach $aref (@{$AltReceivers{$channel}}) {
 		printf "    %-43d ", $aref->[0];	# secondary channel
 		$nref = $AltRecrNames{$channel}->[$i];
-		print_tail 1, $aref, $nref;
+		print_tail 1, $aref, $nref, $channel;
 		$i++;
 	    }
 	}
@@ -1027,11 +1030,6 @@ sub pushReceiverData {
     if (not defined $ReceiverData{$rconn}) {
 	## this is the first message for this receiver
 	push @{$ReceiverData{$rconn}}, $rconn;	# save real connection
-    } elsif ($opt_t and $sender) {
-	my $aref = $ReceiverData{$rconn};
-	my $msg2 = join ',', @$aref;	# one or more channel:value pairs
-	$msg2 =~ s/[^,]*,//;
-	print "$rcvCnt	Push extra message '$msg2,$msg1' on $ClientNames{$rconn} sender $sender\n";
     }
     push @{$ReceiverData{$rconn}}, $msg1;	# collect messages for sending
 } # pushReceiverData
@@ -1115,15 +1113,15 @@ sub rcvd_msg_from_client {
 	} else {
 	    printf "S%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
 	}
-    } elsif ($opt_t) {
-	print "S: ";
     }
     if (defined $msg) {				# ignore undefined message (unlikely)
 	my $len = length $msg;
 	$sender = $ClientNames{$conn};		# set when name registered for this $conn
 	$rcvCnt++;
 no warnings;
-	print "($len)$msg< '$sender'\n" if $opt_t;
+	if ($opt_t and $msg =~ /^(\d+):/s and not $CDchannels{$1}) {
+	    print "S: $msg < $sender\n";
+	}
 use warnings;
 	if ($len == 0) {
 	    ############################################################
@@ -1231,6 +1229,9 @@ use warnings;
 		    $name = $2;
 		    $bits = $5;
 		    $channel = allocate_channel($name);
+		    if ($name =~ /^[CD]/) {
+			$CDchannels{$channel} = 1;
+		    }
 		    if (exists $EquivBase{$name}) {
 			($base, $primCh, $secCh) = @{$EquivBase{$name}};
 			if (not $secCh) {
@@ -1519,7 +1520,11 @@ use warnings;
 	    $rconn  = shift @$aref;		# the real connection object
 	    if (defined $rconn) {
 		$msg1 = join ',', @$aref;	# one or more channel:value pairs
-		print "$sender $msg1 => $ClientNames{$c}\n" if $opt_t or $opt_J or $opt_O;
+no warnings;
+		if (($opt_t or $opt_J or $opt_O) and $msg1 =~ /^(\d+):/s and not $CDchannels{$1}) {
+		    print "S: $msg1 > $ClientNames{$c}\n";
+		}
+use warnings;
 		$rconn->send_now("$msg1");	# send channel:value pairs to destination
 	    } else {
 		warnD("no message to send to connection '$c' ???\n");

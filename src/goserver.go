@@ -42,7 +42,7 @@ import (
 	"time"
 )
 
-const ID_goserver_go = "$Id: goserver.go 1.6 $"
+const ID_goserver_go = "$Id: goserver.go 1.7 $"
 const TCP_PORT = "8778" // default TCP port for iC system
 
 type eq struct {
@@ -72,6 +72,7 @@ var muEquiv sync.Mutex // guard equivalences and equivBase modifications
 var clientCons = map[string]net.Conn{}  // hashed by name - client connection - existence of client
 var clientNames = map[net.Conn]string{} // hashed by conn - client name for a connection
 var channels = map[string]int{}         // hashed by name - channel of I/O S<name> and R<name>
+var CDchannels = map[string]bool{}      // hashed by (string)channel - SC<name> SD<name> RC<name> RD<name>
 var equivalences = map[string][]*eq{}   // hashed by base - equivalent names with same or different channel as base
 var equivBase = map[string]*eqB{}       // hashed by name - base name of equivalenced names (even own name if base)
 
@@ -120,7 +121,7 @@ func allocateChannel(name string, channel int) int {
 			channel = maxChannel
 			if maxChannel >= cap(senderCon) {
 				/********************************************************************
-				 *  Double the capacity of al slices indexed randomly by 'channel'
+				 *  Double the capacity of all slices indexed randomly by 'channel'
 				 *******************************************************************/
 				senderCon = append(senderCon, make([]net.Conn, maxChannel)...)
 				senderName = append(senderName, make([]string, maxChannel)...)
@@ -394,8 +395,9 @@ func allocateEquivalences(arg string) {
  *
  *******************************************************************/
 
-func printTail(aref []net.Conn, nref []string) {
+func printTail(aref []net.Conn, nref []string, ch int) {
 	var rName string
+	var deb string
 	var rCons []string
 	for i, rcon := range aref {
 		if rcon != nil {
@@ -410,7 +412,12 @@ func printTail(aref []net.Conn, nref []string) {
 	} else {
 		rName = strings.Join(rCons, "\t")
 	}
-	fmt.Printf("%s\n", rName)
+	if CDchannels[strconv.Itoa(ch)] {
+		deb = "\t[iClive]"
+	} else {
+		deb = ""
+	}
+	fmt.Printf("%s%s\n", rName, deb)
 } // printTail
 
 /********************************************************************
@@ -485,13 +492,13 @@ func printTables() {
 			}
 			fmt.Printf("%-3d %-15s %-15s %-11s ", channel, chName, senderName[channel], senderValue[channel])
 			nref := receiverNames[channel]
-			printTail(aref, nref)
+			printTail(aref, nref, channel)
 		}
 		if _, ok := altRecvCons[channel]; ok { // exists
 			for i, aref := range altRecvCons[channel] {
 				fmt.Printf("    %-43d ", aref.altsecCh) // secondary channel
 				nref := altRecvNames[channel][i]
-				printTail(aref.altCons, nref)
+				printTail(aref.altCons, nref, channel)
 			}
 		}
 	}
@@ -507,11 +514,13 @@ func writeReceiverData(receiverData map[net.Conn][]string, goId int) {
 	for con, msgSlice := range receiverData {
 		wbuf := append([]byte{0, 0, 0, 0}, strings.Join(msgSlice, ",")...) // build Perl type message
 		if *opt_t {
-			fmt.Printf("%02d: (%d) %s > %q\n", goId, len(wbuf)-4, wbuf[4:], clientNames[con])
+			if m := reData.FindStringSubmatch(string(wbuf[4:])); len(m) != 0 && ! CDchannels[m[1]] { // "^([0-9]+):(.*)$"
+				fmt.Printf("S%d: %s > %s\n", goId, wbuf[4:], clientNames[con])
+			}
 		}
 		err := tcpcomm.Write(con, &wbuf)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%02d: msg = %q client = %q\n", goId, wbuf[4:], clientNames[con])
+			fmt.Fprintf(os.Stderr, "S%d: msg = %q client = %q\n", goId, wbuf[4:], clientNames[con])
 			shutdownServer(4, fmt.Sprint(err))
 		}
 	}
@@ -531,7 +540,7 @@ func writeReceiverData(receiverData map[net.Conn][]string, goId int) {
 func disconnect(name string, goId int) {
 	if name != "" {
 		if !*opt_q {
-			fmt.Printf("%02d: %s: disconnecting now\n", goId, name)
+			fmt.Printf("S%d: %s: disconnecting now\n", goId, name)
 		}
 		receiverData := map[net.Conn][]string{} // clear all keys and entries
 		for channel := 0; channel <= maxChannel; channel++ {
@@ -545,7 +554,7 @@ func disconnect(name string, goId int) {
 					senderValue[channel] = "0" // reset sender value
 				}
 				if *opt_t {
-					fmt.Printf("%02d: %s: S %s	%d nil\n", goId, name, senderName[channel], channel)
+					fmt.Printf("S%d: %s: S %s	%d nil\n", goId, name, senderName[channel], channel)
 				}
 			}
 			if rflag {
@@ -580,7 +589,7 @@ func disconnect(name string, goId int) {
 							equivBase[nam].secCh = 0 // clear secondary channel to flag no registration
 						}
 						if *opt_t {
-							fmt.Printf("%02d: %s: R %s	%d spliced out\n", goId, name, nam, channel)
+							fmt.Printf("S%d: %s: R %s	%d spliced out\n", goId, name, nam, channel)
 						}
 						// splice out connection and name
 						*aref = append((*aref)[:i], (*aref)[i+1:]...)
@@ -608,7 +617,7 @@ func disconnect(name string, goId int) {
 								equivBase[nam].secCh = 0 // clear secondary channel to flag no registration
 							}
 							if *opt_t {
-								fmt.Printf("%02d: %s: R %s	%d spliced out\n", goId, name, nam, secCh)
+								fmt.Printf("S%d: %s: R %s	%d spliced out\n", goId, name, nam, secCh)
 							}
 							*cref = append((*cref)[:i], (*cref)[i+1:]...) // skip extra channel entry
 							*nref = append((*nref)[:i], (*nref)[i+1:]...) // splice out name whose index starts at 0
@@ -617,7 +626,7 @@ func disconnect(name string, goId int) {
 					}
 					if len(*cref) == 0 { // group has no connections left, only alternate channel
 						if *opt_t {
-							fmt.Printf("%02d: altRecvCons[%d] group %d spliced out\n", goId, channel, j)
+							fmt.Printf("S%d: altRecvCons[%d] group %d spliced out\n", goId, channel, j)
 						}
 						altRecvCons[channel] = append(altRecvCons[channel][:j],
 							altRecvCons[channel][j+1:]...) // whole group disconnected
@@ -642,7 +651,7 @@ func disconnect(name string, goId int) {
 			}
 		}
 		if !*opt_q {
-			fmt.Printf("%02d: %s: disconnected\n", goId, name)
+			fmt.Printf("S%d: %s: disconnected\n", goId, name)
 		}
 		numberOfConnections--
 		if numberOfConnections <= 0 {
@@ -652,6 +661,7 @@ func disconnect(name string, goId int) {
 			 *******************************************************************/
 			clientCons = map[string]net.Conn{}
 			channels = map[string]int{}
+			CDchannels = map[string]bool{}
 			clientNames = map[net.Conn]string{}
 			senderCon = make([]net.Conn, 16)
 			senderName = make([]string, 16)
@@ -692,7 +702,7 @@ func disconnect(name string, goId int) {
 				}
 			}
 			if !*opt_q {
-				fmt.Printf("%02d: last client has disconnected\n", goId)
+				fmt.Printf("S%d: last client has disconnected\n", goId)
 			}
 		}
 
@@ -736,7 +746,7 @@ func handleConnection(conn net.Conn) {
 	goCount++
 	goId := goCount // identify this goroutine
 	if !*opt_q {
-		fmt.Printf("%02d: Connection %s at %s\n", goId, conn.RemoteAddr().String(), named)
+		fmt.Printf("S%d: Connection %s at %s\n", goId, conn.RemoteAddr().String(), named)
 	}
 	defer conn.Close()
 	var regFlag bool // initially false
@@ -786,7 +796,9 @@ func handleConnection(conn net.Conn) {
 			}
 		}
 		if *opt_t {
-			fmt.Printf("%02d: (%d) %s < %q\n", goId, len(rbuf), rbuf, sender)
+			if m := reData.FindStringSubmatch(string(rbuf)); len(m) != 0 && ! CDchannels[m[1]] { // "^([0-9]+):(.*)$"
+				fmt.Printf("S%d: %s < %s\n", goId, rbuf, sender)
+			}
 		}
 		if len(rbuf) == 0 {
 			/********************************************************************
@@ -842,7 +854,7 @@ func handleConnection(conn net.Conn) {
 				}
 				if !sendFlag {
 					if *opt_t {
-						fmt.Printf("%02d: %s %s => dummy\n", goId, sender, msg)
+						fmt.Printf("S%d: %s %s => dummy\n", goId, sender, msg)
 					}
 				}
 			} else if m := reNname.FindStringSubmatch(msg); len(m) != 0 { // "^N(.+)$"
@@ -884,7 +896,7 @@ func handleConnection(conn net.Conn) {
 				sender = name
 				numberOfConnections++
 				if !*opt_q {
-					fmt.Printf("%02d: %s: client registering now\n", goId, sender)
+					fmt.Printf("S%d: %s: client registering now\n", goId, sender)
 				}
 			} else if m = reSRiec.FindStringSubmatch(msg); len(m) != 0 { // `^([SR])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`
 				/********************************************************************
@@ -897,6 +909,9 @@ func handleConnection(conn net.Conn) {
 				bits := m[5]
 				muEquiv.Lock() // allocateChannel() also called in allocateEquivalences()
 				channel := allocateChannel(name, 0)
+				if name[0] == 'C' || name[0] == 'D' {
+					CDchannels[strconv.Itoa(channel)] = true
+				}
 				muEquiv.Unlock()
 				var base string
 				var primCh, secCh int
@@ -916,7 +931,7 @@ func handleConnection(conn net.Conn) {
 				}
 				ack := channel // used to build acknowledge string
 				if *opt_t {
-					fmt.Printf("%02d: register %s %q base = %q primCh = %d secCh = %d channel = %d ack = %d\n", goId, direction, name, base, primCh, secCh, channel, ack)
+					fmt.Printf("S%d: register %s %q base = %q primCh = %d secCh = %d channel = %d ack = %d\n", goId, direction, name, base, primCh, secCh, channel, ack)
 				}
 				if direction == "S" {
 					if primCh != channel {
@@ -925,7 +940,7 @@ func handleConnection(conn net.Conn) {
 						 *  an alternate equivalence group TODO find a test case
 						 *******************************************************************/
 						if *opt_t {
-							fmt.Printf("%02d: register S name = %q base = %q primCh = %d secCh = %d channel = %d\n", goId, name, base, primCh, secCh, channel)
+							fmt.Printf("S%d: register S name = %q base = %q primCh = %d secCh = %d channel = %d\n", goId, name, base, primCh, secCh, channel)
 						}
 						if equivBase[base].secCh != 0 { // secondary channel of base name already registered
 							ack = -channel
@@ -950,7 +965,7 @@ func handleConnection(conn net.Conn) {
 						equivalences[base] = append(equivalences[base][:i], equivalences[base][i+1:]...)
 						equivalences[base] = append([]*eq{aref}, equivalences[base][:]...)
 						if *opt_t {
-							fmt.Printf("%02d: S delete equivalences[base = %s]\n", goId, base)
+							fmt.Printf("S%d: S delete equivalences[base = %s]\n", goId, base)
 						}
 						delete(equivalences, base) // delete old base entry
 						for _, equivBp := range equivBase {
@@ -998,17 +1013,17 @@ func handleConnection(conn net.Conn) {
 							}
 							autoBoxCh <- iCboxParam
 							if *opt_t {
-								fmt.Printf("%02d: Autovivify %s: sender %s\n", goId, boxName, iCboxParam)
+								fmt.Printf("S%d: Autovivify %s: sender %s\n", goId, boxName, iCboxParam)
 							}
 						}
 					} else if boxName != "" && reIXBWL.FindString(name) != "" { // `^I[XBWL]\d+`
 						autoBoxCh <- "-" + name // delete AutoVivify entry (ignored if already done)
 						if *opt_t {
-							fmt.Printf("%02d: Delete autovivify %s: sender %s\n", goId, boxName, name)
+							fmt.Printf("S%d: Delete autovivify %s: sender %s\n", goId, boxName, name)
 						}
 					}
 					if *opt_t {
-						fmt.Printf("%02d: %q S %q	ack = %d\n", goId, sender, name, ack)
+						fmt.Printf("S%d: %q S %q	ack = %d\n", goId, sender, name, ack)
 					}
 				} else if direction == "R" {
 					/********************************************************************
@@ -1070,7 +1085,8 @@ func handleConnection(conn net.Conn) {
 							}
 						AltStored:
 						}
-						if senderCon[primCh] != nil { // is sender registered on primary channel ?
+						if senderCon[primCh] != nil {	// is sender registered on primary channel ?
+							ini = senderValue[primCh];	// yes - current value
 							if ini != "0" { // yes - current value
 								/********************************************************************
 								 *  sender is registered and has either initial value 0 or other
@@ -1095,18 +1111,18 @@ func handleConnection(conn net.Conn) {
 							}
 							autoBoxCh <- iCboxParam
 							if *opt_t {
-								fmt.Printf("%02d: Autovivify %s: receiver %s\n", goId, boxName, iCboxParam)
+								fmt.Printf("S%d: Autovivify %s: receiver %s\n", goId, boxName, iCboxParam)
 							}
 						}
 						if boxName != "" && reQXBWL.FindString(base) != "" { // `^Q[XBWL]\d+`
 							autoBoxCh <- "-" + base // delete AutoVivify entry (ignored if already done)
 							if *opt_t {
-								fmt.Printf("%02d: Delete autovivify %s: receiver %s\n", goId, boxName, base)
+								fmt.Printf("S%d: Delete autovivify %s: receiver %s\n", goId, boxName, base)
 							}
 						}
 					}
 					if *opt_t {
-						fmt.Printf("%02d: %s R %s	ack = %d	ini = %q\n", goId, sender, name, ack, ini)
+						fmt.Printf("S%d: %s R %s	ack = %d	ini = %q\n", goId, sender, name, ack, ini)
 					}
 				}
 				if len(wbuf) == 4 {
@@ -1125,7 +1141,7 @@ func handleConnection(conn net.Conn) {
 					delete(clientCons, name)
 					numberOfConnections--
 					if !*opt_q {
-						fmt.Printf("%02d: %s: client unregistering now\n", goId, name)
+						fmt.Printf("S%d: %s: client unregistering now\n", goId, name)
 					}
 				} else {
 					/********************************************************************
@@ -1152,7 +1168,7 @@ func handleConnection(conn net.Conn) {
 					if con == conn {
 						senderCon[channel] = nil // no need to splice out only array entry
 						if *opt_t {
-							fmt.Printf("%02d: unregister sender   %s\n", goId, name)
+							fmt.Printf("S%d: unregister sender   %s\n", goId, name)
 						}
 					} else {
 						warnD(fmt.Sprintf("%q trying to unregister s '%s; not registered as sender - aborted", sender, name))
@@ -1166,7 +1182,7 @@ func handleConnection(conn net.Conn) {
 					for i, rconn := range receiverCons[channel] {
 						if rconn == conn {
 							if *opt_t {
-								fmt.Printf("%02d: unregister receiver %s\n", goId, name)
+								fmt.Printf("S%d: unregister receiver %s\n", goId, name)
 							}
 							// splice out connection and name
 							receiverCons[channel] = append(receiverCons[channel][:i], receiverCons[channel][i+1:]...)
@@ -1183,12 +1199,12 @@ func handleConnection(conn net.Conn) {
 				}
 			} else if m := reEquiv.FindStringSubmatch(msg); len(m) != 0 { // "^E(.+)$"
 				if *opt_t {
-					fmt.Printf("%02d: Allocate equivs %q\n", goId, m[1])
+					fmt.Printf("S%d: Allocate equivs %q\n", goId, m[1])
 				}
 				allocateEquivalences(m[1])
 			} else if msg == "T" {
 				if *opt_t {
-					fmt.Printf("%02d: Print Tables\n", goId)
+					fmt.Printf("S%d: Print Tables\n", goId)
 				}
 				printTables()
 			} else if m := reXname.FindStringSubmatch(msg); len(m) != 0 { // "^X(.*)$"
@@ -1198,7 +1214,7 @@ func handleConnection(conn net.Conn) {
 					shutdownServer(0, fmt.Sprintf("Stop from %q - stop %s", m[1], named))
 				}
 			} else if msg != "" {
-				fmt.Printf("%02d: Warning strange message %s in %s ???\n", goId, msg, rbuf) // ignore null msg
+				fmt.Printf("S%d: Warning strange message %s in %s ???\n", goId, msg, rbuf) // ignore null msg
 			}
 		}
 		if len(wbuf) > 4 {
@@ -1208,7 +1224,7 @@ func handleConnection(conn net.Conn) {
 			 *  registration
 			 *******************************************************************/
 			if *opt_t {
-				fmt.Printf("%02d: ACK: %s => %s\n", goId, wbuf[4:], sender)
+				fmt.Printf("S%d: ACK: %s => %s\n", goId, wbuf[4:], sender)
 			}
 			err = tcpcomm.Write(conn, &wbuf) // registration acknowledgement
 			if err != nil {
@@ -1218,7 +1234,7 @@ func handleConnection(conn net.Conn) {
 				if iniString != "" {
 					// must be independent xmission, because different rcv call in client
 					if *opt_t {
-						fmt.Printf("%02d: INI: %s => %s\n", goId, iniString, sender)
+						fmt.Printf("S%d: INI: %s => %s\n", goId, iniString, sender)
 					} // registration initialization
 					wbuf = []byte{0, 0, 0, 0}                 // clear wbuf for this iteration
 					wbuf = append(wbuf, []byte(iniString)...) // build Perl type message

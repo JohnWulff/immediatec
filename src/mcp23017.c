@@ -1,5 +1,5 @@
 static const char mcp23017_c[] =
-"$Id: mcp23017.c 1.3 $";
+"$Id: mcp23017.c 1.4 $";
 /********************************************************************
  *
  *	Copyright (C) 2023  John E. Wulff
@@ -52,36 +52,35 @@ static const char *	i2cdev[10] = {
  *
  *  setupI2C
  *	Setup the I2C interface on the Raspberry Pi
- *	i2cSel	0     = /dev/i2c-0 direct I2C channel bypassing PCA9548A
- *	i2cSel	1 - 8 = /dev/i2c-11 to /dev/i2c-18 multiplexed I2C channels
- *	i2cSel	9     = /dev/i2c-1 direct I2C channel bypassing PCA9548A
- *	return	i2cFd or -1 if channel not active
+ *	i2cCh	0     = /dev/i2c-0 direct I2C channel bypassing PCA9548A
+ *	i2cCh	1 - 8 = /dev/i2c-11 to /dev/i2c-18 multiplexed I2C channels
+ *	i2cCh	9     = /dev/i2c-1 direct I2C channel bypassing PCA9548A
+ *	return	i2cFd or -1 if I2C channel not active
  *
  *******************************************************************/
 
 int
-setupI2C(int i2cSel)
+setupI2C(int i2cCh)
 {
     int			i2cFd;
     unsigned long	funcs;
 
-    assert(i2cSel >= 0 && i2cSel < 10);
-    if (iC_debug & 0200) fprintf(iC_outFP, "*** i2cSel = [%d] i2cChannel = [%s]\n", i2cSel, i2cdev[i2cSel]);
+    assert(i2cCh >= 0 && i2cCh < 10);
     // open
-    if ((i2cFd = open(i2cdev[i2cSel], O_RDWR)) < 0) {
+    if ((i2cFd = open(i2cdev[i2cCh], O_RDWR)) < 0) {
         return -1;
     }
     // check functionality of the I2C channel - will ignore multiplexed devices if PCA9548A is not present
     if (ioctl(i2cFd, I2C_FUNCS, &funcs) < 0) {
 	fprintf(stderr, "setupI2C: ERROR: Could not get the adapter functionality matrix for I2C channel %s: %s\n",
-		i2cdev[i2cSel], strerror(errno));
+		i2cdev[i2cCh], strerror(errno));
 	close(i2cFd);
         return -1;
     }
     if (!(funcs & I2C_FUNC_SMBUS_WRITE_BYTE) &&
 	!(funcs & I2C_FUNC_SMBUS_READ_BYTE)) {
 	fprintf(stderr, "setupI2C: ERROR: Could not write or read a byte on I2C device %s: %s\n",
-		i2cdev[i2cSel], strerror(errno));
+		i2cdev[i2cCh], strerror(errno));
 	close(i2cFd);
         return -1;
     }
@@ -119,16 +118,13 @@ int
 setupMCP23017(int i2cFd, enum conf config, uint8_t devId, uint8_t iocBits,
 	      uint8_t inputA, uint8_t inputB, uint8_t invA, uint8_t invB)
 {
-    uint8_t	i;
     uint8_t	iocon_init = (IOCON_SEQOP | iocBits);	/* Sequential operation disabled, Address always enabled */
 							/* IOCON_ODR sets the INTA and INTB pins to open drain */
 							/* if IOCON_ODR is not set INTPOL is 0 for INT active-low */
     assert((devId & ~0x07) == 0x20);
     writeByte(i2cFd, devId, IOCON, iocon_init);
-    if ((i = readByte(i2cFd, devId, IOCON)) != iocon_init) {
+    if (readByte(i2cFd, devId, IOCON) != iocon_init) {
         return -1;
-    } else {
-        if (iC_debug & 0200) fprintf(iC_outFP, "MCP23017 [0x%02x] present (i = [0x%02x] iocon_init = [0x%02x])\n", devId, i, iocon_init);
     }
 
     if (config != detect) {
@@ -136,14 +132,20 @@ setupMCP23017(int i2cFd, enum conf config, uint8_t devId, uint8_t iocBits,
         if (inputA) {
             writeByte(i2cFd, devId, GPINTENA, inputA);	/* Enable interrupts for inputs */
             if (config == data) {
-                writeByte(i2cFd, devId, INTCONA, 0x00);	/* data - compare changes in input to previous value */
-                writeByte(i2cFd, devId, IPOLA, invA);	/* data - input bit polarity */
+                writeByte(i2cFd, devId, INTCONA, 0x00);	/* compare changes in input to previous value */
+                writeByte(i2cFd, devId, IPOLA, invA);	/* input bit polarity */
             } else {	/* concentrate */
                 writeByte(i2cFd, devId, DEFVALA, inputA);	/* concentrator MCP23017 */
                 writeByte(i2cFd, devId, INTCONA, inputA);	/* compare changes in input to DEFVALA */
             }
             writeByte(i2cFd, devId, GPPUA, inputA);	/* Enable pull-ups for inputs */
             readByte(i2cFd, devId, INTCAPA);		/* clear a possible INTA interrupt */
+	} else {
+            writeByte(i2cFd, devId, GPINTENA, 0x00);	/* disable interrupts for inputs */
+	    writeByte(i2cFd, devId, INTCONA,  0x00);	/* compare changes in input to previous value */
+	    writeByte(i2cFd, devId, IPOLA,    0x00);	/* reset input bit polarity */
+	    writeByte(i2cFd, devId, DEFVALA,  0x00);	/* clear  */
+            writeByte(i2cFd, devId, GPPUA,    0x00);	/* disable pull-ups for inputs */
         }
         writeByte(i2cFd, devId, OLATA, 0x00);		/* Set all actual outputs off */
 
@@ -151,14 +153,20 @@ setupMCP23017(int i2cFd, enum conf config, uint8_t devId, uint8_t iocBits,
         if (inputB) {
             writeByte(i2cFd, devId, GPINTENB, inputB);	/* Enable interrupts for inputs */
             if (config == data) {
-                writeByte(i2cFd, devId, INTCONB, 0x00);	/* data - compare changes in input to previous value */
-                writeByte(i2cFd, devId, IPOLB, invA);	/* data - input bit polarity */
+                writeByte(i2cFd, devId, INTCONB, 0x00);	/* compare changes in input to previous value */
+                writeByte(i2cFd, devId, IPOLB, invB);	/* input bit polarity */
             } else {	/* concentrate */
                 writeByte(i2cFd, devId, DEFVALB, inputB);	/* concentrator MCP23017 */
                 writeByte(i2cFd, devId, INTCONB, inputB);	/* compare changes in input to DEFVALB */
             }
             writeByte(i2cFd, devId, GPPUB, inputB);	/* Enable pull-ups for inputs */
             readByte(i2cFd, devId, INTCAPB);		/* clear a possible INTB interrupt */
+	} else {
+            writeByte(i2cFd, devId, GPINTENB, 0x00);	/* disable interrupts for inputs */
+	    writeByte(i2cFd, devId, INTCONB,  0x00);	/* compare changes in input to previous value */
+	    writeByte(i2cFd, devId, IPOLB,    0x00);	/* reset input bit polarity */
+	    writeByte(i2cFd, devId, DEFVALB,  0x00);	/* clear  */
+            writeByte(i2cFd, devId, GPPUB,    0x00);	/* disable pull-ups for inputs */
         }
         writeByte(i2cFd, devId, OLATB, 0x00);		/* Set all actual outputs off */
     }
@@ -173,9 +181,9 @@ setupMCP23017(int i2cFd, enum conf config, uint8_t devId, uint8_t iocBits,
  *******************************************************************/
 
 const char *
-getI2cDevice(int channel) {
-    assert((channel >= 0) && (channel < 10));
-    return i2cdev[channel];
+getI2cDevice(int i2cCh) {
+    assert((i2cCh >= 0) && (i2cCh < 10));
+    return i2cdev[i2cCh];
 }
 
 /********************************************************************

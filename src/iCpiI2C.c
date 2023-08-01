@@ -329,14 +329,8 @@ static const char *	usage =
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 "    -d deb  +1   trace TCP/IP send actions\n"
 "            +2   trace TCP/IP rcv  actions\n"
-#ifdef	TRACE
-"            +4   trace MCP calls\n"
-#endif	/* TRACE */
 "            +10  trace I2C  input  actions\n"
 "            +20  trace I2C  output actions\n"
-#ifdef	TRACE
-"            +40  debug MCP calls\n"
-#endif	/* TRACE */
 "            +100 show arguments\n"
 "            +200 show more debugging details\n"
 "            +400 exit after initialisation\n"
@@ -351,7 +345,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2023 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiI2C.c 1.6 $\n"
+"Version	$Id: iCpiI2C.c 1.7 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -597,7 +591,7 @@ main( int argc, char ** argv)
 		    break;
 #if YYDEBUG && !defined(_WINDOWS)
 		case 't':
-		    iC_debug |= 0100;	/* trace arguments and activity */
+		    iC_debug |= 0130;	/* trace arguments and activity */
 		    break;
 		case 'm':
 		    iC_micro++;		/* microsecond info */
@@ -726,14 +720,18 @@ main( int argc, char ** argv)
 	 *  only if an argument requesting MCP23017 IO (IXcng or QXcng) is found.
 	 *
 	 *******************************************************************/
-	value = mcpCnt = 0;
-	for (ch = 0; ch < 10; ch++) {		/* scan /dev/i2c-0, /dev/i2c-11 to */
-	    if ((fd = setupI2C(ch)) < 0) {	/* /dev/i2c-18 and /dev/i2c-1 */
+	mcpCnt = 0;
+	for (ch = 0; ch < 10; ch++) {		/* scan /dev/i2c-0, i2c-11 - i2c-18, i2c-1 */
+	    if (ch == 9 && mcpCnt) {
+		break;				/* no need to scan /dev/i2c-1 */
+	    }
+	    if ((fd = setupI2C(ch)) < 0) {
 		for (ns = 0; ns < 8; ns++) {
 		    mcpL[ch][ns] = (void *) -1;	/* no MCPs in inactive channel */
 		}
 		continue;
 	    }
+	    if (iC_debug & 0200) fprintf(iC_outFP, "### Present i2cChannel %s\n", getI2cDevice(ch));
 	    i2cFdCnt++;				/* flags that at least one I2C channel is valid */
 	    m = 0;
 	    for (ns = 0; ns < 8; ns++) {
@@ -744,6 +742,7 @@ main( int argc, char ** argv)
 		    mcpL[ch][ns] = (void *) -1;	/* no MCP23017 at this address */
 		    continue;
 		}
+		if (iC_debug & 0200) fprintf(iC_outFP, "### Detected           MCP %s 0x%02x\n", getI2cDevice(ch), ns+0x20);
 		mcpL[ch][ns] = NULL;		/* MCP wired but not configured */
 		m++;				/* count active MCP23017s in this I2C channel */
 		mcpCnt++;			/* count all active MCP23017s */
@@ -770,12 +769,14 @@ main( int argc, char ** argv)
 			    iC_progname, getI2cDevice(ch), CONCDEV);
 			continue;
 		    }
-		    if (iC_debug & 0200) fprintf(iC_outFP, "concentrator MCP23017 at channel %s dev 0x%02x configured\n",
+		    if (iC_debug & 0200) fprintf(iC_outFP, "### Concentrator       MCP %s 0x%02x configured\n",
 			getI2cDevice(ch), CONCDEV);
+		    mcpL[ch][CONCDEV-0x20] = (void *) -1;	/* block concentrator for data usage */
+		    mcpCnt--;
 		    goto concentratorFound;
 		}
 	    }
-	    fprintf(iC_errFP, "ERROR: %s: no concentrator MCP23017 found at dev 0x%02x in any channel - cannot process I2C\n",
+	    fprintf(iC_errFP, "ERROR: %s: no concentrator MCP23017 found at dev 0x%02x in any I2C channel - cannot process I2C\n",
 		iC_progname, CONCDEV);
 	    if (writeUnlockCloseGpios() < 0) {
 		fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
@@ -1077,7 +1078,7 @@ main( int argc, char ** argv)
 		    mcp = mcpL[ch][ns];
 		    snprintf(temp, TSIZE, "%cX%u%u%u%s", QI[qi], ch, ns, gs+ofs, iids);
 		    if (mcp == (void *) -1) {
-			fprintf(iC_errFP, "ERROR: %s: '%s' MCP23017 %s does not exist\n", iC_progname, *argp, temp);
+			fprintf(iC_errFP, "ERROR: %s: '%s' MCP23017 %s not wired for data\n", iC_progname, *argp, temp);
 			errorFlag++;
 			continue;
 		    }
@@ -1462,10 +1463,6 @@ main( int argc, char ** argv)
      *  Send final registration string made up of all active I/O names
      *******************************************************************/
     snprintf(cp, regBufRem, ",Z");		/* Z terminator */
-    if (iC_debug & 0200)  fprintf(iC_outFP, "register:%s\n", regBuf);
-#if YYDEBUG && !defined(_WINDOWS)
-    if (iC_micro) iC_microPrint("send registration", 0);
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
     regAck();
     /********************************************************************
      *  ACK string tmpBuf.b contains a comma separated list of channel numbers
@@ -1576,14 +1573,12 @@ main( int argc, char ** argv)
     if (iC_debug & 0200) fprintf(iC_outFP, "reply: top channel = %hu\n", topChannel);
     /********************************************************************
      *  Report results of argument analysis
-     *  Port A outputs are inverted by hardware
-     *  Port B inputs and outputs are direct
      *******************************************************************/
     if (iC_debug & 0300) {
 	fprintf(iC_outFP, "\n");
 	if (mcpCnt) {
-	    fprintf(iC_outFP, "Allocation for %d MCP23017%s, global instance = \"%s\"\n",
-		mcpCnt, mcpCnt == 1 ? "" : "s", iC_iidNM);
+	    fprintf(iC_outFP, "Allocation for %d MCP23017%s, global instance = \"%s%s\"\n",
+		mcpCnt, mcpCnt == 1 ? "" : "s", strlen(iC_iidNM) ? "-" : "", iC_iidNM);
 	    fprintf(iC_outFP, "   Port  IEC inst          bits            iC channel\n");
 	    for (ch = 0; ch < 10; ch++) {	/* scan all I2C channels */
 		if (i2cFdA[ch] == -1) {
@@ -1618,9 +1613,9 @@ main( int argc, char ** argv)
 	if (gpioCnt) {
 	    char *	iidPtr;
 	    char *	iidSep;
-	    fprintf(iC_outFP, "Allocation for %d GPIO element%s, global instance = \"%s\"\n",
+	    fprintf(iC_outFP, "Allocation for %d GPIO group%s, global instance = \"%s\"\n",
 		gpioCnt, gpioCnt == 1 ? "" : "s", iC_iidNM);
-	    fprintf(iC_outFP, "	IEC bit	inst	gpio	channel\n\n");
+	    fprintf(iC_outFP, "	IEC bit	inst	gpio	iC channel\n\n");
 	    for (qi = 0; qi < 2; qi++) {
 		for (gep = iC_gpL[qi]; gep; gep = gep->nextIO) {
 		    strcpy(buffer, gep->Gname);		/* retrieve name[-instance] */
@@ -1632,7 +1627,7 @@ main( int argc, char ** argv)
 		    }
 		    for (bit = 0; bit <= 7; bit++) {
 			if ((gpio = gep->gpioNr[bit]) != 0xffff) {	/* saved gpio number for this bit */
-			    fprintf(iC_outFP, "	%c%s.%hu	%s%s	%3hu	%3hu\n",
+			    fprintf(iC_outFP, "	%c%s.%hu	%s%s	%3hu	%5hu\n",
 				gep->Ginv & iC_bitMask[bit] ? '~' : ' ',
 				buffer, bit, iidSep, iidPtr, gpio, gep->Gchannel);
 			}
@@ -1643,7 +1638,7 @@ main( int argc, char ** argv)
 	}
     }
     cp = regBuf;
-    if (iC_debug & 0100) {
+    if (iC_debug & 010) {
 	op = buffer;
 	ol = BS;
 	regBufRem = BS/3;	/* to allow INI message to fit in buffer[BS] */
@@ -1681,10 +1676,10 @@ main( int argc, char ** argv)
 				if(regBufRem < 12) {		/* fits largest data telegram */
 				    /* partial ini data telegram(s) to iCserver (skip initial ',') */
 				    iC_send_msg_to_server(iC_sockFN, regBuf+1);
-				    if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
+				    if (iC_debug & 010) fprintf(iC_outFP, "M: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
 				    cp = regBuf;
 				    regBufRem = REPLY;
-				    if (iC_debug & 0100) {
+				    if (iC_debug & 010) {
 					op = buffer;
 					ol = BS;
 				    }
@@ -1698,7 +1693,7 @@ main( int argc, char ** argv)
 				    assert(len < regBufRem);	/* output was truncated */
 				    cp += len;
 				    regBufRem -= len;
-				    if (iC_debug & 0100) {
+				    if (iC_debug & 010) {
 					len = snprintf(op, ol, " M %s(INI)", mdp->name);	/* source name */
 					op += len;
 					ol -= len;
@@ -1733,10 +1728,10 @@ main( int argc, char ** argv)
 	if(regBufRem < 12) {		/* fits largest data telegram */
 	    /* partial ini data telegram(s) to iCserver (skip initial ',') */
 	    iC_send_msg_to_server(iC_sockFN, regBuf+1);
-	    if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
+	    if (iC_debug & 010) fprintf(iC_outFP, "M: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
 	    cp = regBuf;
 	    regBufRem = REPLY;
-	    if (iC_debug & 0100) {
+	    if (iC_debug & 010) {
 		op = buffer;
 		ol = BS;
 	    }
@@ -1746,7 +1741,7 @@ main( int argc, char ** argv)
 	assert(len < regBufRem);		/* output was truncated */
 	cp += len;
 	regBufRem -= len;
-	if (iC_debug & 0100) {
+	if (iC_debug & 010) {
 	    len = snprintf(op, ol, " G %s(INI)", gep->Gname);	/* source name */
 	    op += len;
 	    ol -= len;
@@ -1758,7 +1753,7 @@ main( int argc, char ** argv)
      *******************************************************************/
     if (cp > regBuf) {
 	iC_send_msg_to_server(iC_sockFN, regBuf+1);	/* final ini data telegram(s) to iCserver (skip initial ',') */
-	if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
+	if (iC_debug & 010) fprintf(iC_outFP, "M: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
     }
     /********************************************************************
      *  Write GPIO QXn initialisation outputs
@@ -1842,8 +1837,8 @@ main( int argc, char ** argv)
 					 *  Direct output to an MCP23017 Port
 					 *******************************************************************/
 					writeByte(mdp->i2cFd, mdp->mcpAdr, OLAT[mdp->g], (val & mdp->bmask) ^ mdp->inv);
-					if (iC_debug & 0100) {
-					    fprintf(iC_outFP, "M: %s:	%hu:%d	> MCP %s:%x%c - %s\n",
+					if (iC_debug & 020) {
+					    fprintf(iC_outFP, "M: %s:	%hu:%d	> MCP %s:%x%c %s\n",
 						    iC_iccNM, channel, val,
 						    strrchr(getI2cDevice(mdp->name[2]-'0'), '-')+1,
 						    mdp->mcpAdr, AB[mdp->g], mdp->name);
@@ -1926,13 +1921,13 @@ main( int argc, char ** argv)
 						cp += len;
 						regBufRem -= len;
 						if (iC_debug & 0300) {
-						    len = snprintf(op, ol, " MCP %s:%x%c - %s",
+						    len = snprintf(op, ol, " MCP %s:%x%c %s",
 								   strrchr(getI2cDevice(ch), '-')+1,
 								   ma, AB[gs], mdp->name); /* source name */
 						    op += len;
 						    ol -= len;
 						}
-					    } else if (iC_debug & 0100) {
+					    } else if (iC_debug & 020) {
 						fprintf(iC_outFP, "M: %s: %d input on unregistered MCP23017 %s:%x%c\n",
 							iC_iccNM, val,
 							strrchr(getI2cDevice(ch), '-')+1,
@@ -1959,13 +1954,13 @@ main( int argc, char ** argv)
 		 *******************************************************************/
 		if (cp > regBuf) {
 		    iC_send_msg_to_server(iC_sockFN, regBuf+1);			/* send data telegram(s) to iCserver */
-		    if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
+		    if (iC_debug & 010) fprintf(iC_outFP, "M: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
 		}
-		if ((iC_debug & (DQ | 0200)) == 0200) {
+		if ((iC_debug & (DQ | 010)) == 010) {
 		    if (m1 > 5){
-			fprintf(iC_errFP, "WARNING: %s: GPIO 27 interrupt %d loops %d changes \"%s\"\n", iC_progname, m1, m, regBuf+1);
+			fprintf(iC_outFP, "WARNING: %s: GPIO 27 interrupt %d loops %d changes \"%s\"\n", iC_progname, m1, m, regBuf+1);
 		    } else if (m == 0) {	/* for some reason this happens occasionaly - no inputs are missed though */
-			fprintf(iC_errFP, "WARNING: %s: GPIO 27 interrupt and no INTF set on MCP23017s\n", iC_progname);
+			fprintf(iC_outFP, "WARNING: %s: GPIO 27 interrupt and no INTF set on MCP23017s\n", iC_progname);
 		    }
 		    *(regBuf+1) = '\0';			/* clean debug output next time */
 		}
@@ -1976,7 +1971,7 @@ main( int argc, char ** argv)
 	    m1 = 0;
 	    cp = regBuf;
 	    regBufRem = REPLY;
-	    if (iC_debug & 0100) {
+	    if (iC_debug & 010) {
 		op = buffer;
 		ol = BS;
 	    }
@@ -2008,7 +2003,7 @@ main( int argc, char ** argv)
 		    len = snprintf(cp, regBufRem, ",%hu:%d", gep->Gchannel, val ^ gep->Ginv); /* data telegram */
 		    cp += len;
 		    regBufRem -= len;
-		    if (iC_debug & 0100) {
+		    if (iC_debug & 010) {
 			len = snprintf(op, ol, " G %s", gep->Gname); /* source name */
 			op += len;
 			ol -= len;
@@ -2021,7 +2016,7 @@ main( int argc, char ** argv)
 	     *******************************************************************/
 	    if (cp > regBuf) {
 		iC_send_msg_to_server(iC_sockFN, regBuf+1);	/* send data telegram(s) to iCserver */
-		if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
+		if (iC_debug & 010) fprintf(iC_outFP, "M: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
 	    }
 	    if (FD_ISSET(0, &iC_rdfds)) {
 		/********************************************************************
@@ -2146,8 +2141,7 @@ scanIEC(const char * format, int * ieStartP, int * ieEndP, char * tail, unsigned
 	if (sl > 3 ||
 	    ch < 0 || ch > 9 ||
 	    ns < 0 || ns > 7 ||
-	    gs < 0 || gs > 1 ||
-	    (ch == concCh && ns == CONCDEV-0x20)) {
+	    gs < 0 || gs > 1) {
 	    fprintf(iC_errFP, "ERROR: %s: '%s' with offset %d does not address a data MCP23017 register\n", iC_progname, *argp, ofs);
 	    errorFlag++;
 	    return 6;				/* goto endOneArg */
@@ -2325,7 +2319,7 @@ regAck(void)
 		do {
 		    if (bc <= 0) {
 			*cp = '\0';			/* buffer overflowed - remove last entry */
-			if (iC_debug & 0224) fprintf(iC_outFP, "equivalence:%s\n", rpyBuf);
+			if (iC_debug & 0200) fprintf(iC_outFP, "Equivalence: %s\n", rpyBuf);
 			iC_send_msg_to_server(iC_sockFN, rpyBuf); /* send partial equivalence string */
 			cp = rpyBuf + 1;		/* bypass initial 'E' */
 			bc = REPLY  - 1;
@@ -2347,17 +2341,17 @@ regAck(void)
 		} while (bc <= 0);
 		cp += len;				/* room for this entry and '\0' terminator */
 	    }
-	    if (iC_debug & 0224) fprintf(iC_outFP, "equivalence:%s\n", rpyBuf);
+	    if (iC_debug & 0200) fprintf(iC_outFP, "Equivalence: %s\n", rpyBuf);
 	    iC_send_msg_to_server(iC_sockFN, rpyBuf);	/* send final equivalence string */
 	    tmpBuf.b[0] = '\0';
 	}
 	if (iC_debug & 04) fprintf(iC_outFP, "*** TCP interrupt has been primed\n");
     }
-    if (iC_debug & 0224) fprintf(iC_outFP, "register:%s\n", regBuf);
+    if (iC_debug & 0200) fprintf(iC_outFP, "Register: %s\n", regBuf);
     iC_send_msg_to_server(iC_sockFN, regBuf);	/* register controller and IOs */
     if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {	/* busy wait for acknowledgment reply */
 	if (iC_micro & 06) iC_microPrint("reply from server", 0);
-	if (iC_debug & 0224) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
+	if (iC_debug & 0200) fprintf(iC_outFP, "Reply: %s\n", rpyBuf);
 	bufAppend(&tmpBuf, ',', rpyBuf);		/* append Ack string directly to tmpBuf */
     } else {
 	iC_quit(QUIT_SERVER);			/* quit normally */
@@ -2379,7 +2373,7 @@ writeGPIO(gpioIO * gep, unsigned short channel, int val)
     unsigned short	bit;
 
     assert(gep && gep->Gname && *gep->Gname == 'Q');	/* make sure this is really a GPIO output */
-    if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%hu:%d G	> %s\n",
+    if (iC_debug & 020) fprintf(iC_outFP, "M: %s:	%hu:%d	> G %s\n",
 	iC_iccNM, channel, (int)val, gep->Gname);
     val ^= gep->Ginv;			/* normally write non-inverted data to GPIO output */
     diff = val ^ gep->Gval;		/* bits which are going to change */
@@ -2500,14 +2494,22 @@ termQuit(int sig)
 		}
 		for (ns = 0; ns < 8; ns++) {
 		    mcp = mcpL[ch][ns];
-		    if (mcp == (void *) -1 || mcp == NULL) {
+		    if (mcp == (void *) -1) {	/* reset MCPs not used (mcp == NULL) */
 			continue;		/* no MCP23017 at this address */
 		    }
-		    setupMCP23017(mcp->i2cFd, data, mcp->mcpAdr, IOCON_ODR, 0x00, 0x00, 0x00, 0x00);
+		    fd = i2cFdA[ch];
+		    assert(fd > 0);
+		    if (iC_debug & 0200) fprintf(iC_outFP, "### Reset              MCP %s 0x%02x\n", getI2cDevice(ch), ns+0x20);
+		    if (setupMCP23017(fd, data, ns+0x20, IOCON_ODR, 0x00, 0x00, 0x00, 0x00) < 0) {
+			assert(0);		/* cannot reset previously detected MCP ?? */
+		    }
 		}
 	    }
-	    if (concFd > 0) {
-		setupMCP23017(concFd, data, CONCDEV, IOCON_ODR, 0x00, 0x00, 0x00, 0x00);	/* concentrator MCP */
+	    if (concFd > 0) {			/* concentrator MCP */
+		if (iC_debug & 0200) fprintf(iC_outFP, "### Reset concentrator MCP %s 0x%02x\n", getI2cDevice(concCh), CONCDEV);
+		if (setupMCP23017(concFd, data, CONCDEV, IOCON_ODR, 0x00, 0x00, 0x00, 0x00) < 0) {
+		    assert(0);			/* cannot reset previously detected MCP ?? */
+		}
 	    }
 	    /********************************************************************
 	     *  Close selected i2cdev devices

@@ -165,7 +165,7 @@ Usage:
 	    Q   from keyboard: exit without stopping iCserver
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.66 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.67 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -1115,11 +1115,11 @@ sub send_input {
     my ($ch, $val) = @_;
     printMicroSeconds();
     if ($hold) {
-	print "$named: $ch:$val	II $ChannelNames[$ch]\n" if $opt_t;
+	print "B: $named: $ch:$val	II $ChannelNames[$ch]\n" if $opt_t;
 	$HoldQueue{$ch} = $val;			# hold latest value - not sent now
     } elsif ($val != $ChannelsIq[$ch]) {
 	$ChannelsIq[$ch] = $val;		# always save latest value sent on this channel for hold
-	print "$named: $ch:$val	< $ChannelNames[$ch]\n" if $opt_t;
+	print "B: $named: $ch:$val	< $ChannelNames[$ch]\n" if $opt_t;
 	printf "%s	> %2d:%d\n", $ChannelNames[$ch], $ch, $val if $opt_O;
 	$conn->send_now("$ch:$val");		# send latest value
     }
@@ -1136,7 +1136,6 @@ sub rcvd_msg_from_server {
     printMicroSeconds();
     if (defined $msg) {
         my $len = length $msg;
-	print "($len)$msg<\n" if $opt_t;
 	if ($len == 0) {
 	    print STDERR "iCbox '$named' disconnected by server\n" unless $opt_q;
 	    quit_program();			# never returns
@@ -1161,7 +1160,7 @@ sub rcvd_msg_from_server {
 			    }
 			}
 			$ChannelsQ[$channel] = $value;	# ready for next message
-			print "$named: $msg1	> $ChannelNames[$channel]\n" if $opt_t;
+			print "B: $named: $msg1	> $ChannelNames[$channel]\n" if $opt_t;
 			printf "%s	< %2d:%d\n", $ChannelNames[$channel], $channel, $value if $opt_J;
 		    }
 		} else {
@@ -1286,8 +1285,6 @@ sub printMicroSeconds {
 	    printf "B%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
 	}
 	$t0 = $t1;
-    } elsif ($opt_t) {
-	print "B: ";
     }
 } # printMicroSeconds
 
