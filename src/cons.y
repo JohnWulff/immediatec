@@ -1,5 +1,5 @@
 %{ static const char cons_y[] =
-"@(#)$Id: cons.y 1.7 $";
+"@(#)$Id: cons.y 1.8 $";
 /********************************************************************
  *
  *	Copyright (C) 2016  John E. Wulff
@@ -467,6 +467,6 @@ warning(char * warnMsg, char * msg)
 static void
 yyerror (const char * msg)
 {
-    printf("*** %s for return value %d\n", msg, *retValue);
+    printf("*** %s\n", msg);
 } /* yyerror */
 #endif	/* TESTCONS */

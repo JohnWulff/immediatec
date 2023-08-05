@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.83 $
+# @(#)$Id: Makefile.in 1.84 $
 
 #######################################################################
 #
@@ -134,11 +134,12 @@ gramPREFIX =
 #### Standalone versions ##############################################
 #### make icr and lmain with YYDEBUG, since they need it for normal operation
 
-im_lib:
-	@$(srcdir)/makeAll -o$(O)
-
-quiet:
-	@$(srcdir)/makeAll -q -o$(O)
+nothing:
+	@echo "Use 'm' to make various parts of the iC system with correct options"
+	@echo "    'm'    without flags - update compilers and libraries - install"
+	@echo "    'm -a' make compilers, libraries and drivers and install them"
+	@echo "           use after 'make clean'"
+	@echo "    'm -h' help list of possible calls"
 
 immcc:	$(srcdir)/Makefile icc.$(O) misc.$(O) scid.$(O) $(COBJ) pplstfix
 	$(CC) $(LDFLAGS) -o immcc icc.$(O) misc.$(O) scid.$(O) $(COBJ) $(EL)
@@ -225,18 +226,18 @@ pplstfix:
 
 $(srcdir)/lex.yy.c:	$(srcdir)/lexc.l
     ifneq ($(LEX),)
-	$(SHELL) -ec 'if ! $(LEX) $<; then echo "$(LEX) error return"; fi'
+	@$(SHELL) -ec 'if ! $(LEX) $<; then echo "$(LEX) error return"; fi'
     else
 	@echo "System has no flex or lex - install one of them"
     endif
 
 $(srcdir)/%.tab.c:	$(srcdir)/%.y
     ifneq ($(YACC),)
-	$(SHELL) -ec 'if [ -f $(*).tab.h ]; then mv -f $(*).tab.h yy.tab.ht; fi'
-	$(SHELL) -ec 'if grep -q %if $<; then mv $< $(<).sav; ./immac -Y $(OPT) -o $< $(<).sav; fi'
-	$(SHELL) -ec 'if ! $(YACC) $(YFLAGS) $($(*)PREFIX) $<; then echo "$(YACC) error return"; fi'
-	$(SHELL) -ec 'if [ -f $(<).sav ]; then mv -f $(<).sav $<; fi'
-	$(SHELL) -ec 'if cmp -s $(*).tab.h yy.tab.ht; then mv yy.tab.ht $(*).tab.h; else rm -f yy.tab.ht; fi'
+	@$(SHELL) -ec 'if [ -f $(*).tab.h ]; then mv -f $(*).tab.h yy.tab.ht; fi'
+	@$(SHELL) -ec 'if grep -q %if $<; then mv $< $(<).sav; ./immac -Y $(OPT) -o $< $(<).sav; fi'
+	@$(SHELL) -ec 'if ! $(YACC) $(YFLAGS) $($(*)PREFIX) $<; then echo "$(YACC) error return"; fi'
+	@$(SHELL) -ec 'if [ -f $(<).sav ]; then mv -f $(<).sav $<; fi'
+	@$(SHELL) -ec 'if cmp -s $(*).tab.h yy.tab.ht; then mv yy.tab.ht $(*).tab.h; else rm -f yy.tab.ht; fi'
     else
 	@echo "System has no bison, yacc or byacc - install one of them"
     endif
@@ -417,58 +418,58 @@ endif
 
 uninstall:
 	@$(srcdir)/perlinstall -r $(srcdir)
-	sudo rm -f `$(srcdir)/perlinstall`/iCmsg.pm
-	sudo rm -f ${bindir}/${binprefix}immcc
-	sudo rm -f ${bindir}/${binprefix}pplstfix
-	sudo rm -f ${bindir}/${binprefix}immac
-	sudo rm -f ${bindir}/${binprefix}immax
-	sudo rm -f ${bindir}/${binprefix}iCbox
-	sudo rm -f ${bindir}/${binprefix}iClift
-	sudo rm -f ${bindir}/${binprefix}iClive
-	sudo rm -f ${bindir}/${binprefix}iCmake
-	sudo rm -f ${bindir}/${binprefix}iCman
-	sudo rm -f ${bindir}/${binprefix}iCserver
-	sudo rm -f ${bindir}/${binprefix}iCpiFace
-	sudo rm -f ${bindir}/${binprefix}iCpiPWM
-	sudo rm -f ${bindir}/${binprefix}iCpiI2C
-	sudo rm -f ${bindir}/${binprefix}iCpiGPIO
-	sudo rm -f ${bindir}/${binprefix}iCgpioPUD
-	sudo rm -f ${bindir}/${binprefix}iCtherm
-	sudo rm -f ${includedir}/${includeprefix}pigpio.h
-	sudo rm -f ${includedir}/${includeprefix}pigpiod_if.h
-	sudo rm -f ${libdir}/${libprefix}libpigpio.a
-	sudo rm -f ${libdir}/${libprefix}libpigpiod_if.a
-	sudo rm -f ${bindir}/${binprefix}iCrfid
-	sudo rm -f ${libdir}/${libprefix}libict.a
-	sudo rm -f ${libdir}/${libprefix}libict.so
-	sudo rm -f ${libdir}/${libprefix}libict.so.1
-	sudo rm -f ${libdir}/${libprefix}libict.so.1.$(REV)
-	sudo rm -f ${bindir}/${binprefix}Mdiff
-	sudo rm -f ${includedir}/${includeprefix}icg.h
-	sudo rm -f ${mandir}/man1/${manprefix}immcc.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}immac.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}immax.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}iCbox.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}iClift.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}iClive.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}iCmake.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}iCman.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}iCserver.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}iCpiFace.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}iCpiPWM.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}iCpiI2C.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}iCtherm.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}iCrfid.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}makeAll.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}Mdiff.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}pig2vcd.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}pigpiod.1.gz
-	sudo rm -f ${mandir}/man1/${manprefix}pigs.1.gz
-	sudo rm -f ${mandir}/man3/${manprefix}pigpio.3.gz
-	sudo rm -f ${mandir}/man3/${manprefix}pigpiod_if.3.gz
+	@sudo rm -f `$(srcdir)/perlinstall`/iCmsg.pm
+	@sudo rm -f ${bindir}/${binprefix}immcc
+	@sudo rm -f ${bindir}/${binprefix}pplstfix
+	@sudo rm -f ${bindir}/${binprefix}immac
+	@sudo rm -f ${bindir}/${binprefix}immax
+	@sudo rm -f ${bindir}/${binprefix}iCbox
+	@sudo rm -f ${bindir}/${binprefix}iClift
+	@sudo rm -f ${bindir}/${binprefix}iClive
+	@sudo rm -f ${bindir}/${binprefix}iCmake
+	@sudo rm -f ${bindir}/${binprefix}iCman
+	@sudo rm -f ${bindir}/${binprefix}iCserver
+	@sudo rm -f ${bindir}/${binprefix}iCpiFace
+	@sudo rm -f ${bindir}/${binprefix}iCpiPWM
+	@sudo rm -f ${bindir}/${binprefix}iCpiI2C
+	@sudo rm -f ${bindir}/${binprefix}iCpiGPIO
+	@sudo rm -f ${bindir}/${binprefix}iCgpioPUD
+	@sudo rm -f ${bindir}/${binprefix}iCtherm
+	@sudo rm -f ${includedir}/${includeprefix}pigpio.h
+	@sudo rm -f ${includedir}/${includeprefix}pigpiod_if.h
+	@sudo rm -f ${libdir}/${libprefix}libpigpio.a
+	@sudo rm -f ${libdir}/${libprefix}libpigpiod_if.a
+	@sudo rm -f ${bindir}/${binprefix}iCrfid
+	@sudo rm -f ${libdir}/${libprefix}libict.a
+	@sudo rm -f ${libdir}/${libprefix}libict.so
+	@sudo rm -f ${libdir}/${libprefix}libict.so.1
+	@sudo rm -f ${libdir}/${libprefix}libict.so.1.$(REV)
+	@sudo rm -f ${bindir}/${binprefix}Mdiff
+	@sudo rm -f ${includedir}/${includeprefix}icg.h
+	@sudo rm -f ${mandir}/man1/${manprefix}immcc.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}immac.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}immax.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}iCbox.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}iClift.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}iClive.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}iCmake.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}iCman.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}iCserver.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}iCpiFace.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}iCpiPWM.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}iCpiI2C.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}iCtherm.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}iCrfid.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}makeAll.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}Mdiff.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}pig2vcd.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}pigpiod.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}pigs.1.gz
+	@sudo rm -f ${mandir}/man3/${manprefix}pigpio.3.gz
+	@sudo rm -f ${mandir}/man3/${manprefix}pigpiod_if.3.gz
 
 clean:
-	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/ConstObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/PiPWMObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/const $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/iCpiI2C $(srcdir)/iCpiPWM $(srcdir)/goserver $(srcdir)/../pkg/*/tcpcomm.a $(srcdir)/immag $(srcdir)/*.1.gz
+	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/ConstObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/PiI2CObjs $(srcdir)/PiPWMObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/const $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/iCpiI2C $(srcdir)/iCpiPWM $(srcdir)/goserver $(srcdir)/../pkg/*/tcpcomm.a $(srcdir)/immag $(srcdir)/*.1.gz
 
 distclean: clean
 	rm -f $(srcdir)/Makefile $(srcdir)/comp.tab.c $(srcdir)/comp.tab.h $(srcdir)/comp.output $(srcdir)/gram.tab.c $(srcdir)/gram.tab.h $(srcdir)/gram.output $(srcdir)/lex.yy.c $(srcdir)/cons.tab.c $(srcdir)/cons.tab.h $(srcdir)/cons.output $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/pplstfix.log

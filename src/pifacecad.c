@@ -1,5 +1,5 @@
 static const char pifacecad_c[] =
-"$Id: pifacecad.c 1.4 $";
+"$Id: pifacecad.c 1.5 $";
 /********************************************************************
  *
  *	Copyright (C) 2014  John E. Wulff
@@ -55,7 +55,7 @@ static const char pifacecad_c[] =
 #include <string.h>
 #include <assert.h>
 #include <icg.h>
-#include <mcp23s17.h>
+#include "mcp23s17.h"
 #include "tcpc.h"
 #include "pifacecad.h"
 

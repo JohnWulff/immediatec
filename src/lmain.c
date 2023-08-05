@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c 1.20 $";
+"@(#)$Id: lmain.c 1.21 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -57,8 +57,8 @@ static const char *	usage =
 "Copyright (C) 1985-2009 John E. Wulff\n"
 "%s\n";
 
-FILE *	yyin;
-FILE *	yyout;
+extern FILE *	yyin;
+extern FILE *	yyout;
 FILE *	iC_outFP;
 FILE *	T6FP = NULL;
 char *		iC_progname;		/* name of this executable */
