@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c 1.33 $";
+"@(#)$Id: tcpc.c 1.34 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -275,32 +275,29 @@ iC_connect_to_server(const char *	host,
     server.sin_addr = sin_addr;
     server.sin_port = sin_port;
 
-    for (r = 0; connect(sock, (SA)&server, sizeof(server)) < 0; r++) {
-	if (r < 50 ||  errno != ECONNREFUSED) {	/* wait 10 seconds max - will break within 200 ms of connecting */
-	    if (r == 0) {
-		if (strcmp(inet_ntoa(server.sin_addr), "127.0.0.1") == 0) {
+    for (r = 0; connect(sock, (SA)&server, sizeof(server)) < 0; ) {
+	if (strcmp(inet_ntoa(server.sin_addr), "127.0.0.1") == 0) {
+	    if (r < 50 ||  errno != ECONNREFUSED) {	/* wait 10 seconds max - will break within 200 ms of connecting */
+		if (r == 0) {
 		    len = snprintf(cp, TLEN, "iCserver -kz%s%s",
 		        (isatty(fileno(stdin))) ? "a" : "",	/* [autovivify] if stdin is a terminal (not pipe) */
 			(iC_debug & DQ)         ? "q" : "");	/* [quiet] */
-		    assert(len < sizeof cp);		/* unlikely since message is fixed size */
+		    assert(len < sizeof cp);			/* unlikely since message is fixed size */
 		    iC_fork_and_exec(iC_string2argv(cp, 2));	/* fork iCserver -kz[a][q] block STDIN */
 		    iC_Xflag = 1;		/* this process started iCserver */
-		} else {
-		    fprintf(iC_errFP, "ERROR: %s: '%s:iCserver -p %s -akz' cannot be started here - start it on '%s' to connect\n",
-			iC_iccNM, host, port, host);
-		    iC_quit(SIGUSR1);
 		}
+		r++;
+	    } else {
+		fprintf(iC_errFP, "ERROR in %s: client could not be connected to server '%s:%d'\n",
+		    iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+		perror("connect failed");
+		iC_quit(SIGUSR1);
 	    }
 #ifdef	_WIN32
 	    Sleep(200);				/* 200 ms in ms */
 #else	/* ! _WIN32 Linux */
 	    nanosleep(&ms200, NULL);
 #endif	/* _WIN32 */
-	} else {
-	    fprintf(iC_errFP, "ERROR in %s: client could not be connected to server '%s:%d'\n",
-		iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
-	    perror("connect failed");
-	    iC_quit(SIGUSR1);
 	}
     }
 
