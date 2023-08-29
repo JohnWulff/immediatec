@@ -346,7 +346,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2023 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiI2C.c 1.8 $\n"
+"Version	$Id: iCpiI2C.c 1.9 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -1350,6 +1350,9 @@ main( int argc, char ** argv)
     len = snprintf(buffer, BS, "%s", iC_iccNM);
     if (mcpCnt == 0) {
 	len += snprintf(buffer+len, BS-len, "_G");		/* name GPIO marker */
+    }
+    if (ofs != 0) {
+	len += snprintf(buffer+len, BS-len, "-o%d", ofs);	/* alternate offset */
     }
     if (*iC_iidNM) {
 	len += snprintf(buffer+len, BS-len, "-%s", iC_iidNM);	/* name-instance header */

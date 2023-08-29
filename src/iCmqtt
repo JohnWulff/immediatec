@@ -1,0 +1,1343 @@
+#!/usr/bin/perl
+
+########################################################################
+#
+#	Copyright (C) 2000-2017  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file
+#
+#	iCmqtt; interface between MQTT broker and iCserver
+#
+########################################################################
+
+########################################################################
+
+use iCmsgM;		# Messaging Toolkit: from Advanced Perl Programming
+			##                   by Sriram Srinivasan
+			## added code from   https://metacpan.org/pod/Net::MQTT::Simple
+use strict;
+use warnings;
+
+my @ArgNames;		# stores IO names and initialisers in argument list order
+my @ChannelNames;	# stores IO names with instance for each registered channel
+my @ChannelsRI;		# allow retrieval of @ArgNames info via $channel
+my @ChannelsQ;		# stores received value for all Q[XBWL]n outputs
+my @ChannelsQX;		# stores computed bit value for all QXn.<0..7> outputs
+my @ChannelsI;		# stores computed or selected value for all I[XBWL]n inputs
+my @ChannelsIX;		# stores selected bit values for all IXn.<0..7> inputs
+my @ChannelsIq;		# stores values before queing for all I[XBWL]n inputs
+my %IONames;		# stores channel for each IO name (aux use in initial pass)
+my $UnitRegistrations;	# stores the registration string
+my $setButton;		# Set all inputs button
+my $set;		# state of Set button
+my @allButtons = ();	# used to note all buttons to set
+my $indicatoron = 1;	# 0 button    1 checkbox
+my $greenButton = "'green4'";
+my $redButton   = "'red'";
+my @argv = ();
+
+my $Ch = 0;
+my $Bit;
+
+my @args;
+my @runArgs = ();
+my $argsP = \@args;			# intially fill @args
+my $Rflag = 0;
+my $opt_Z = 0;		# 1 for debugging sub convertFlags()
+my %commandLineFlags = (
+    'b'   => 0,				# Bool flag
+    'd'   => 0,
+    'r'   => 0,
+    'H'   => 0,
+    'm'   => 0,
+    'x'   => 0,
+    't'   => 0,
+    'J'   => 0,
+    'O'   => 0,
+    'q'   => 0,
+    'z'   => 0,
+    'T'   => 0,
+    's'   => 1,				# value flag
+    'p'   => 1,
+    'n'   => 1,
+    'i'   => 1,
+    'c'   => 1,
+    'C'   => 1,
+    'S'   => 1,
+    'l'   => 1,
+    'h'   => 0,
+    'f'   => 1,				# include file
+    'R'   => 1,				# Run an app
+);
+
+my @masks =	(1, 2, 4, 8, 16, 32, 64, 128);
+my @bitIndex =	(
+    0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,	# 0x01 0x02 0x04 0x08
+    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	# 0x10
+    5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x20
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x40
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x80
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+);
+
+########################################################################
+#
+#	Initialization
+#
+########################################################################
+
+my $named = untaint($0); $named =~ s#.*[/\\]##;
+format STDERR =
+Usage:
+    @<<<< [-qHbdrtJOmTxh][ -s <iC host>][ -p <iC port>][ -N <name>][ -i <inst>]
+	$named
+          [ -s <MQTT host>][ -p <MQTT port>]
+	  [ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
+	  [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
+	ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
+		Any ID can be preceded by 'I' or 'Q' in which case
+		only that input or output is generated (default is both)
+		default ID is X0 generating input IX0 and output QX0
+		A range of ID's can be specified with -; eg IX0-IX7
+	ID-inst Each ID can be followed by -<inst>, where <inst> consists
+		of up to 3 numeric digits (usually 1 digit).
+		Such an appended instance code takes precedence over the
+		general instance specified with the -i <inst> (see below)
+	ID=ini  initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
+		applies only to input ID's. One =ini applies to each input
+		in a range of ID's; eg X5-X7=0b11 inits IX5 IX6 and IX7 to 3
+	ID,<button_select_mask>,<input_reset_time>,<reset_select_mask>
+	X1,0b11 select digital buttons IX0.0, IX0.1, QX0.0 and QX0.1 only
+		with a bit mask - default X1 (= X1,0b11111111) selects all
+	X1,,200 digital input push-buttons IX1.0 .. IX1.7 reset after 200 ms
+		default on/off buttons, which must be reset by another click
+		outputs QX1.0 .. QX1.7 are not affected by <input_reset time>
+	IX1,,200,0b11  only IX1.0 and IX1.1 are push-buttons - rest are on/off
+	ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
+	B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
+	B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
+	-s host name of iCserver host    (default '127.0.0.1')
+	-p port service port of iCserver (default '8778')
+	-m host name of MQTT broker host    (default '127.0.0.1')
+	-n port service port of MQTT broker (default '8778')
+	-N name registration name (default first full ID)
+	-i inst instance ID for this @<<<<<< (1 to 3 numeric digits)
+				    $named
+	-q      quiet - do not report clients connecting and disconnecting
+	-c col  maximum number of columns in a row (default 12)
+	-C col  absolute maximum number of columns in a row (default 18)
+	-S rows absolute maximum number of rows (default 3)
+	-l len  length of scales (default 170 pixels)
+	-f file read flags and additional ID parameters from this file
+	-H      a Hold button is generated which holds input changes
+	-b      use buttons instead of checkboxes for digital I/O
+	-d      display inputs IMn (no change and no ini values allowed)
+	-r      reverse - display inputs IMn, send outputs QMn like inputs
+	    DEBUG options
+	-t      trace debug messages
+	-J      trace rcv messages in iCmsgM.pm
+	-O      trace send messages in iCmsgM.pm
+	-M      display elapsed time in seconds and microseconds
+	-T      extra static debug messages
+	-x      exit after analyzing input parameters
+	-h      help, ouput this Usage text only
+	    AUXILIARY app   - start a Bernstein chain
+	-R <app ...> run one app followed by -z and its arguments as a
+		     separate process; -R ... must be last arguments,
+	    KEYBOARD inputs
+	    q   from keyboard or (X) button: stops iCserver and all apps
+	    Q   from keyboard: exit without stopping iCserver
+Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
+							  '@'
+$Id: iCmqtt 1.1 $
+.
+
+########################################################################
+#	convert POSIX flags to individual flags - process -f -R
+########################################################################
+
+convertFlags(\@ARGV);
+print "args    = '", join(" ", @args), "'\n" if $opt_Z;
+print "runArgs = '", join(" ", @runArgs), "'\n" if $opt_Z;
+@ARGV = @args;
+
+my $nr = qr/-?[1-9]\d*|0(x[\da-fA-F]+|b[01]+|[0-7]*)/;	# precompiled regex for number in all representations
+							# NOTE: oct() only handles lower case 0b, 0x
+my ($id, $ini, $from, $to, $res, $argNameRef);
+
+########################################################################
+#	Handle all remaining -switch options and non-switch options
+########################################################################
+
+use vars qw($opt_ $opt_b $opt_d $opt_r $opt_H $opt_M $opt_x $opt_t $opt_J $opt_O $opt_T);
+use vars qw($opt_q $opt_z $opt_s $opt_p $opt_m $opt_n $opt_N $opt_i $opt_c $opt_C $opt_S $opt_l $opt_h);
+use Getopt::Long qw(:config no_ignore_case bundling);
+GetOptions (
+    ''    => \$opt_,			# lone - (not used)
+    '<>'  => sub { push(@argv, @_); },	# Transfer I/O argument to @argv
+    'b'   => \$opt_b,
+    'd'   => \$opt_d,
+    'r'   => \$opt_r,
+    'H'   => \$opt_H,
+    'M'   => \$opt_M,
+    'x'   => \$opt_x,
+    't'   => \$opt_t,
+    'J'   => \$opt_J,
+    'O'   => \$opt_O,
+    'q'   => \$opt_q,
+    'z'   => \$opt_z,	# dummy flag for iCserver calls -R iCmqtt -z (stops error message)
+    'T'   => \$opt_T,
+    's=s' => \$opt_s,
+    'p=s' => \$opt_p,
+    'm=s' => \$opt_m,
+    'n=s' => \$opt_n,
+    'N=s' => \$opt_N,
+    'i=i' => \$opt_i,
+    'c=i' => \$opt_c,
+    'C=i' => \$opt_C,
+    'S=i' => \$opt_S,
+    'l=i' => \$opt_l,
+    'h'   => \$opt_h,
+);
+scalar @ARGV == 0 or die "*** ERROR: $named: '@ARGV' remaining after Getopt::Long GetOptions() ???\n";
+
+if ($opt_h) {
+    write STDERR; exit 0;	# -h, ouput Usage only
+}
+
+if ($opt_q) {
+    $opt_q = 'q';			# quiet option
+} else {
+    $opt_q = '';			# define $opt_q
+}
+
+use Time::HiRes qw(ualarm gettimeofday);
+my ($t0, $t1, $sec, $usec);
+if ($opt_M) {
+    $t0 = [gettimeofday];	# start of program
+}
+$SIG{ALRM} = \&endPulse;	# signal 14 - Timer signal from ualarm()
+
+$opt_c = 12	unless $opt_c;	# default maximum number of columns
+$opt_C = 18	unless $opt_C;	# absolute maximum number of columns
+$opt_c = $opt_C	if $opt_c > $opt_C;
+$opt_S = 3	unless $opt_S;	# absolute maximum number of rows
+$opt_l = 170	unless $opt_l;	# default length of analog scale
+print "c = $opt_c C = $opt_C S = $opt_S l = $opt_l\n" if $opt_t;
+
+if ($opt_b) {
+    $indicatoron = 0;		# 0 button    1 checkbox
+    $greenButton = "'light green'";
+    $redButton   = "'IndianRed1'";
+}
+
+my $QX        = $opt_d ? qr/^[IQ]X/        : $opt_r ? qr/^IX/        : qr/^QX/;
+my $Q_BWL_    = $opt_d ? qr/^[IQ][BWL]/    : $opt_r ? qr/^I[BWL]/    : qr/^Q[BWL]/;
+my $Q__XBWL__ = $opt_d ? qr/^[IQ]([XBWL])/ : $opt_r ? qr/^I([XBWL])/ : qr/^Q([XBWL])/;
+
+my $IX        = $opt_r ? qr/^QX/        : qr/^IX/;
+my $I_BWL_    = $opt_r ? qr/^Q[BWL]/    : qr/^I[BWL]/;
+my $I__XBWL__ = $opt_r ? qr/^Q([XBWL])/ : qr/^I([XBWL])/;
+
+my $instance = '';
+if (defined $opt_i and $opt_i ne '') {
+    if ($opt_i =~ /^\d{1,3}$/) {	# INSTSIZE 3 defined in icc.h
+	$instance = "-$opt_i";
+	print "instance = '$instance'\n" if $opt_t;
+    } else {
+	warn "$named: badly formed option -i $opt_i - ignored\n";
+    }
+}
+
+########################################################################
+#
+#	Analyse ID parameters
+#
+#	X0 X2	generates inputs and outputs IX0 QX0 IX2 QX2 in that order
+#	B0-B2	generates inputs and outputs IB0 QB0 IB1 QB1 IB2 QB2
+#	IW3 IW7	generates only inputs IW3 and IW7
+#	QL4-QL7 generates only outputs QL4 QL5 QL6 and QL7
+#
+#	Combined input/output or input-only parameters can be initialised
+#	with =<number>.
+#	<number> may be decimal, octal, hexadecimal or binary as follows:
+#	X10=15 X11=017 IX12=0xf IX13=0b1111	all equal decimal 15
+#	only decimal initialisers may be preceded by a minus sign
+#	IW10=-100	initialises IW10 with -100
+#
+#	An initialiser may be placed after the second parameter of a range.
+#	Every input in the range will be initialised to the same value.
+#	IW20-IW27=100	initialises IW20 IW21 .. IW27 with 100
+#	X20-X27=0x3a	initialises IX20 IX21 .. IX27 with 0x3a
+#	Outputs cannot be initialised.
+#
+#	All digital parameters or parameter ranges may optionally be followed
+#	by one number separated by a comma representing a bit-mask defining,
+#	whether a particular bit .0 to .7 is defined and should be implemented.
+#	Default ',255' which defines all 8 bits. The easiest way to declare
+#	the bit mask is as a binary number, eg: ',0b10001111'. This declares
+#	that bits .0, .1, .2, .3 and .7 are defined in the application and
+#	should be implemented. The bits which are not defined are left blank.
+#
+#	All analog parameters or parameter ranges may optionally be followed
+#	by two or three comma-separated numbers naming the start, finish
+#	and optionally the resolution of the numbers displayed by the analog
+#	scale. Default ',0,100' which is equivalent to ',0,100,1'.  A negative
+#	resolution reverses the direction of the slider. (0 not allowed)
+#
+#	ID-parameter, range, initialiser and number-range must be written
+#	without spaces in the command line unless they are quoted. In the
+#	optional INI file which can be read with the -f option, white space
+#	can be placed between parameter, range, initialiser and number-range.
+#	They must only be all in one line. Any text following '#' is ignored
+#	and treated as a comment.
+#
+########################################################################
+
+unshift(@argv, 'X0') unless @argv;	# default name X0
+print "argv: '", join(':', @argv), "'\n" if $opt_t;
+
+my ($argv);
+while ($argv = shift @argv) {
+    my ($start_iq_xbwl, $start_iq, $start_xbwl, $start_n, $si, $end_n, $ei, $fr_to_re, @list);
+    if ($argv =~ /^
+		    (				# $1   start IEC-1131 ID
+			(			# $2   start_iq_xbwl
+			    ( [IQ]? )		# $3   start_iq
+			    ( [XBWL] )		# $4   start_xbwl
+			)
+			( \d+ )			# $5   start_n IEC addr <<<<<<<
+			(			# $6   optional
+			    -\d{1,3}		#      3 digit instance
+			)?
+		    )
+		    (				# $7   optional
+			\s*-\s*			#      '-' 2nd ID
+			(			# $8   end IEC-1131 ID
+			    ( [IQ]?[XBWL] )	# $9   end_iq_xbwl
+			    ( \d+ )		# $10  end_n IEC addr
+			    (			# $11  optional
+				-\d{1,3}	#      3 digit instance
+			    )?
+			)
+		    )?
+		    (				# $12  optional initialiser
+			\s*=\s*			#      '='
+			( $nr )?		# $13  internal $14 in $nr = qr...
+		    )?
+		    (				# $15  optional  from, to, resolution
+			(			# $16
+			    \s*,\s*		# ','
+			    ( $nr )?		# $17  internal $18 in $nr = qr...
+			){0,3}			# 0 to 3 values ,<number>
+		    )
+		$/xog) {
+	my ($n);
+	$ini = 0;				# default initial value
+	$start_iq_xbwl = $2;
+	$start_iq = $3;
+	$start_xbwl = $4;
+	$start_n = $end_n = $5;			# start_n addr (end_n in case no range)
+	$si = defined $6 ? $6 : '';		# start instance
+	if ($8) {				# end IEC-1131 ID
+	    $end_n = $10;			# end_n addr
+	    $ei = defined $11 ? $11 : $si;	# end instance (same as start instance if not defined)
+	    if (not $9 or			# end_iq_xbwl
+		$start_iq_xbwl ne $9 or		# start_iq_xbwl must equal end_iq_xbwl
+		not defined $end_n or		# $10 can never be '' with ( \d+ )
+		$start_n > $end_n or
+		$si ne $ei)			# start instance must equal end instance
+	    {
+		goto ARG_WARN;			# iq_xbwl not identical or negative range
+	    }
+	}
+	if ($13) {		# initialiser
+	    if ($start_iq and $start_iq eq 'Q') {
+		warn "$named: $argv: output argument cannot be initialised - ignore initialiser\n";
+	    } else {
+		$ini = convert_nr($13, 0, $argv);# 7 or 07 or 0x7 or 0b111 Input initialiser
+	    }
+	}
+	unless ($si) {
+	    $si = $instance;
+	}
+	$fr_to_re = defined $15 ? $15 : '';
+	if ($fr_to_re) {			# [, from[, to[, resolution]]]
+	    my $dummy;
+	    print "fr_to_re = '$fr_to_re'\n" if $opt_t;
+	    ($dummy, $from, $to, $res) = split /\s*,\s*/, $fr_to_re;
+	    ########################################################################
+	    ## $from, $to and $res are optional, so initialise them if undefined
+	    ## all we know that if they are defined, they consist of a valid number
+	    ## For digital I/O:
+	    ## $ini contains the value of initial bits set (must be ANDED with $from)
+	    ## $from contains the bit mask defining which bits are to be used
+	    ##   if $from eq '' it is set to 255 - all 8 buttons present
+	    ##   if $from == 0 it becomes a dummy frame with no buttons
+	    ## $to is the pushbutton delay in ms (default '' or 0 is normal on/off button)
+	    ## $res contains the bit mask defining which bits are push buttons if $to != 0
+	    ########################################################################
+	    if ($start_xbwl eq 'X') {
+		$from = convert_nr($from, 0xff, $argv);	# digital I/O default bit mask for all 8 bits
+		$ini &= $from;				# $ini should not have more bits than defined bits
+		if ($start_iq and $start_iq eq 'Q' and defined $to) {
+		    warn "$named: $argv: digital output argument cannot have a time delay - used 0\n";
+		    $to = 0;
+		} else {
+		    $to = convert_nr($to, 0, $argv);	# default 0 is normal Input on/off button
+		}
+		if ($to and $to < 50) {
+		    warn "$named: $argv: push button time delay '$to' must be >= 50 - used 50 ms\n";
+		    $to = 50;				# minimum push button time delay is 50 ms (not -ve)
+		}
+		$res = convert_nr($res, $to ? 0xff : 0, $argv);# push-button I/O default bit mask for all 8 bits if $to
+		$res &= $from;				# $res should not have more bits than defined bits
+	    } else {
+		$from = convert_nr($from, 0, $argv);	# analog I/O default from = 0
+		$to = convert_nr($to, 100, $argv);	# analog I/O default to   = 100
+		$res = convert_nr($res, 1, $argv);	# analog I/O default res  = 1
+		unless ($res) {
+		    warn "$named: $argv: resolution '$res' must be non-zero - used 1\n";
+		    $res = 1;
+		} elsif ($res < 0) {
+		    my $tmp = $from;			# reverse direction of scale
+		    $from = $to;
+		    $to   = $tmp;
+		    $res = -$res;
+		}
+	    }
+	} elsif ($start_xbwl eq 'X') {
+	    ($from, $to, $res) = (0xff, 0, 0);		# digital I/O default bit mask for all 8 bits
+	    $ini &= 0xff;				# should never have more than 8 bits initialised
+	} else {
+	    ($from, $to, $res) = (0, 100, 1);		# analog I/O default
+	}
+	foreach $n ($start_n .. $end_n) {
+	    if ($start_iq) {
+		@list = ("$start_iq_xbwl$n$si");	# generate individual I/Os
+	    } else {
+		@list = ("I$start_iq_xbwl$n$si", "Q$start_iq_xbwl$n$si");	# both I/Os
+	    }
+	    foreach $id (@list) {
+		if ($IONames{$id}) {
+		    print "\n" if $opt_t;
+		    warn "$named: $id occurs twice - ignore second instance\n";
+		} else {
+		    $IONames{$id} = -1;			# mark as unregistered IO
+		    print " $id=$ini" if $opt_t;
+		    push @ArgNames, [ $id, $ini, $from, $to, $res ];	# argument order for generating widgets
+		}
+	    }
+	}
+	print "\n" if $opt_t;
+    } else {
+	ARG_WARN: warn "$named: $argv: badly formed ID argument - ignored\n";
+    }
+}
+@ArgNames or die "$named: no valid arguments - cannot make any boxes\n";
+
+if ($opt_t) {
+    print "LIST:	ID	ini	from	to	resolution\n";
+    foreach $argNameRef (@ArgNames) {
+	my $argLine = join "\t", @$argNameRef;
+	print "\t$argLine\n";
+    }
+}
+
+%IONames = ();		# clear for channel entries
+
+########################################################################
+#
+#	Connect to server and register I/Os
+#
+#	Inhibit Nagle's algorithm
+#
+########################################################################
+
+my $host = defined $opt_s ? $opt_s : '127.0.0.1';
+my $port = defined $opt_p ? $opt_p : 8778;
+my $name = untaint($opt_N ? "$opt_N$instance" : $ArgNames[0][0]);	# : $ArgNames [first entry] [$id]
+$named = $name;			# use individual ID for warnings from now on
+
+iCmsgM->inhibit_nagle(1, $opt_J, $opt_O);	# inhibit Nagle's algorithm for real time response
+my $conn = iCmsgM->connect($host, $port, \&rcvd_msg_from_server);
+die "Client '$named' could not connect to $host:$port\n" unless $conn;
+print STDERR "iCmqtt '$named' connected to iCserver at '$host:$port'\n" unless $opt_q;
+
+########################################################################
+#
+#  Additional code to connect to an MQTT broker
+#
+########################################################################
+
+use Net::MQTT::Simple;
+
+my $m_host = defined $opt_m ? $opt_m : 'localhost';
+my $m_port = defined $opt_n ? $opt_n : 1883;
+
+# Allow unencrypted connection with credentials
+$ENV{MQTT_SIMPLE_ALLOW_INSECURE_LOGIN} = 1;
+
+# Connect to broker
+print "##### Net::MQTT::Simple->new(\"$m_host:$m_port\");\n" if $opt_t;
+my $mqtt = Net::MQTT::Simple->new("$m_host:$m_port");
+
+# Depending if authentication is required, login to the broker
+$mqtt->subscribe("gf_s/#", \&received);
+$mqtt->subscribe("ff_s/#", \&received);
+
+############# send registration ############################
+
+my ($label, $direction);
+my $register = 1;		# tested in rcvd_msg_from_server() for registration reply
+my $ri = 0;			# registration index used in rcvd_msg_from_server()
+my $frameCount = 0;		# number of frames in the box
+$UnitRegistrations = "N$name";	# initiate registration string
+
+foreach $argNameRef (@ArgNames) {
+    ($id, $ini, $from, $to, $res) = @$argNameRef;
+    $direction = $label = '';
+    if ($id =~ /^I/) {
+	$direction = $opt_d || $opt_r ? 'R' : 'S';
+    } elsif ($id =~ /^Q/) {
+	$direction = $opt_r ? 'S' : 'R';
+    } else {
+	die "$named: invalid argument '$id' - internal error";
+    }
+    if ($opt_r and $id =~ /^.X/ and $from < 255) {
+	$id .= "($from)";				# bit-mask for digital I/Os only if -r
+    }
+    if ((length($UnitRegistrations) + length($id)) > 1396) {	# REPLY 1400 - (1+2+1) in tcpc.h
+	print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
+	$conn->send_now($UnitRegistrations);		# unlikely to overflow - tested with length() < 139
+	my ($tmsg, $terr) = $conn->rcv_now();		# receive registration acknowledgment
+	print "$named: Reply: $tmsg\n" if $opt_t;
+	rcvd_msg_from_server($conn, $tmsg, $terr);	# process registration acknowledgment
+	$UnitRegistrations = "$direction$id"		# start new $unitRegistrations without comma
+    } else {
+	$UnitRegistrations .= ",$direction$id";	# direction 1 ',Z' 2 term 1
+    }
+    print "register: $direction$id	inByte = $ini\n" if $opt_t;
+}
+$UnitRegistrations .= ",Z";			# terminate registration string
+print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
+$conn->send_now($UnitRegistrations);
+my ($tmsg, $terr) = $conn->rcv_now();		# receive final registration acknowledgment
+print "$named: Reply: $tmsg\n" if $opt_t;
+rcvd_msg_from_server($conn, $tmsg, $terr);	# process final registration acknowledgment
+
+############# registration analysis ########################
+$ri == scalar @ArgNames or
+    die "$named: $ri: not enough registration replies from iCserver - system error";
+$frameCount != 0 or
+    die "$named: no valid registrations - cannot make any frames\n";
+$register = 0;
+############# correct number of registration replies #######
+
+my ($frame, $ch, $maxColumn, $mw, $pane);
+my ($row, $column, $scroll) = (0, 0, 0);
+
+$frameCount++ if $opt_H;			# extra Hold frame
+if ($frameCount > $opt_C*$opt_S) {
+    $maxColumn = $opt_C;
+    $scroll = 1;
+} else {
+    for (my $r = $opt_S; $r > 0; $r--) {
+	my $r1 = $r - 1;
+	if ($frameCount > $opt_c*$r1) {
+	    $maxColumn = int(($frameCount + $r1) / $r);
+	    last;
+	}
+    }
+}
+print "frameCount = $frameCount maxColumn = $maxColumn scroll = $scroll\n" if $opt_t;
+exit if $opt_x;	# deliberate exit with -x option before any network activity
+
+########################################################################
+#	Optionally run -R option
+########################################################################
+if (@runArgs) {
+    splice(@runArgs, 1, 0, "-s", "$host") unless $host eq "localhost" or $host eq "127.0.0.1";
+    splice(@runArgs, 1, 0, "-p", "$port") unless $port eq "8778";
+    splice(@runArgs, 1, 0, "-z$opt_q",);	# -z not used in iCmqtt - place holder
+    print "at fork	runArgs: '", join(':', @runArgs), "'\n" if $opt_t;
+    fork_and_exec(@runArgs);
+}
+
+########################################################################
+#	Create and display an icon bitmap
+########################################################################
+
+my $icon = pack("b48" x 48,
+    "................................................",
+    "................................................",
+    "................................................",
+    "................................................",
+    "................................................",
+    "................................................",
+    "................................................",
+    ".....111........................................",
+    "....11111.......................................",
+    "...1111111......................................",
+    "...1111111......................................",
+    "...1111111......................................",
+    "....11111.......................................",
+    ".....111........................................",
+    "................................................",
+    "................................................",
+    "................................................",
+    "................................................",
+    "................................................",
+    "...111111...........111111111...111111111.......",
+    "...111111..........1111111111...1111111111......",
+    "...111111.........111111111111.111111111111.....",
+    "....11111........111111...111111111...111111....",
+    "....11111........111111...111111111...111111....",
+    "....11111........11111.....1111111.....11111....",
+    "....11111........11111.....1111111.....11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "....11111........11111......11111......11111....",
+    "...1111111......1111111....1111111....1111111...",
+    "...1111111......1111111....1111111....1111111...",
+    "...1111111......1111111....1111111....1111111...",
+    "................................................",
+    "................................................",
+    "................................................",
+    "................................................",
+    "................................................",
+);
+# $mw->DefineBitmap('icon' => 48, 48, $icon);
+# $mw->iconbitmap("icon");	# could use built in bitmap like "Tk" instead
+
+########################################################################
+#
+#	For each argument generate a frame with
+#
+########################################################################
+
+########################################################################
+#
+#	either 8 output checkbuttons
+#	    my $makeOutCheckbutton = "\
+#	    \$frame->Checkbutton(\
+#		-text               => $text,\
+#		-variable           => \\\$ChannelsQX[$ch][$index],\
+#		-selectcolor        => $redButton,\
+#		-borderwidth        => $borderwidth,\
+#		-takefocus          => 0,\
+#		-state              => 'disabled',\
+#		-disabledforeground => 'dark red',\
+#		-indicatoron        => $indicatoron,\
+#	    )->pack(-side => 'top', -expand => 1,);\
+#
+########################################################################
+
+########################################################################
+#
+#	or 8 input checkbuttons
+#	    my $makeInCheckbutton = ($del ? "\
+#	    my \$myself;" : "") . "\
+#	    my \$thisButton = \$frame->Checkbutton(\
+#		-text        => $text,\
+#		-variable    => \\\$ChannelsIX[$ch][$index],\
+#		-selectcolor => $greenButton,\
+#		-borderwidth => $borderwidth,\
+#		-state       => $state,\
+#		-indicatoron => $indicatoron," . ($sel ? "\
+#		-command     => " . ($del ? "\\(\$myself = " : "") . "sub {\
+#		    my \$val = \$ChannelsI[$ch];" . ($del ? "\
+#		    if (\$val & $masks[$index]) {\
+#			\$ChannelsIX[$ch][$index] = 0;	# reset bit indicator\
+#			\$val &= ~$masks[$index];	# clear bit after time delay\
+#		    } els" : "\
+#		    ") . "if (\$ChannelsIX[$ch][$index]) {\
+#			\$val |= $masks[$index];	# set bit" . ($del ? "\
+#			\$mw->after($del, \$myself) unless \$hold;	# clear bit after $del ms" : "") . "\
+#		    } else {\
+#			\$val &= ~$masks[$index];	# clear bit\
+#		    }\
+#		    if (\$val != \$ChannelsI[$ch]) {\
+#			\$ChannelsI[$ch] = \$val;\
+#			send_input($ch, \$val);\
+#		    }\
+#		}" . ($del ? ")" : "") . "," : "") . "\
+#	    )->pack(-side   => 'top', -expand => 1,);" . (($sel and $opt_H) ? "\
+#	    push \@allButtons, \$thisButton;	# prepare for all set/reset" : "") . "\
+#
+########################################################################
+
+########################################################################
+#
+#	or 1 analog output scale
+#	    -variable    => \$ChannelsQ[$ch],
+#
+########################################################################
+
+########################################################################
+#
+#	or 1 analog input scale
+#	must be processed by eval to make -command a closure
+#	    -variable    => \\\$ChannelsI[$ch],\
+#	    -command     => sub {\
+#		send_input($ch, \$ChannelsI[$ch]);\
+#
+########################################################################
+
+########################################################################
+#
+#	Register an event handler callback for STDIN to recognise
+#	q or ctrl+D from the keyboard to terminate the program
+#	unless $opt_z (-z) which blocks STDIN if called in a chain.
+#
+#	Sit in an infinite loop dispatching incoming events.
+#	if connected to iCserver
+#
+########################################################################
+iCmsgM->set_event_handler(*STDIN, "read" => \&readStdin) unless $opt_z;
+iCmsgM->event_loop($mqtt);
+
+####### End of main program ############################################
+
+########################################################################
+#
+#	This is the MQTT callback function, when a message arrives for
+#	the subscribed topic
+#
+########################################################################
+
+sub received
+{
+    my ($topic, $message) = @_;
+    print "Q< $topic $message\n";
+    if ($topic =~ /(IX\d+)_([0-7])/) {
+	my $iec = $1;
+	my $index = int($2);
+	$Ch = $IONames{$iec};
+	if ($message eq "ON") {
+	    $index &= ~1;
+	} elsif ($message eq "OFF") {
+	    $index |= 1;
+	} else {
+	    print STDERR "*** ERROR iCmqtt '$named' '$topic' '$message' not ON or OFF\n";
+	    
+	}
+	$Bit = $masks[$index];
+	printf("iec = %s index = %d Ch = %d Bit = 0x%02x\n", $iec, $index, $Ch, $Bit);
+	send_input($Ch, $Bit);			# rise of the pulse
+	ualarm(100_000);				# trigger fall after 100 ms
+    }
+}
+
+########################################################################
+#
+#	Reset pulse after 100 ms vi ualarm(100_000) and
+#	$SIG{ALRM} = \&endPulse;	# signal 14 - Timer signal from ualarm()
+#
+########################################################################
+
+sub endPulse
+{
+    if ($Ch) {
+	send_input($Ch, 0);			# fall of the pulse
+    }
+}
+
+########################################################################
+#
+#	Convert from Posix bundled flag interpretation to Go type flags.
+#	Extract -f flag and open next argument as an include file
+#	Extract first -R flag and save all further arguments in runArgs
+#
+#	Modify command line bundled flags to interpret -abc as -a -b -c,
+#	which is the way flag.Parse must be presented with Bool flags.
+#	flag.Parse interprets -abc as the flag named "abc".
+#	Mofify Value flags to interpret -xVal as -x Val. Can also have
+#	-abcx Val or -abcxVal, which are both converted to -a -b -c -x Val.
+#	Value flags could be identified by the flag initialisers above,
+#	but it is simpler to define a map of Value flag identifiers.
+#	Command line flags starting with -- are not touched, which is the
+#	Posix way of mixed flags starting with - or --.
+#	https://www.gnu.org/software/libc/manual/html_node/Argument-Syntax.html
+#
+#	The -f <include file> argument opens the include file, which is
+#	trimmed of extraneous spaces and comments and produces another slice
+#	of command line arguments. A recursive call of convertFlags() moves
+#	these arguments into args and runargs, replacing the f<> argument.
+#
+#	The -R option starts a Bernstein chain. Each -R option in the chain
+#	starts a new iC app. Apps in a Bernstein chain are started sequentially
+#	to run their initialization code, at which point the app starts
+#	the next iC app in the Bernstein chain with its -R option. The
+#	current app keeps running in parallel with the app that started it.
+#	Finally all iC apps in a Bernstein chain run in parallel after their
+#	initialization codes have been run sequentially.
+#	The first iC app in the Bernstein chain must have the -z option, which
+#	suppresses stdin interrupts. This is necessary, because programs started
+#	with exec.Command().run() close stdin, which causes EOF for stdin in
+#	the iC app, which causes it to shut down. -z suppresses that.
+#
+#	Modifying command line options and interpreting -f is stopped after the
+#	first -R option because any further options are interpreted by apps in the
+#	Bernstein chain and may not be set correctly in the commandLineFlags map.
+#
+########################################################################
+
+sub convertFlags {
+    my ($argp) = @_;
+    my ($ch);
+    print "cF:	*argp = '", join(" ", @{$argp}), "'\n" if $opt_Z;
+    my $Fflag = 0;
+    foreach my $arg (@{$argp}) {
+	if (length($arg) == 0) { next; }
+	print "    \"$arg\"\n" if $opt_Z;
+	my $Sflag = 1;
+	my $s0 = substr $arg, 0, 1;
+	my $s1 = substr $arg, 1, 1;
+	if ($arg ne "-" && $s0 eq '-' && $s1 ne '-' && ($Rflag eq 0 || $s1 eq 'R')) {
+	    $Sflag = 0;
+	    my $i     = 0;
+	    foreach my $sf (split(//, substr($arg, 1))) {
+		print "	$sf	Sflag = $Sflag	Rflag = $Rflag	Fflag = $Fflag\n" if $opt_Z;
+		unless (exists $commandLineFlags{$sf}) {
+		    $arg = substr($arg, $i+1);	# not a flag value
+		    $Sflag = 1;
+		    last;
+		}
+		if ($sf eq "R" && $Rflag == 0) {
+		    $Rflag = 1;			# first -R not appended to args or runArgs
+		    $argsP = \@runArgs		# now fill arguments for -R option in runArgs
+		} elsif ($sf eq "f" && $Rflag == 0) {
+		    $Fflag = 1;
+		} else {
+		    push(@{$argsP}, "-$sf");
+		}
+		if ($commandLineFlags{$sf} == 1 && $i+2 < length($arg)) {
+		    $arg = substr($arg, $i+2);	# value flag followed directly by value
+		    $Sflag = 1;
+		    last;
+		}
+		$i++;
+	    }
+	}
+	print "		Sflag = $Sflag	Rflag = $Rflag	Fflag = $Fflag\n" if $opt_Z;
+	if ($Sflag) {
+	    if (not $Fflag) {
+		push(@{$argsP}, $arg);		# append a value after a value flag
+	    } else {
+		my @incArgs;
+		$Fflag = 0;
+		open IN, $arg or die "can't open ID file $arg! $!";
+		LINE:
+		while (<IN>) {			# read next entry from include file into $_
+		    chomp;
+		    print "$arg:$.: '$_'\n" if $opt_Z;
+		    s/(^\s+)|(\s*(#.*)?$)//g;	# strip leading space and trailing comment
+		    s/\s*([=:,;.])\s*/$1/g;	# remove spaces around separators
+		    if (length($_) > 0) {
+			push(@incArgs, split(" ", $_));
+		    }
+		}
+		close IN;
+		if (@incArgs) {
+		    print "cF:	incArgs = '", join(" ", @incArgs), "'\n" if $opt_Z;
+		    convertFlags(\@incArgs)	# recursive call to add options in include file
+		}
+	    }
+	}
+    }
+} # convertFlags
+
+########################################################################
+#
+#	Quit program and stop iCserver, which stops all registered apps
+#	unless 'Q' is pressed, which is useful for testing disconnect
+#
+########################################################################
+
+sub quit_program {
+    my (undef, $flag) = @_;
+    print "$named: quit\n" if $opt_t;
+    if ($conn) {
+	if (not $flag) {
+	    $conn->send_now("X$named");		# stop iCserver - (X), 'q' or disconnected by server
+	} else {
+	    $conn->send_now("");		# disconnect this app at iCserver only - 'Q'
+	}
+	$conn->disconnect();
+    }
+    $mw->destroy() if $mw;
+    $mqtt->disconnect();
+    exit(0);
+} # quit_program
+
+########################################################################
+#
+#	Convert a number string obtained with $nr to an integer value
+#	Parameter 1:	dec, bin, oct or hex number string - dec may be signed
+#	Parameter 2:	default value
+#	Parameter 3:	name of argument being converted
+#	retun numerical value or default value if parameter 1 undef or ''
+#
+########################################################################
+
+sub convert_nr {
+    my ($val, $default, $argv) = @_;
+    return $default if not defined $val or $val eq '';
+    if ($val =~ /^-\s*0/) {
+	$val = 0;
+	print "\n" if $opt_t;
+	warn "$named: $argv: bin, oct or hex numbers may not be signed - ignore initialiser\n";
+    } else {
+	$val = oct($val) if $val =~ /^0/;	# handles 017 0xf 0b1111
+    }
+    $val = int($val);				# initialize to a number for correct AND/OR
+    return $val;
+} # convert_nr
+
+########################################################################
+#
+#	Send input value, unless hold - in which case input is queued
+#
+########################################################################
+
+sub send_input {
+    my ($ch, $val) = @_;
+    printMicroSeconds();
+    if ($val != $ChannelsIq[$ch]) {
+	$ChannelsIq[$ch] = $val;		# always save latest value sent on this channel for hold
+	print "B: $named: $ch:$val	< $ChannelNames[$ch]\n" if $opt_t;
+	printf "%s	> %2d:%d\n", $ChannelNames[$ch], $ch, $val if $opt_O;
+	$conn->send_now("$ch:$val");		# send latest value
+    }
+} # send_input
+
+########################################################################
+#
+#	Receive message from server - adjust outputs - ack registrations
+#
+########################################################################
+
+sub rcvd_msg_from_server {
+    my ($conn, $msg, $err) = @_;
+    printMicroSeconds();
+    if (defined $msg) {
+        my $len = length $msg;
+	if ($len == 0) {
+	    print STDERR "iCmqtt '$named' disconnected by server\n" unless $opt_q;
+	    quit_program();			# never returns
+	}
+	my ($msg1, $channel, $value, $old, $bitRef, $id, $ini, $from, $to, $res, $regId, $bit);
+	foreach $msg1 (split /,/, $msg) {	# break up comma separated multiple messages
+	    if ($msg1 =~ /^(\d+):(-?\d+)$/) {
+		$channel = $1;			## receive data as channel:value
+		$value   = $2;			## decimal value with optional sign
+		$old = $ChannelsQ[$channel];
+		if (defined $old) {
+		    if ($value != $old) {
+			# stores computed bit value for all QXn.<0..7> outputs
+			$bitRef = $ChannelsQX[$channel];
+			if (defined $bitRef) {		# only defined for QXm digital
+			    my ($diff, $mask);
+			    goto WrongFormat if $value >= 0x100;	# only 8 bit map allowed
+			    $diff = $old ^ $value;	# $old initialized to a number for correct XOR
+			    while ($diff) {		# age old algorithm from CSR days
+				$mask = $diff & -$diff;	# rightmost set bit from diff
+				$bit = ${$bitRef}[$bitIndex[$mask]] = ($value & $mask) ? 1 : 0;
+				$diff &= ~$mask;	# modify viewable output - clear rightmost bit
+				my $state = $bit ? "ON" : "OFF";
+				# Publish a MQTT message
+				my $topic = "gf_p/$ChannelNames[$channel]_$bitIndex[$mask]";
+				print "Q> $topic $state\n";
+				$mqtt->publish($topic, $state);
+			    }
+			}
+			$ChannelsQ[$channel] = $value;	# ready for next message
+			print "B: $named: $msg1	> $ChannelNames[$channel]\n" if $opt_t;
+			printf "%s	< %2d:%d\n", $ChannelNames[$channel], $channel, $value if $opt_J;
+		    }
+		} else {
+		    warn "$named: not registered for $msg1 from iCserver - not OK\n";
+		}
+	    } elsif ($register and $msg1 =~ /^(-?\d+)$/) {
+		next if $1 eq '-0';		## null acknowledgment
+		$channel = $1;			## receive channel of a registration acknowledgment
+		($id, $ini, $from, $to, $res) = @{$ArgNames[$ri]};	# all argument values
+		defined $id or
+		    die "$named: too many registration acknowledgments from iCserver - system error";
+		print "$named: $ri: registering '$id' on channel '$channel'\n" if $opt_t;
+		$ChannelsRI[$channel] = $ri;	# allow retrieval of @ArgNames info via $channel
+		$ri++;
+		my $dir = '';
+		if ($id =~ /$Q__XBWL__/o) {	# /^Q([XBWL])/ or /^[IQ]([XBWL])/ if $opt_d
+		    if ($channel == 0) {	# /^I([XBWL])/ if $opt_r
+			warn "$named: trying to register receiver '$id' at channel 0 - error\n";
+			next;
+		    }
+		    $dir = 'R';
+		    $frameCount++;
+		    if ($channel < 0) {
+			$channel = -$channel;
+			print "$named: registering receiver '$id' on channel $channel twice - equivalence\n" if $opt_t;
+		    } else {
+			$ChannelsQ[$channel] = 0;	# initial value and Q definition
+			## when this array element is defined, it is a Q[XBWL] receiver (or I[XBWL] if $opt_d or $opt_r)
+			if ($1 eq 'X') {
+			    @{$ChannelsQX[$channel]}[0..7] = (0,0,0,0,0,0,0,0);
+			    ## when this array slice is defined, channel is a QXx.y
+			    ## Q[BWL]n have this slice undefined for their channel
+			}
+		    }
+		}
+		elsif ($id =~ /$I__XBWL__/o) {	# /^I([XBWL])/ or /^Q([XBWL])/ if $opt_r
+		    if ($channel == 0) {
+			warn "$named: trying to register sender '$id' twice - not allowed\n";
+			next;
+		    }
+		    $dir = 'S';
+		    $frameCount++;
+		    ## initial value and I definition
+		    $ChannelsIq[$channel] = $ChannelsI[$channel] = $ini;
+		    ## when this array element is defined, it is a I[XBWL] sender (or Q[XBWL] if $opt_r)
+		    if ($1 eq 'X') {
+			for my $index (0 .. 7) {
+			    $ChannelsIX[$channel][$index] = ($ini & $masks[$index]) ? 1 : 0;
+			}
+			## when this array slice is defined, channel is a IXx.y
+			## I[BWL]n have this slice undefined for their channel
+		    }
+		}
+		if ($dir) {
+		    $regId = "$dir$id";
+		    $ChannelNames[$channel] = "$id";
+		    $IONames{$id} = $channel;	# for mqtt use $id not $regId
+		    print "register: $regId channel = $channel ini = '$ini' from = '$from' to = '$to' res = '$res'\n" if $opt_t;
+		}
+	    } else {
+	      WrongFormat:
+		warn "$named: WARNING: '$msg1' out of '$msg' from iCserver has wrong format - ignored";
+	    }
+	}
+    } elsif ($opt_T) {
+	warn "$named: undefined messagefrom iCserver - ignored $err";
+    }
+} # rcvd_msg_from_server
+
+########################################################################
+#
+#	Fork a new process - ignore CHLD signal
+#	Parameters: call + arguments
+#
+########################################################################
+
+sub fork_and_exec {
+    ## ignore CHLD signal of processes forked
+    $SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
+    my $pid;
+    FORK: {
+	if ($pid = fork) {
+	    ## parent process
+	    select undef, undef, undef, 0.2;	# wait for control program to be activated as child process
+	} elsif (defined $pid) {	# $pid is zero if defined
+	    print STDERR "\$ @_ &\n" unless $opt_q;
+	    ## dispatch child process
+	    exec @_;			# does not return unless exec failure
+	    warn "forked child process exited - failure exec '@_'\n";
+	    exec ("$named", '-X');	# cleanly exit overlay child process
+	} elsif ($! =~ /No more process/) {
+	    ## EAGAIN, recoverable fork error
+	    select undef, undef, undef, 5;
+	    redo FORK;
+	} else {
+	    ## weird fork error
+	    die "Can't fork: $!\n";
+	}
+    }
+} # fork_and_exec
+
+########################################################################
+#
+#	Compute and print elapsed microseconds
+#
+########################################################################
+
+sub printMicroSeconds {
+    if ($opt_M) {
+	my ($sec, $usec);
+	$t1 = [gettimeofday];
+	$sec =  $t1->[0] - $t0->[0];
+	$usec = $t1->[1] - $t0->[1];
+	if ($usec < 0) {
+	    $sec--;
+	    $usec += 1000000;
+	}
+	if ($opt_t) {
+	    printf "B%3d.%03d,%03d: ", $sec, int($usec/1000), $usec%1000;
+	} else {
+	    printf "B%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
+	}
+	$t0 = $t1;
+    }
+} # printMicroSeconds
+
+########################################################################
+#
+#	Untaint a string for executing from a setuid program
+#
+########################################################################
+
+sub untaint {
+    my ($string) = @_;
+    if ($string =~ m/^([-\@\w.\/\\]+)$/) {
+	return $1;		# now untainted
+    } else {
+	die "Bad data in $string";
+    }
+} # untaint
+__END__
+
+############ POD to generate man page ##################################
+
+=encoding utf8
+
+=head1 NAME
+
+iCmqtt - a TK-widget to provide virtual digital and analog I/O
+
+=head1 SYNOPSIS
+
+ iCmqtt [-qHbdrtJOmTxh][ -s <iC host>][ -p <iC port>][ -N <name>][ -i <inst>]
+       [ -s <MQTT host>][ -p <MQTT port>]
+       [ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
+       [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
+       [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
+    ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
+            Any ID can be preceded by 'I' or 'Q' in which case
+            only that input or output is generated (default is both)
+            default ID is X0 generating input IX0 and output QX0
+            A range of ID's can be specified with -; eg IX0-IX7
+    ID-inst Each ID can be followed by -<inst>, where <inst> consists
+            of up to 3 numeric digits (usually 1 digit).
+            Such an appended instance code takes precedence over the
+            general instance specified with the -i <inst> (see below)
+    ID=ini  initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
+            applies only to input ID's. One =ini applies to each input
+            in a range of ID's; eg X5-X7=0b11 inits IX5 IX6 and IX7 to 3
+    ID,<button_select_mask>,<input_reset_time>,<reset_select_mask>
+    X1,0b11 select digital buttons IX0.0, IX0.1, QX0.0 and QX0.1 only
+            with a bit mask - default X1 (= X1,0b11111111) selects all
+    X1,,200 digital input push-buttons IX1.0 .. IX1.7 reset after 200 ms
+            default on/off buttons, which must be reset by another click
+            outputs QX1.0 .. QX1.7 are not affected by <input_reset time>
+    IX1,,200,0b11  only IX1.0 and IX1.1 are push-buttons - rest are on/off
+    ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
+    B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
+    B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
+    -s host name of iCserver host    (default '127.0.0.1')
+    -p port service port of iCserver (default '8778')
+    -m host name of MQTT broker host    (default '127.0.0.1')
+    -n port service port of MQTT broker (default '8778')
+    -N name registration name (default first full ID)
+    -i inst instance ID for this iCmqtt (1 to 3 numeric digits)
+    -q      quiet - do not report clients connecting and disconnecting
+    -c col  maximum number of columns in a row (default 12)
+    -C col  absolute maximum number of columns in a row (default 18)
+    -S rows absolute maximum number of rows (default 3)
+    -l len  length of scales (default 170 pixels)
+    -f file read flags and additional ID parameters from this file
+    -H      a Hold button is generated which holds input changes
+    -b      use buttons instead of checkboxes for digital I/O
+    -d      display inputs IMn (no change and no ini values allowed)
+    -r      reverse - display inputs IMn, send outputs QMn like inputs
+        DEBUG options
+    -t      trace debug messages
+    -J      trace rcv messages in iCmsgM.pm
+    -O      trace send messages in iCmsgM.pm
+    -M      display elapsed time in seconds and microseconds
+    -T      extra static debug messages
+    -x      exit after analyzing input parameters
+    -h      help, ouput this Usage text only
+        AUXILIARY app   - start a Bernstein chain
+    -R <app ...> run one app followed by -z and its arguments as a
+                 separate process; -R ... must be last arguments,
+	KEYBOARD inputs
+        q   from keyboard or (X) button: stops iCserver and all apps
+        Q   from keyboard: exit without stopping iCserver
+
+=head1 DESCRIPTION
+
+The B<iCmqtt> widget contains one or more frames - each frame containing one
+digital or analog input or output widget.
+
+Digital I/O widgets consist of a row of 8 vertical checkbuttons
+labelled .0 to .7 - representing the 8 bits of one digital I/O byte
+IXn or QXn. The address IXn or QXn labels the frame. Input checkbuttons
+are green whereas output checkbuttons are red when on. Only input
+checkbuttons are active when the mouse is over a button and can be
+toggled on or off with mouse button-1.
+
+Analog I/O widgets consist of a slider or scale widget allowing the
+display or selection of a range of numbers. Default is a range from 0
+to 100. This range can be changed on creation of the widget (,start,finish
+option). Analog I/O widgets may be generated to deal with single
+byte values, 2 byte or word values and 4 byte or long values. These
+are labelled IBn, IWn, ILn and QBn, QWn, QLn for inputs and outputs
+respectively. Input sliders have a green background and their central
+button may be moved with the mouse to change the value transmitted
+from the widget. To obtain greater precision, the coloured area
+above and below the button may be clicked with the mouse button-1,
+to decrement or increment the value in unit steps. Output sliders have
+a red background and only display the value received by the widget.
+
+ ID parameters
+
+ X0 X2    generates inputs and outputs IX0 QX0 IX2 QX2 in that order
+ B0-B2    generates inputs and outputs IB0 QB0 IB1 QB1 IB2 QB2
+ IW3 IW7  generates only inputs IW3 and IW7
+ QL4-QL7  generates outputs QL4 QL5 QL6 QL7
+
+ Combined input/output or input-only parameters may optionally be
+ initialised with =<number>.
+ <number> may be decimal, octal, hexadecimal or binary as follows:
+ X10=15 X11=017 IX12=0xf IX13=0b1111    all equal decimal 15
+ only decimal initialisers may be preceded by a minus sign
+ IW10=-70 initialises IW10 with -70 (IW10=-70,-100,0 to be useful)
+
+An optional initialiser may be placed after the second parameter
+of a range.  Every input in the range will be initialised to the
+same value.  Outputs cannot be initialised.
+
+ IW20-IW27=50  initialises IW20 IW21 .. IW27 with 50
+ For analog inputs this means that the slider and the output are
+ set to the value of 50, which happens to be in the middle.
+
+ X20-X27=0b1011 initialises IX20 IX21 .. IX27 with 0b1011
+ For digital inputs X20 this means that IX20.0 IX20.1 and IX20.3 are
+ set - all other bits remain reset. Similarly for IX21 to IX27.
+
+All analog parameters or parameter ranges may optionally be followed
+by two or three comma-separated numbers naming the start, finish
+and optionally the resolution of the numbers displayed by the analog
+scale. Default ',0,100' which is equivalent to ',0,100,1'.  A negative
+resolution reverses the direction of the slider. (0 is not allowed)
+
+All digital parameters or parameter ranges may optionally be followed
+by one, two or three comma-separated numbers. Two consecutive commas
+or any numbers missing at the end will be filled with a default.
+
+ Number 1) is a bit-mask defining, whether a particular bit .0 to .7
+           is defined and should be implemented.  Default ',255'
+           defines all 8 bits. The easiest way to declare the bit mask
+           is as a binary number, eg: ',0b10001111'. This declares that
+           bits .0, .1, .2, .3 and .7 are defined in the application
+           and should be implemented. The bits which are not defined
+           are left blank. Default 0b11111111 - all bits are defined.
+
+ Number 2) is a delay value in milliseconds. Any value 50 and above
+	   is used to reset the button internally after that many
+	   milliseconds, which makes it a push-button that only
+	   needs to be clicked once with the left mouse button.
+	   Non-zero values less than 50 (including negative values)
+	   are set to 50 ms. Default 0 - normal on/off button.
+
+ Number 3) is a bit-mask defining, whether a particular bit .0 to .7
+	   is a push-button or is a normal on/off button. This is only
+	   useful if a delay value has been specified. This optional
+	   mask lets you select which bits in one group are to be
+	   push-buttons. Default 0x11111111 - all push-buttons.
+
+ID-parameter, range, initialiser and number-range must be written
+without spaces in the command line unless they are quoted. In the
+optional INI file which can be read with the -f option, white space
+can be placed between parameter, range, initialiser and number-range.
+They must only be all in one line. In an INI file any text following
+'#' is ignored and treated as a comment.
+
+A separate frame is generated for each input and output ID; two frames
+for an ID not specifying I or Q. Each frame is labelled with the ID
+followed by the optional instance; eg IX0 or IX0-1. The number of
+columns is limited to 12, to prevent the whole widget becoming too
+wide. On the other hand the number of rows is also limited to 3 (has
+precedence). The number of frames in a row (columns) may be specified
+with the -c option (absolute maximum with -C).  If the number of
+I/O frames exceeds an absolute maximum of 18 columns and 3 rows,
+more rows are generated, which can be accessed with a scroll-bar.
+
+Digital frames have a vertical row of 8 Checkbuttons labelled .0 .1
+... .7 for IX0.0 IX0.1 ... IX0.7; Input Checkbuttons are green when set
+and may be pressed on and off or on only if they are a push-button;
+Output Checkbuttons are red when set and display an external value
+only - they cannot be pressed.
+
+Analog frames have a vertical slider labelled 0 to 100 by default.
+Analog inputs have a green slider - analog outputs a red slider. Only
+input sliders can be moved to change an input value.
+
+An B<iCmqtt> generated with the -d option will make input frames which
+behave like outputs (except for the labels). This is useful for
+monitoring real external inputs (and outputs).
+
+An B<iCmqtt> generated with the -r option will reverse the functionality
+of inputs and outputs. Frames whose ID starts with a Q can be modified
+whereas frames whose ID starts with I will only monitor. An B<iCmqtt> -r
+mimics an iC application during early development.
+
+An optional frame with a B<Hold> button is generated with the -H
+option showing [II] (press to hold).  After this button is pressed it
+shows [>] (release to continue).  While [>] is pressed, any input
+changes are queued and not transmitted until the [>] button is released.
+This is useful for testing iC programs in a situation when several
+inputs must arrive simultaneously. Analog input scales and Push-buttons
+with an internal reset delay are also held, the latter sending their on
+and delayed off state when the [>] button is released.  Two further
+buttons showing [all] and [~all] are generated. The former sets all
+inputs when pressed and resets all inputs when released. The latter
+inverts all inputs when pressed and inverts them again when released.
+
+=head1 AUTHOR
+
+John E. Wulff
+
+=head1 BUGS
+
+Email bug reports to B<immediateC@gmail.com> with L<iC Project> in the
+subject field.
+
+=head1 SEE ALSO
+
+L<immcc(1)>, L<iClive(1)>, L<iCserver(1)>
+
+=head1 COPYRIGHT
+
+COPYRIGHT (C) 2000-2017  John E. Wulff
+
+You may distribute under the terms of either the GNU General Public
+License or the Artistic License, as specified in the README file.
+
+For more information about this program, or for information on how
+to contact the author, see the README file.
