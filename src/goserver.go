@@ -32,6 +32,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"errors"
 	"regexp"
 	"sort"
 	"strconv"
@@ -42,7 +43,7 @@ import (
 	"time"
 )
 
-const ID_goserver_go = "$Id: goserver.go 1.7 $"
+const ID_goserver_go = "$Id: goserver.go 1.8 $"
 const TCP_PORT = "8778" // default TCP port for iC system
 
 type eq struct {
@@ -1087,7 +1088,7 @@ func handleConnection(conn net.Conn) {
 						}
 						if senderCon[primCh] != nil {	// is sender registered on primary channel ?
 							ini = senderValue[primCh];	// yes - current value
-							if ini != "0" { // yes - current value
+							if ini != "0" {
 								/********************************************************************
 								 *  sender is registered and has either initial value 0 or other
 								 *  current value - send new receiver value different to 0
@@ -1352,7 +1353,25 @@ func autoVivBox(avArg string) {
 				}
 				if autoMsg[0] != '-' {
 					iec := strings.SplitN(autoMsg, ",", 2)
-					iCboxMap[iec[0]] = autoMsg // remove ,bits in key to allow delete
+					base := iec[0]
+					if prevAutoMsg, ok := iCboxMap[base]; ok {
+						if len(iec) > 1 {
+							prevIec := strings.SplitN(prevAutoMsg, ",", 2)
+							if len(prevIec) > 1 {
+								bits, _ := strconv.Atoi(iec[1])
+								prevBits, _ := strconv.Atoi(prevIec[1])
+								bits |= prevBits
+								if bits == 255 {
+									autoMsg = base	// no ,bits in combined iec
+								} else {
+									autoMsg = fmt.Sprintf("%s,%d", base, bits)
+								}
+							} else {
+								autoMsg = base		// no ,bits in previous iec
+							}
+						}
+					}
+					iCboxMap[base] = autoMsg // remove ,bits in key to allow delete
 				} else {
 					iec := autoMsg[1:]
 					delete(iCboxMap, iec)
@@ -1381,6 +1400,9 @@ func autoVivBox(avArg string) {
 					fmt.Printf("$ %s %v\n", iCboxCmd[0], strings.Join(iCboxFlags, " "))
 				}
 				cmd := exec.Command(iCboxCmd[0], iCboxFlags...)
+				if errors.Is(cmd.Err, exec.ErrDot) {
+					cmd.Err = nil		// allow program relative to current directory
+				}
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 				err := cmd.Start() // execute iCbox in another process
@@ -1713,6 +1735,9 @@ separate process; -R ... must be last arguments`)
 			fmt.Printf("$ %s %v\n", runArgs[0], strings.Join(runArgs[1:], " "))
 		}
 		cmd := exec.Command(runArgs[0], runArgs[1:]...)
+		if errors.Is(cmd.Err, exec.ErrDot) {
+			cmd.Err = nil		// allow program relative to current directory
+		}
 		cmd.Stdin = os.Stdin   // lets 'stty size' work correctly in iClive
 		cmd.Stdout = os.Stdout // show output of apps in Bernstein chain on terminal
 		cmd.Stderr = os.Stderr

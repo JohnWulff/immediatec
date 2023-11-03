@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.96 $";
+"@(#)$Id: genr.c 1.97 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1263,9 +1263,9 @@ op_asgn(				/* assign List_e stack to links */
 	    execerror("ALIAS points to temp ???", var->name, __FILE__, __LINE__);
 	} else if ((t_last = sv->l, t_first = sv->f) != 0) {
 	    assert(t_first >= iCbuf && t_last >= t_first && t_last < &iCbuf[IMMBUFSIZE]);
-	    memset(t_first, '#', sv->l - t_first);	/* mark left var, leave ALIAS */
+	    memset(t_first, '#', t_last - t_first);	/* mark left var, leave ALIAS */
 	}
-	return var;			/* needs no reduction */
+	return sv->v;			/* needs no reduction */
     }	/* end of ALIAS */
 
     /********************************************************************
@@ -1948,6 +1948,7 @@ op_asgn(				/* assign List_e stack to links */
 	    if (sp->u_blist == 0 && gp->ftype < MIN_ACT && gt_count == 0) {
 		right = constExpr_push(tBuf, 0);
 		rsp = right->le_sym;
+		var = sp;				/* tail is a constant expression */
 		goto makeAlias;
 	    }
 	    if (sp->ftype != OUTW) {			/* output cexe function */

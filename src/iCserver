@@ -145,7 +145,7 @@ Usage:
     registered iC apps.
 Copyright (C) 2000-2017  John E. Wulff    <immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.69 $
+$Id: iCserver 1.70 $
 .
 
 ########################################################################
@@ -1398,6 +1398,18 @@ use warnings;
 				}
 			    }
 			    elsif ($base =~ /^I[XBWL]\d+/) {	#  no, sender not registered on primary channel from
+				if ($bits and $AutoVivify{$base}) {
+				    my $prev_param = $AutoVivify{$base};
+				    my ($old_base, $old_bits) = split /,/, $prev_param;
+				    if ($old_bits) {
+					$bits |= int($old_bits);
+					if ($bits == 255) {
+					    $bits = undef;	# no ,bits in combined $iCbox_param
+					}
+				    } else {
+					$bits = undef;		# no ,bits in $prev_param
+				    }
+				}
 				my $iCbox_param = $bits ? "$base,$bits" : $base;	# $EquivBase{$name} or own $name
 				$AutoVivify{$base} = $iCbox_param;
 				$ioName = "$sender-IO";

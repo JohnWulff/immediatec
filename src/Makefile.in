@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.84 $
+# @(#)$Id: Makefile.in 1.85 $
 
 #######################################################################
 #
@@ -293,6 +293,8 @@ $(srcdir)/iCman.1.gz:	$(srcdir)/iCman $(srcdir)/scid.c
 
 $(srcdir)/iCserver.1.gz:	$(srcdir)/iCserver $(srcdir)/scid.c
 
+$(srcdir)/iCmqtt.1.gz:	$(srcdir)/iCmqtt $(srcdir)/scid.c
+
 $(srcdir)/iCtherm.1.gz:	$(srcdir)/iCtherm $(srcdir)/scid.c
 
 $(srcdir)/immac.1.gz:	$(srcdir)/immac $(srcdir)/scid.c
@@ -363,7 +365,7 @@ strict:
 # Since this Makefile.in is provided to only make and install the various parts of the
 # iC system it is sufficient to modify the calls of perlinstall here. JW 2023.02.10
 ########################################################################
-install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/goserver.1.gz $(srcdir)/immag.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiI2C.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
+install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/goserver.1.gz $(srcdir)/immag.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCmqtt.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiI2C.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
 	@${INSTALL} -d ${bindir} ${libdir} ${includedir} ${mandir}/man1 ${mandir}/man3
 	@${INSTALL_PROGRAM} $(srcdir)/iCmsg.pm  `$(srcdir)/perlinstall`/iCmsg.pm
 	@$(srcdir)/perlinstall -t $(srcdir) $(libdir)
@@ -377,6 +379,7 @@ install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir
 	@${INSTALL_PROGRAM} $(srcdir)/iCman      ${bindir}/${binprefix}iCman
 	@if [ -f $(srcdir)/goserver ]; then ${INSTALL_PROGRAM} $(srcdir)/goserver ${bindir}/${binprefix}iCserver; else ${INSTALL_PROGRAM} $(srcdir)/iCserver ${bindir}/${binprefix}iCserver; fi
 	@if [ -f $(srcdir)/immag ]; then ${INSTALL_PROGRAM} $(srcdir)/immag ${bindir}/${binprefix}immac; else ${INSTALL_PROGRAM} $(srcdir)/immac ${bindir}/${binprefix}immac; fi
+	@${INSTALL_PROGRAM} $(srcdir)/iCmqtt     ${bindir}/${binprefix}iCmqtt
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
 	@${INSTALL_PROGRAM} $(srcdir)/iCpiFace          ${bindir}/${binprefix}iCpiFace
 	@sudo ln -sf ${bindir}/${binprefix}iCpiFace     ${bindir}/${binprefix}iCpiGPIO
@@ -403,6 +406,7 @@ endif
 	@${INSTALL_DATA} $(srcdir)/iCman.1.gz    ${mandir}/man1/${manprefix}iCman.1.gz
 	@if [ -f $(srcdir)/goserver.1.gz ]; then ${INSTALL_DATA} $(srcdir)/goserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz; else ${INSTALL_DATA} $(srcdir)/iCserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz; fi
 	@if [ -f $(srcdir)/immag.1.gz ]; then ${INSTALL_DATA} $(srcdir)/immag.1.gz ${mandir}/man1/${manprefix}immac.1.gz; else ${INSTALL_DATA} $(srcdir)/immac.1.gz ${mandir}/man1/${manprefix}immac.1.gz; fi
+	@${INSTALL_DATA} $(srcdir)/iCmqtt.1.gz   ${mandir}/man1/${manprefix}iCmqtt.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCpiFace.1.gz ${mandir}/man1/${manprefix}iCpiFace.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCpiPWM.1.gz  ${mandir}/man1/${manprefix}iCpiPWM.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCpiI2C.1.gz  ${mandir}/man1/${manprefix}iCpiI2C.1.gz
@@ -429,6 +433,7 @@ uninstall:
 	@sudo rm -f ${bindir}/${binprefix}iCmake
 	@sudo rm -f ${bindir}/${binprefix}iCman
 	@sudo rm -f ${bindir}/${binprefix}iCserver
+	@sudo rm -f ${bindir}/${binprefix}iCmqtt
 	@sudo rm -f ${bindir}/${binprefix}iCpiFace
 	@sudo rm -f ${bindir}/${binprefix}iCpiPWM
 	@sudo rm -f ${bindir}/${binprefix}iCpiI2C
@@ -455,6 +460,7 @@ uninstall:
 	@sudo rm -f ${mandir}/man1/${manprefix}iCmake.1.gz
 	@sudo rm -f ${mandir}/man1/${manprefix}iCman.1.gz
 	@sudo rm -f ${mandir}/man1/${manprefix}iCserver.1.gz
+	@sudo rm -f ${mandir}/man1/${manprefix}iCmqtt.1.gz
 	@sudo rm -f ${mandir}/man1/${manprefix}iCpiFace.1.gz
 	@sudo rm -f ${mandir}/man1/${manprefix}iCpiPWM.1.gz
 	@sudo rm -f ${mandir}/man1/${manprefix}iCpiI2C.1.gz
@@ -472,7 +478,7 @@ clean:
 	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/ConstObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/PiI2CObjs $(srcdir)/PiPWMObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/const $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/iCpiI2C $(srcdir)/iCpiPWM $(srcdir)/goserver $(srcdir)/../pkg/*/tcpcomm.a $(srcdir)/immag $(srcdir)/*.1.gz
 
 distclean: clean
-	rm -f $(srcdir)/Makefile $(srcdir)/comp.tab.c $(srcdir)/comp.tab.h $(srcdir)/comp.output $(srcdir)/gram.tab.c $(srcdir)/gram.tab.h $(srcdir)/gram.output $(srcdir)/lex.yy.c $(srcdir)/cons.tab.c $(srcdir)/cons.tab.h $(srcdir)/cons.output $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/pplstfix.log
+	rm -f $(srcdir)/Makefile $(srcdir)/comp.tab.c $(srcdir)/comp.tab.h $(srcdir)/comp.output $(srcdir)/gram.tab.c $(srcdir)/gram.tab.h $(srcdir)/gram.output $(srcdir)/lex.yy.c $(srcdir)/cons.tab.c $(srcdir)/cons.tab.h $(srcdir)/cons.output $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/pplstfix.log $(srcdir)/goserver $(srcdir)/immag
 	cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 
 distribution:
