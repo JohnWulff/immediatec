@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.97 $";
+"@(#)$Id: genr.c 1.98 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -305,37 +305,6 @@ freeTemp(List_e * lp)
 	freeTempSym(sy_pop(lp));		/* free link, Symbol and its name */
     }
 } /* freeTemp */
-
-/********************************************************************
- *
- *	Resolve a possible ALIAS chain - return the first non-alias
- *	Symbol pointed to by lp
- *	An ALIAS must have a gate it points to via list.
- *
- *******************************************************************/
-
-Symbol *
-resolveAlias(List_e * lp)
-{
-    Symbol *	sp  = lp->le_sym;
-    Symbol *	tsp = 0;
-    while (sp &&
-	   sp->type == ALIAS &&			/* scan down list of aliases */
-	   sp->list != 0			/* alias has been assigned */
-	  ) {
-	if (tsp == sp) {
-	    tsp->type = ERR;			/* error found */
-	    ierror("circular list of aliases:", tsp->name);
-	    break;				/* circular list of aliases */
-	}
-	if (tsp == 0) tsp = sp;			/* start of alias chain */
-	lp->le_val ^= sp->list->le_val;		/* handle possible inverting alias */
-	sp = sp->list->le_sym;
-	lp->le_sym = sp;
-    }
-    assert(sp);					/* lp or ALIAS points to nothing ??? */
-    return sp;
-} /* resolveAlias */
 
 /********************************************************************
  *
@@ -940,7 +909,6 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 		fprintf(iC_outFP, "\nt_first = %p >= iCbuf = %p\n", t_first, iCbuf);
 		fflush(iC_outFP);
 		ierror("Assertion 2:", NULL);
-//##		    exit(-1);
 	    }
 #endif
 	    if (t_last < t_first) {

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.114 $";
+"@(#)$Id: outp.c 1.115 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -2727,18 +2727,22 @@ iC_outNet(FILE * iFP, char * outfile)
 		    }
 		} else
 		if (typ == INPW) {
-		    if (iqt[0] == 'I' &&	/* IB0 is cnt == 3 */
+		    if ((iqt[0] == 'I' && !(sp->em & EO) ||	/* IB0 is cnt == 3 */
+			(iqt[0] == 'Q' &&  (sp->em & EO) )) &&
 			xbwl[0] != 'X' &&	/* can only be 'B', 'W' or 'L' */
 			cnt == 3) {
+			sp->em &= ~EO;
 			fprintf(Fp, " {0},");
 		    } else {
 			goto InErr;
 		    }
 		} else
 		if (typ == INPX) {
-		    if (iqt[0] != 'Q' &&	/* can only be 'I' or 'T' */
+		    if ((iqt[0] != 'Q' && !(sp->em & EO) ||	/* can only be 'I' or 'T' */
+			(iqt[0] == 'Q' &&  (sp->em & EO) )) &&
 			xbwl[0] == 'X' &&	/* IX0.0 is cnt == 4 */
 			cnt == 4 && bit < 8) {
+			sp->em &= ~EO;
 			fprintf(Fp, " {0},");
 		    } else {
 		    InErr:

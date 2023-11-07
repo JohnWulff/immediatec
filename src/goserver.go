@@ -32,7 +32,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"errors"
 	"regexp"
 	"sort"
 	"strconv"
@@ -41,9 +40,10 @@ import (
 	"syscall"
 	"tcpcomm" // own package handling Perl type messages
 	"time"
+	"runtime"
 )
 
-const ID_goserver_go = "$Id: goserver.go 1.8 $"
+const ID_goserver_go = "$Id: goserver.go 1.9 $"
 const TCP_PORT = "8778" // default TCP port for iC system
 
 type eq struct {
@@ -1400,9 +1400,6 @@ func autoVivBox(avArg string) {
 					fmt.Printf("$ %s %v\n", iCboxCmd[0], strings.Join(iCboxFlags, " "))
 				}
 				cmd := exec.Command(iCboxCmd[0], iCboxFlags...)
-				if errors.Is(cmd.Err, exec.ErrDot) {
-					cmd.Err = nil		// allow program relative to current directory
-				}
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 				err := cmd.Start() // execute iCbox in another process
@@ -1621,6 +1618,8 @@ var flag1 *flag.FlagSet
 var t0 time.Time
 
 func main() {
+	goVersion := runtime.Version()
+    os.Setenv("GODEBUG", "execerrdot=0")	// allow exec program relative to current directory for GO >= go1.19
 	re := regexp.MustCompile(`.*[/\\]`)
 	named = re.ReplaceAllLiteralString(os.Args[0], "")
 	flag1 = flag.NewFlagSet(named, flag.ExitOnError)
@@ -1648,7 +1647,8 @@ func main() {
     registered iC apps.
 Copyright (C) 2001  John E. Wulff    <immediateC@gmail.com>
 %q
-%q`, named, named, named, ID_goserver_go, tcpcomm.ID_tcpcomm_go))
+%q
+GO Version: %q`, named, named, named, ID_goserver_go, tcpcomm.ID_tcpcomm_go, goVersion))
 
 	// The -f and -R option are handled directly in convertFlags(). Include here for help info
 	_ = flag1.String("f", "", "include file containing options, equivalences and client calls")
@@ -1735,9 +1735,6 @@ separate process; -R ... must be last arguments`)
 			fmt.Printf("$ %s %v\n", runArgs[0], strings.Join(runArgs[1:], " "))
 		}
 		cmd := exec.Command(runArgs[0], runArgs[1:]...)
-		if errors.Is(cmd.Err, exec.ErrDot) {
-			cmd.Err = nil		// allow program relative to current directory
-		}
 		cmd.Stdin = os.Stdin   // lets 'stty size' work correctly in iClive
 		cmd.Stdout = os.Stdout // show output of apps in Bernstein chain on terminal
 		cmd.Stderr = os.Stderr

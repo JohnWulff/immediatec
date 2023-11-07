@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h 1.79 $";
+"@(#)$Id: comp.h 1.80 $";
 
 #include	<setjmp.h>
 #include	"icc.h"		/* fir definition of struct Gate */
@@ -276,8 +276,6 @@ extern void	listGenOut(		/* listing for undefined immC variable */
 	    Symbol * sp, int size, Valp * ini);
 extern List_e *	delayOne(List_e * tp);	/* implicit delay of 1 tick for ctref : texpr ; */
 extern void	freeTemp(List_e * lp);	/* unlink a temporary object from templist and free it */
-extern Symbol *	resolveAlias(		/* resolve possible alias chain */
-	    List_e * lp);
 extern List_e *	cCallCount(		/* check parameter count in 'cCall' */
 	    Symbol * cName, List_e * cParams, int pcnt);
 extern List_e *	cListCount(		/* count parameters in 'cList' */

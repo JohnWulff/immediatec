@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.135 $";
+"@(#)$Id: comp.y 1.136 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -206,6 +206,7 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %type	<sym>	useFlag decl declC extDecl immDecl immCDecl asgn dasgn casgn dcasgn tasgn dtasgn
 %type	<sym>	iFunTrigger vFunCall rParams rPlist immT
 %type	<sym>	extCdecl dVar immCarray immCarrayHead extimmCarray extimmCarrayHead immCarrayVariable
+%type	<sym>	extQinput extQinputHead
 %type	<list>	expr aexpr cexpr texpr actexpr comma_expr cexpr_comma_expr texpr_comma_expr ractexpr
 %ifdef	BOOT_COMPILE
 %type	<list>	lexpr fexpr cfexpr tfexpr
@@ -313,6 +314,8 @@ simpleStatement
 	| extDecl ','		{ $$   = $1; }		/* " new style for immac which can generate ,; */
 	| extimmCarray		{ $$   = $1; }		/* declare an immC array extern */
 	| extimmCarray ','	{ $$   = $1; }		/* " new style for immac which can generate ,; */
+	| extQinput		{ $$   = $1; }		/* declare a Q... variable extern making it an input */
+	| extQinput ','		{ $$   = $1; }		/* " new style for immac which can generate ,; */
 	;
 
 asgnStatement			/* all declarations are not 'asgnStatement' because they may contain a ',' */
@@ -866,6 +869,57 @@ extDeclHead
 	    }
 	;
 
+	/********************************************************************
+	 *
+	 * Extern IEC Q... variable declared as input in this program
+	 *
+	 *	extern QX10.0;
+	 *	extern QX20.0, QB21, QW22, QL23; // different types allowed
+	 *
+	 * These extern declarations in iC declare that these IEC output
+	 * variables have been declared and assigned in another iC program
+	 * and will be registered as Senders with iCserver at run-time by
+	 * the program in which they have been assigned.
+	 *
+	 * This program accepts changing external values of extern Q...
+	 * variables as inputs, just like an input IEC variable I...
+	 * accepts values from iC I/O apps like iCbox or iCpiFace,
+	 * for which input I/O variables I... are Senders.
+	 *
+	 * extern Q... variables may not be assigned in either iC or C code.
+	 * They may only be used as values in iC or C code.
+	 *
+	 * If the same extern Q... variable is going to be used in several
+	 * sources making up an iC program, each source must declare its
+	 * own extern Q... for that I/O output variable. It may not be
+	 * declared extern imm bit QX.. etc, because that declares that
+	 * the variable will be assigned in another source of THIS program,
+	 * which it may not. Only the value of that variable comes from
+	 * another iC program via iCserver.
+	 *
+	 * Since an extern Q... variable will only be used as a value in iC
+	 * or C code, it does not make any difference whether the variable
+	 * is declared imm or immC in another program.
+	 *
+	 *******************************************************************/
+
+extQinput
+	: extQinputHead outVariable		{	/* LOUT AOUT */
+		$$ = $2;
+		Symbol *	sp;
+		sp = $$.v;
+		assert(sp->type == UDF && (sp->em & EO) && (sp->ftype == GATE || sp->ftype == ARITH));
+		sp->type = sp->ftype == GATE ? INPX : INPW;
+	    }
+	;
+
+extQinputHead
+	: EXTERN	{
+	    }
+	| extQinput ','	{
+	    }
+	;
+	
 	/************************************************************
 	 *
 	 * Immediate type declaration - may be combined with dasgn
@@ -5214,7 +5268,7 @@ yylex(void)
 	    if (typ >= KEYW) {
 		c = symp->u_val;		/* reserved word or C-type */
 	    } else
-	    if (qtoken > 1) {			/* ignore I... */
+	    if (qtoken > 1 && symp->name[0] == 'Q') {	/* ignore I... */
 		c = qtoken;			/* first time LOUT or AOUT */
 		symp->em |= EO;			/* marks variable as LOUT AOUT Q... */
 	    } else
