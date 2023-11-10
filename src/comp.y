@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.136 $";
+"@(#)$Id: comp.y 1.137 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -776,10 +776,14 @@ extDecl	: extDeclHead UNDEF	{
 		sp = $$.v = $2.v;
 		if (sp) {
 		    assert(($1.v.em & (EM|EX)) == (EM|EX));	/* has been set in extDeclHead */
-		    if (((typ2 = sp->type) == INPW || typ2 == INPX) &&
-			(typ1 == ARNC || typ1 == LOGC) &&
-			sp->type != ERR) {
-			ierror("extern immC declaration of an input variable is invalid:", sp->name);
+		    if (((typ2 = sp->type) == INPW || typ2 == INPX) && sp->type != ERR) {
+			if (typ1 == ARNC || typ1 == LOGC) {
+			    ierror("extern immC declaration of an input variable is invalid:", sp->name);
+			    sp->type = ERR;	/* cannot execute properly */
+			} else if (sp->em & EO) {
+			    ierror("variable declared previously as extern Q...:", sp->name);
+			    sp->type = ERR;	/* cannot execute properly */
+			}
 		    } else
 		    if (sp->ftype != (ftyp = $1.v.ftype) && sp->type != ERR) {
 			ierror("extern declaration does not match previous declaration:", sp->name);
@@ -908,7 +912,10 @@ extQinput
 		$$ = $2;
 		Symbol *	sp;
 		sp = $$.v;
-		assert(sp->type == UDF && (sp->em & EO) && (sp->ftype == GATE || sp->ftype == ARITH));
+		if (sp->type != UDF || !(sp->em & EO) || (sp->ftype != GATE && sp->ftype != ARITH)) {
+		    ierror("multiple use of extern Q... variable assigned previously:", sp->name);
+		    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
+		}
 		sp->type = sp->ftype == GATE ? INPX : INPW;
 	    }
 	;

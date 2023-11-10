@@ -43,7 +43,7 @@ import (
 	"runtime"
 )
 
-const ID_goserver_go = "$Id: goserver.go 1.9 $"
+const ID_goserver_go = "$Id: goserver.go 1.10 $"
 const TCP_PORT = "8778" // default TCP port for iC system
 
 type eq struct {
@@ -71,7 +71,7 @@ var muEquiv sync.Mutex // guard equivalences and equivBase modifications
  *******************************************************************/
 
 var clientCons = map[string]net.Conn{}  // hashed by name - client connection - existence of client
-var clientNames = map[net.Conn]string{} // hashed by conn - client name for a connection
+var clientNames = map[net.Conn][2]string{} // hashed by conn - client name and app for a connection
 var channels = map[string]int{}         // hashed by name - channel of I/O S<name> and R<name>
 var CDchannels = map[string]bool{}      // hashed by (string)channel - SC<name> SD<name> RC<name> RD<name>
 var equivalences = map[string][]*eq{}   // hashed by base - equivalent names with same or different channel as base
@@ -402,7 +402,7 @@ func printTail(aref []net.Conn, nref []string, ch int) {
 	var rCons []string
 	for i, rcon := range aref {
 		if rcon != nil {
-			if rName = clientNames[rcon]; rName == "" {
+			if rName = clientNames[rcon][0]; rName == "" {
 				rName = "<undef>"
 			}
 			rCons = append(rCons, rName, nref[i])
@@ -434,8 +434,11 @@ func printTables() {
 	defer muEquiv.Unlock()
 	fmt.Printf("%s: Table of clientNames and registered Senders and Receivers\n", named)
 	names := make([]string, 0, len(clientNames))
-	for _, name := range clientNames {
-		names = append(names, name)
+	for _, nameA := range clientNames {
+		if nameA[0][0] == '-' {
+			nameA[1] = "\t[iClive]"
+		}
+		names = append(names, nameA[0] + nameA[1])	// client name + client app
 	}
 	sort.Strings(names)
 	for _, name := range names {
@@ -488,7 +491,7 @@ func printTables() {
 		aref := receiverCons[channel]
 		con := senderCon[channel]
 		if con != nil || len(aref) > 0 {
-			if chName = clientNames[con]; chName == "" {
+			if chName = clientNames[con][0]; chName == "" {
 				chName = "<no sender>"
 			}
 			fmt.Printf("%-3d %-15s %-15s %-11s ", channel, chName, senderName[channel], senderValue[channel])
@@ -516,12 +519,12 @@ func writeReceiverData(receiverData map[net.Conn][]string, goId int) {
 		wbuf := append([]byte{0, 0, 0, 0}, strings.Join(msgSlice, ",")...) // build Perl type message
 		if *opt_t {
 			if m := reData.FindStringSubmatch(string(wbuf[4:])); len(m) != 0 && ! CDchannels[m[1]] { // "^([0-9]+):(.*)$"
-				fmt.Printf("S%d: %s > %s\n", goId, wbuf[4:], clientNames[con])
+				fmt.Printf("S%d: %s > %s\n", goId, wbuf[4:], clientNames[con][0])
 			}
 		}
 		err := tcpcomm.Write(con, &wbuf)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "S%d: msg = %q client = %q\n", goId, wbuf[4:], clientNames[con])
+			fmt.Fprintf(os.Stderr, "S%d: msg = %q client = %q\n", goId, wbuf[4:], clientNames[con][0])
 			shutdownServer(4, fmt.Sprint(err))
 		}
 	}
@@ -547,7 +550,7 @@ func disconnect(name string, goId int) {
 		for channel := 0; channel <= maxChannel; channel++ {
 			rflag := false
 			con := senderCon[channel]
-			nam := clientNames[con]
+			nam := clientNames[con][0]
 			if nam == name {
 				senderCon[channel] = nil // no need to splice out only array entry
 				if *opt_r && senderValue[channel] != "0" {
@@ -561,7 +564,7 @@ func disconnect(name string, goId int) {
 			if rflag {
 				// scan once, resetting receivers, before splicing out any array elements
 				for _, con := range receiverCons[channel] {
-					if clientNames[con] != name {
+					if clientNames[con][0] != name {
 						msg := fmt.Sprintf("%d:0", channel)
 						receiverData[con] = append(receiverData[con], msg) // reset message to receiver channels
 					}
@@ -583,7 +586,7 @@ func disconnect(name string, goId int) {
 			if len(*aref) != 0 {
 				for i := 0; i < len(*aref); i++ {
 					con := (*aref)[i]
-					if clientNames[con] == name {
+					if clientNames[con][0] == name {
 						nref := &receiverNames[channel]
 						nam := (*nref)[i]
 						if equivBase[nam] != nil {
@@ -611,7 +614,7 @@ func disconnect(name string, goId int) {
 					cref := &aref.altCons
 					for i := 0; i < len(*cref); i++ {
 						con := (*cref)[i]
-						if clientNames[con] == name {
+						if clientNames[con][0] == name {
 							nref := &altRecvNames[channel][j]
 							nam := (*nref)[i]
 							if _, ok := equivBase[nam]; ok { // exists
@@ -663,7 +666,7 @@ func disconnect(name string, goId int) {
 			clientCons = map[string]net.Conn{}
 			channels = map[string]int{}
 			CDchannels = map[string]bool{}
-			clientNames = map[net.Conn]string{}
+			clientNames = map[net.Conn][2]string{}
 			senderCon = make([]net.Conn, 16)
 			senderName = make([]string, 16)
 			senderValue = make([]string, 16)
@@ -724,7 +727,7 @@ func warnD(warnMsg string) {
 	if aref := receiverCons[0]; aref != nil { // channel 0 for error messages
 		for _, rconn := range aref {
 			if *opt_t {
-				fmt.Fprintf(os.Stderr, "%s: sent warning => %s\n", named, clientNames[rconn])
+				fmt.Fprintf(os.Stderr, "%s: sent warning => %s\n", named, clientNames[rconn][0])
 			}
 			receiverData[rconn] = append(receiverData[rconn], "0:1;"+warnMsg) //  message to channel 0
 			writeReceiverData(receiverData, 0)                                // write data collected for different receivers
@@ -742,6 +745,7 @@ func warnD(warnMsg string) {
  *******************************************************************/
 
 func handleConnection(conn net.Conn) {
+	iCapp := ""
 	muConn.Lock()
 	defer muConn.Unlock() // unlock when client disconnects
 	goCount++
@@ -786,7 +790,7 @@ func handleConnection(conn net.Conn) {
 			fmt.Fprintln(os.Stderr, "Error in tcpcomm.Read!", err)
 			break
 		}
-		sender := clientNames[conn] // set when name registered for this 'conn'
+		sender := clientNames[conn][0] // set when name registered for this 'conn'
 		if *opt_m {
 			t1 := time.Now()
 			diff := t1.Sub(t0)
@@ -858,8 +862,11 @@ func handleConnection(conn net.Conn) {
 						fmt.Printf("S%d: %s %s => dummy\n", goId, sender, msg)
 					}
 				}
-			} else if m := reNname.FindStringSubmatch(msg); len(m) != 0 { // "^N(.+)$"
+			} else if m := reNname.FindStringSubmatch(msg); len(m) != 0 { // "^N([^.]+)((\.ic)?)$"
 				name := m[1]
+				if m[2] == ".ic" {
+					iCapp = "	[iC app]"
+				}
 				if name[0] == '-' { // -bar is name of iClive session for program bar
 					for i, con := range receiverCons[0] {
 						if con == conn {
@@ -893,8 +900,8 @@ func handleConnection(conn net.Conn) {
 				}
 			ALREADY_REGISTRERD:
 				clientCons[name] = conn  // client by this name exists now
-				clientNames[conn] = name // name may change for iClive connections
-				sender = name
+				clientNames[conn] = [2]string{ name, iCapp }
+				sender = name			// name may change for iClive connections
 				numberOfConnections++
 				if !*opt_q {
 					fmt.Printf("S%d: %s: client registering now\n", goId, sender)
@@ -1086,39 +1093,58 @@ func handleConnection(conn net.Conn) {
 							}
 						AltStored:
 						}
-						if senderCon[primCh] != nil {	// is sender registered on primary channel ?
-							ini = senderValue[primCh];	// yes - current value
-							if ini != "0" {
-								/********************************************************************
-								 *  sender is registered and has either initial value 0 or other
-								 *  current value - send new receiver value different to 0
-								 *  if sender is already registered
-								 *******************************************************************/
-								iniSt := fmt.Sprintf("%d:%s", channel, ini) // message to all secondary receivers
-								if iniString == "" {
-									iniString = iniSt
-								} else {
-									iniString += "," + iniSt
-								}
-							}
-						} else if reIXBWL.FindString(base) != "" { // `^I[XBWL]\d+`
+						/********************************************************************
+						 *  do not AutoVivify an iC box for this receiver if there is already
+						 *  a sender unless it is an extern Q... receiver (iCapp != "")
+						 *******************************************************************/
+						if iCapp != "" && reQXBWL.FindString(base) != "" { // `^Q[XBWL]\d+`
 							iCboxParam := base
 							if bits != "" {
 								iCboxParam += "," + bits
 							}
 							if boxName == "" {
 								boxName = sender + "-IO"
-								autoBoxCh <- boxName // start AutoVivify iCbox
+								autoBoxCh <- boxName // start AutoVivify iCbox for extern Q...
 							}
 							autoBoxCh <- iCboxParam
 							if *opt_t {
-								fmt.Printf("S%d: Autovivify %s: receiver %s\n", goId, boxName, iCboxParam)
+								fmt.Printf("S%d: Autovivify %s: receiver extern %s\n", goId, boxName, iCboxParam)
 							}
-						}
-						if boxName != "" && reQXBWL.FindString(base) != "" { // `^Q[XBWL]\d+`
-							autoBoxCh <- "-" + base // delete AutoVivify entry (ignored if already done)
-							if *opt_t {
-								fmt.Printf("S%d: Delete autovivify %s: receiver %s\n", goId, boxName, base)
+						} else {
+							if senderCon[primCh] != nil {	// is sender registered on primary channel ?
+								ini = senderValue[primCh];	// yes - current value
+								if ini != "0" {
+									/********************************************************************
+									 *  sender is registered and has either initial value 0 or other
+									 *  current value - send new receiver value different to 0
+									 *  if sender is already registered
+									 *******************************************************************/
+									iniSt := fmt.Sprintf("%d:%s", channel, ini) // message to all secondary receivers
+									if iniString == "" {
+										iniString = iniSt
+									} else {
+										iniString += "," + iniSt
+									}
+								}
+							} else if reIXBWL.FindString(base) != "" { // `^I[XBWL]\d+`
+								iCboxParam := base
+								if bits != "" {
+									iCboxParam += "," + bits
+								}
+								if boxName == "" {
+									boxName = sender + "-IO"
+									autoBoxCh <- boxName // start AutoVivify iCbox
+								}
+								autoBoxCh <- iCboxParam
+								if *opt_t {
+									fmt.Printf("S%d: Autovivify %s: receiver %s\n", goId, boxName, iCboxParam)
+								}
+							}
+							if boxName != "" && reQXBWL.FindString(base) != "" { // `^Q[XBWL]\d+`
+								autoBoxCh <- "-" + base // delete AutoVivify entry (ignored if already done)
+								if *opt_t {
+									fmt.Printf("S%d: Delete autovivify %s: receiver %s\n", goId, boxName, base)
+								}
 							}
 						}
 					}
@@ -1682,7 +1708,7 @@ separate process; -R ... must be last arguments`)
 	 *  A Regexp is safe for concurrent use by multiple goroutines.
 	 *******************************************************************/
 	reData = regexp.MustCompile(`^(\d+):(.*)$`)
-	reNname = regexp.MustCompile(`^N(.+)$`)
+	reNname = regexp.MustCompile(`^N([^.]+)((\.ic)?)$`)
 	reSRiec = regexp.MustCompile(`^([SR])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`)
 	renName = regexp.MustCompile(`^n(.+)$`)
 	resrIec = regexp.MustCompile(`^([sr])([\\\/\w]+(-\d*)?)(\((\d+)\))?$`)

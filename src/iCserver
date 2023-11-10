@@ -32,7 +32,7 @@ my %Channels = ();	# indexed by $name - points to correct channel of I/O S<name>
 my %CDchannels = ();	# hashed by (string)channel - SC<name> SD<name> RC<name> RD<name>
 my %Equivalences = ();	# hashed by $base - points to equivalent names with same or different channel as base
 my %EquivBase = ();	# hashed by $name - points to base name of equivalenced names (even own name if base)
-my %ClientNames = ();	# hashed by $conn - points to client name for a connection
+my %ClientNames = ();	# hashed by $conn - points to client name and app for a connection
 my @Sender = ();	# indexed by $channel ... stores send connection       conn                 for channel
 my @SenderName = ();	# indexed by $channel ... stores send names            name
 my @SenderValue = ();	# indexed by $channel ... stores send current values   value1
@@ -145,7 +145,7 @@ Usage:
     registered iC apps.
 Copyright (C) 2000-2017  John E. Wulff    <immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.70 $
+$Id: iCserver 1.71 $
 .
 
 ########################################################################
@@ -547,7 +547,7 @@ sub disconnect {
     my ($conn, $sender) = @_;
     my ($channel, $con, $rflag, $aref, $nref, $ch, $i, $j, $in);
     my ($name, $base, $primCh, $secCh);
-    $sender = $ClientNames{$conn} unless defined $sender;
+    $sender = $ClientNames{$conn}[0] unless defined $sender;
     if (defined $sender) {
 	print "$numberOfConnections: $sender: disconnecting now\n" unless $opt_q;
 	%ReceiverData = ();		# clear all keys and entries
@@ -688,7 +688,7 @@ sub warnD {
     chomp $warnMsg;
     if ($aref = $Receivers[0]) {	# channel 0 for error messages
 	foreach $rconn (@$aref) {
-	    print "$named: sent warning => $ClientNames{$rconn}\n" if $opt_t;
+	    print "$named: sent warning => $ClientNames{$rconn}[0]\n" if $opt_t;
 	    $rconn->send_now("0:1;$warnMsg");
 	}
     }
@@ -937,7 +937,7 @@ sub print_tail {
     @rCons = ();
     foreach $rcon (@{$aref}[$start .. $#{$aref}]) {
 	if ($rcon) {
-	    unless (defined ($rName = $ClientNames{$rcon})) {
+	    unless (defined ($rName = $ClientNames{$rcon}[0])) {
 		$rName = "<undef>";
 	    }
 	    push @rCons, $rName, $nref->[$i];
@@ -951,8 +951,9 @@ sub print_tail {
 
 ############################################################
 #
-#	Print tables of ClientNames and registered Senders and Receivers
-#	Also print table of equivalences if any are defined
+#	Print tables of ClientNames
+#	Print table of equivalences if any are defined
+#	Print table of registered Senders and Receivers
 #
 ############################################################
 
@@ -960,8 +961,11 @@ sub print_tables {
     my ($con, $channel, $nm, $nn, $others, $i, $aref, $nref, $refEq, $ref1, $in);
     my ($base, $primCh, $secCh);
     print "$named: Table of ClientNames and registered Senders and Receivers\n";
-    foreach $con (sort { $ClientNames{$a} cmp $ClientNames{$b} } keys %ClientNames) {
-	print "$ClientNames{$con}\n";
+    foreach $con (sort { $ClientNames{$a}[0] cmp $ClientNames{$b}[0] } keys %ClientNames) {
+	if ($ClientNames{$con}[0] =~ /^-/) {
+	    $ClientNames{$con}[1] = "\t[iClive]";
+	}
+	printf "%s%s\n", $ClientNames{$con}[0], $ClientNames{$con}[1];
     }
     if (%Equivalences) {
 	print "\n\%Equivalences = {\n";
@@ -994,7 +998,7 @@ sub print_tables {
 	$aref = $Receivers[$channel];
 	if (defined ($con = $Sender[$channel]) or (defined $aref and @{$aref})) {
 	    if (not defined $con or
-		not defined ($chName = $ClientNames{$con})) {
+		not defined ($chName = $ClientNames{$con}[0])) {
 		$chName = "<no sender>";
 	    }
 	    unless (defined ($name = $SenderName[$channel])) {
@@ -1116,7 +1120,7 @@ sub rcvd_msg_from_client {
     }
     if (defined $msg) {				# ignore undefined message (unlikely)
 	my $len = length $msg;
-	$sender = $ClientNames{$conn};		# set when name registered for this $conn
+	$sender = $ClientNames{$conn}[0];	# set when name registered for this $conn
 	$rcvCnt++;
 no warnings;
 	if ($opt_t and $msg =~ /^(\d+):/s and not $CDchannels{$1}) {
@@ -1178,8 +1182,9 @@ use warnings;
 			print "$sender $msg1 => dummy\n";		# not registered
 		    }
 		}
-		elsif ($msg1 =~ /^N(.+)/) {	# name part of registration
+		elsif ($msg1 =~ /^N([^.]+)((\.ic)?)$/) {	# name part of registration
 		    $name = $1;
+		    my $iCapp = $2 eq ".ic" ? "	[iC app]" : "";	# true if iC app else false
 		    if ($name =~ /^-/) {
 			my $i = 0;				# registering iClive name
 			foreach $con (@{$Receivers[0]}) {	# no need to check %AltReceivers
@@ -1214,7 +1219,8 @@ use warnings;
 		    }
 		  ALREADY_REGISTRERD:
 		    $Clients{$name} = $conn;		# client by this name exists now
-		    $ClientNames{$conn} = $sender = $name;	# name may change for iClive connections
+		    $ClientNames{$conn} = [ $name, $iCapp ];
+		    $sender = $name;			# name may change for iClive connections
 		    $numberOfConnections++;
 		    $regFlag = 1;			# registration string has started
 		    print STDERR "$numberOfConnections: $name: registering now\n" unless $opt_q;
@@ -1381,23 +1387,11 @@ use warnings;
 				push @{$AltRecrNames{$primCh}}, $aref;
 			      AltStored: ;
 			    }
-			    if ($Sender[$primCh]) {		# is sender registered on primary channel ?
-				$ini = $SenderValue[$primCh];	# yes - current value
-				if ($ini) {
-				    ############################################################
-				    ## sender is registered and has either initial value 0 or other
-				    ## current value - send new receiver value different to 0
-				    ## if sender is already registered
-				    ############################################################
-				    $ini = "$channel:$ini";	# message to all secondary channels
-				    if ($iniString) {
-					$iniString = join ',', $iniString, $ini;
-				    } else {
-					$iniString = $ini;
-				    }
-				}
-			    }
-			    elsif ($base =~ /^I[XBWL]\d+/) {	#  no, sender not registered on primary channel from
+			    ############################################################
+			    ##  do not AutoVivify an iC box for this receiver if there is already
+			    ##  a sender unless it is an extern Q... receiver (iCapp != "")
+			    ############################################################
+			    if ($ClientNames{$conn}[1] and $base =~ /^Q[XBWL]\d+/) {
 				if ($bits and $AutoVivify{$base}) {
 				    my $prev_param = $AutoVivify{$base};
 				    my ($old_base, $old_bits) = split /,/, $prev_param;
@@ -1413,7 +1407,42 @@ use warnings;
 				my $iCbox_param = $bits ? "$base,$bits" : $base;	# $EquivBase{$name} or own $name
 				$AutoVivify{$base} = $iCbox_param;
 				$ioName = "$sender-IO";
-				print "Autovivify receiver '$iCbox_param'\n" if $opt_t;
+				print "Autovivify receiver extern '$iCbox_param'\n" if $opt_t;
+			    } else {
+				if ($Sender[$primCh]) {		# is sender registered on primary channel ?
+				    $ini = $SenderValue[$primCh];	# yes - current value
+				    if ($ini) {
+					############################################################
+					## sender is registered and has either initial value 0 or other
+					## current value - send new receiver value different to 0
+					## if sender is already registered
+					############################################################
+					$ini = "$channel:$ini";	# message to all secondary channels
+					if ($iniString) {
+					    $iniString = join ',', $iniString, $ini;
+					} else {
+					    $iniString = $ini;
+					}
+				    }
+				}
+				elsif ($base =~ /^I[XBWL]\d+/) {	#  no, sender not registered on primary channel from
+				    if ($bits and $AutoVivify{$base}) {
+					my $prev_param = $AutoVivify{$base};
+					my ($old_base, $old_bits) = split /,/, $prev_param;
+					if ($old_bits) {
+					    $bits |= int($old_bits);
+					    if ($bits == 255) {
+						$bits = undef;	# no ,bits in combined $iCbox_param
+					    }
+					} else {
+					    $bits = undef;		# no ,bits in $prev_param
+					}
+				    }
+				    my $iCbox_param = $bits ? "$base,$bits" : $base;	# $EquivBase{$name} or own $name
+				    $AutoVivify{$base} = $iCbox_param;
+				    $ioName = "$sender-IO";
+				    print "Autovivify receiver '$iCbox_param'\n" if $opt_t;
+				}
 			    }
 			}
 			if ($opt_t) {
@@ -1534,7 +1563,7 @@ use warnings;
 		$msg1 = join ',', @$aref;	# one or more channel:value pairs
 no warnings;
 		if (($opt_t or $opt_J or $opt_O) and $msg1 =~ /^(\d+):/s and not $CDchannels{$1}) {
-		    print "S: $msg1 > $ClientNames{$c}\n";
+		    print "S: $msg1 > $ClientNames{$c}[0]\n";
 		}
 use warnings;
 		$rconn->send_now("$msg1");	# send channel:value pairs to destination

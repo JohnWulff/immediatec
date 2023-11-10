@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.80 $";
+"@(#)$Id: load.c 1.81 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2020  John E. Wulff
@@ -1447,7 +1447,7 @@ main(
 			}
 		      linkIO:
 			if (op->gt_ini == -INPX) {
-			    if (i != 3 || op->gt_rlist != 0) goto pass0Err;	/* allow IXm.n QXm.n as input */
+			    if (i != 3 || op->gt_rlist != 0 || tgp->gt_list == 0) goto pass0Err;	/* allow IXm.n QXm.n as input */
 			    tgp->gt_list[bit] = op;	/* pointer to bit Gate */
 			    /* ###### no back link ####### */
 			} else {			/* (op->gt_fni == OUTX) */
