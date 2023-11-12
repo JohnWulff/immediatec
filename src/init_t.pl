@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2013  John E. Wulff
+#	Copyright (C) 2000-2023  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -20,8 +20,18 @@
 #   the builtin function is clocked (all except FORCE() are clocked)
 #
 #   execute the following after making a compiler with -D BOOT_COMPILE
-#	immcc -d20000 init_t.ic | init_t.pl > init_t.out
-#	vi init_t.out init.c	# insert the new code appropriately
+#   To do that execute:
+#       rm comp.tab.c
+#       m -z -D BOOT_COMPILE
+#   Then execute:
+#	./immcc -d20000 init_t.ic | init_t.pl > init_t.out
+#	vi init_t.out init.c	# insert the new code as foll0ws:
+#	   delete all lines between ### insert generated date here ###
+#          and                      ### end    generated data here ###
+#          copy the whole of the new init_t.out between those two lines
+#   Make the new immcc compiler:
+#       make distclean; configure; m -a
+#
 #	# init_t.ic has the definitions of the buil-in functions with
 #	# mangled names in an appropriate alphabetical order
 #	# init_t.pl translates the mangled names to their proper names
@@ -36,7 +46,7 @@
 #   from v 1.3 to 1.4 do the following:
 #   perl -e 'while (<>) { s/0xc([12])/0x8$1/g; s/TIMER02/TIMER2/g; print; }' init_t.out | diff -wB - init.c | less
 #
-# $Id: init_t.pl 1.5 $
+# $Id: init_t.pl 1.6 $
 ########################################################################
 
 use strict;

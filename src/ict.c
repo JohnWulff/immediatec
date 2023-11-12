@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.86 $";
+"@(#)$Id: ict.c 1.87 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -390,7 +390,6 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	    tbc -= el;
 	    el = snprintf(tbp, tbc, "%s%s", sr[i], iC_iccNM);	/* directly into regBuf */
 	}
-    fprintf(iC_errFP, "*** regBuf = \"%s\"\n", regBuf);
 	/* use last string to initialise name "D<progname>[-<instance>]" for D_gate */
 	D_gate.gt_ids = iC_emalloc(el-1);			/* including '\0' */
 	strncpy(D_gate.gt_ids, tbp+2, el-1);		/* +2 leave out ",R" */

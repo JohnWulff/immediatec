@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c 1.34 $";
+"@(#)$Id: tcpc.c 1.35 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -276,6 +276,18 @@ iC_connect_to_server(const char *	host,
     server.sin_port = sin_port;
 
     for (r = 0; connect(sock, (SA)&server, sizeof(server)) < 0; ) {
+	/********************************************************************
+	 *  if iCserver network address is 127.0.0.1 or localhost (default)
+	 *    iCserver is forked on the first iteration unless it was
+	 *    already running and connection was sucessful
+	 *  else
+	 *    wait indefinitely for another iC program to start iCserver
+	 *    (usually on another computer in the network)
+	 *  end
+	 *  To prevent iCserver from starting automatically on this computer
+	 *  start the iC app with -s <network address> of the computer the
+	 *  app is running on.
+	 *******************************************************************/
 	if (strcmp(inet_ntoa(server.sin_addr), "127.0.0.1") == 0) {
 	    if (r < 50 ||  errno != ECONNREFUSED) {	/* wait 10 seconds max - will break within 200 ms of connecting */
 		if (r == 0) {
@@ -293,12 +305,12 @@ iC_connect_to_server(const char *	host,
 		perror("connect failed");
 		iC_quit(SIGUSR1);
 	    }
-#ifdef	_WIN32
-	    Sleep(200);				/* 200 ms in ms */
-#else	/* ! _WIN32 Linux */
-	    nanosleep(&ms200, NULL);
-#endif	/* _WIN32 */
 	}
+#ifdef	_WIN32
+	Sleep(200);				/* 200 ms in ms */
+#else	/* ! _WIN32 Linux */
+	nanosleep(&ms200, NULL);
+#endif	/* _WIN32 */
     }
 
     if (iC_osc_lim != 0 && (iC_debug & DQ) == 0) { /* suppress connection info for unlimited oscillations */

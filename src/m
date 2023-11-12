@@ -40,7 +40,7 @@ usage()
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m 1.27 $' >&2
+    echo '$Id: m 1.28 $' >&2
 }
 
 name=${0##*/}
@@ -94,20 +94,20 @@ while getopts ":aclSNPGVXrtmgpudsyezD:W:Iih" opt; do
     P ) P="P";;
     V ) V="V";;
     X ) X="X";;
-    I ) I="I";;
+    I )
+	echo "Enter root:" >&2
+	sudo chmod +s /usr/bin/install /usr/bin/ranlib
+	echo "chmod +s /usr/bin/install /usr/bin/ranlib" >&2
+	echo "Exit  root:" >&2
+	sudo -k
+	exit
+	;;
     i )	i="install";;
     h )	usage; exit 127;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
 done
 shift $(($OPTIND - 1))
-
-if [ -n "$I" ]; then
-    echo "Enter root:" >&2
-    sudo chmod +s /usr/bin/install /usr/bin/ranlib
-    echo "chmod +s /usr/bin/install /usr/bin/ranlib" >&2
-    echo "Exit  root:" >&2
-fi
 
 if [ -n "$P" ]; then
     clSGrtm="${clSGrtm}P"
