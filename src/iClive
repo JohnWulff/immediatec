@@ -355,7 +355,7 @@ Usage:
 
 Copyright (C) 2000-2021  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.97 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.98 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1363,6 +1363,9 @@ sub display_callback {
     my ($delay, $colour, $message);
     while (@infoMessages) {
 	($delay, $colour, $message) = splice @infoMessages, 0, 3;	# shift 3
+	if (length $message == 0) {
+	    quit_program();	# called from disconnect
+	}
 	$infoBar->configure(-foreground => $colour) if $message ne '';
 	$info = $message;	# display now
 	print "display_callback: '$info'\n" if $opt_T;
@@ -3009,6 +3012,7 @@ sub rcvd_msg_from_server {
 	    $conn = 0;
 	    $server = 0;
 	    info_display(2000, 'red', "iCserver has disconnected $named from '$host:$port'");
+	    info_display(2000, 'red', "");	# quit_program() with zero length message
 	} else {
 	    my ($msg1);
 	    printMicroSeconds("received message from server");
@@ -3917,7 +3921,7 @@ use warnings;
 	    }
 	}
 	if ($infoFlag) {
-	    info_display(0, 'black', '');	# clears display_info
+	    info_display(0, 'black', " ");	# clears display_info to 1 space ("" quit_program)
 	}
 	$text->yview('moveto', $groups[$gi]);	# move forward or backward to next group
 	print("moveto line @{[$lineCnt*$groups[$gi]+1]}\n") if $opt_T;
@@ -4058,7 +4062,7 @@ sub clear_scan {
 	$balloonAttached = 0;
     }
     unless (@_) {		# skip if parameter 1 set
-	info_display(0, 'black', '') if $searchText eq '';	# clears display_info unless search
+	info_display(0, 'black', " ") if $searchText eq '';	# clears display_info unless search
 	if ($conn) {
 	    ####################################################################
 	    ## clear active symbols in connected iC controller process

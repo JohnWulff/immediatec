@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c 1.22 $";
+"@(#)$Id: misc.c 1.23 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -435,7 +435,7 @@ iC_quit(int sig)
     }
 #ifdef	TCP
     if (iC_sockFN > 0) {
-	if (sig < SIGUSR1 || sig == QUIT_TERMINAL || sig == QUIT_DEBUGGER) {	/* but not QUIT_SERVER */
+	if (sig <= SIGUSR1 || sig == QUIT_TERMINAL || sig == QUIT_DEBUGGER) {	/* but not QUIT_SERVER */
 #ifdef	LOAD
 	    if (C_channel) {
 		/* disconnect iClive - follow with '0' for iCserver */

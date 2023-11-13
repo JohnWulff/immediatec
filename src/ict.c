@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.87 $";
+"@(#)$Id: ict.c 1.88 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -202,6 +202,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
     unsigned short	iClock_index;
     unsigned short	debugBlock;
     FILE *		vcdFlag;
+    int			infinityCnt;
 #ifdef	RASPBERRYPI
     piFaceIO *		pfp;
     iqDetails *		pfq;
@@ -992,7 +993,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 
     if (iC_error_flag) {
 	if (iC_error_flag >= 2) {
-	    fprintf(iC_outFP, "\n*** Fatal Errors ***\n");
+	    fprintf(iC_errFP, "\n*** Fatal Errors in %s ***\n", iC_iccNM);
 	    iC_quit(SIGUSR1);
 	}
 	fprintf(iC_outFP, "\n*** Warnings ***\n");
@@ -1515,7 +1516,12 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	    iC_mark_stamp++;		/* leave out zero */
 	}
 	vcdFlag = iC_vcdFP;
+	infinityCnt = 10000;
 	for (;;) {
+	    if (--infinityCnt == 0) {
+		fprintf(iC_errFP, "ERROR: %s: iC logic in an infinite loop - could be JK(toggle, toggle)\n", iC_iccNM);
+		iC_quit(SIGUSR1);
+	    }
 	    if (iC_aList != iC_aList->gt_next) { iC_scan_ar (iC_aList);           }
 	    if (iC_oList != iC_oList->gt_next) { iC_scan    (iC_oList); continue; }
 	    if (iC_cList != iC_cList->gt_next) {
@@ -3235,7 +3241,7 @@ debugWait(void)
 	    }
 	}   /*  end of TCP/IP interrupt */
     } else if (retval == 0) {
-	fprintf(iC_errFP, "ERROR: select in debugWait should not interrupt from a timer\n");
+	fprintf(iC_errFP, "ERROR: %s: select in debugWait should not interrupt from a timer\n", iC_iccNM);
 	iC_quit(SIGUSR1);
     } else {				/* retval -1 */
 	perror("ERROR: select in debugWait failed");

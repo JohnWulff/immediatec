@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.85 $
+# @(#)$Id: Makefile.in 1.86 $
 
 #######################################################################
 #
@@ -101,7 +101,10 @@ manprefix =
 
 REV  = $(shell perl -e 'while (<>) { if ( m/\$$(Revision: icc_|Id: icc.v(,v)? )(\d+)\.(\d+)\b/ ) { print "$$3.$$4"; last; } }' $(srcdir)/icc.v)
 PADD = perl -e 'while (<>) { if ( $$_ !~ m/^\$$Id/ ) { print; } }'
+POD2 =	$(shell pod2man -u $(srcdir)/icc.c > /dev/null 2>&1 ; echo $$?)
+ifeq ($(POD2),0)
 TKGE803 = $(shell perl -e 'use Tk; if ($$Tk::VERSION >= 803) { print "true"; }')
+endif
 
 #### End of system configuration section. ####
 
