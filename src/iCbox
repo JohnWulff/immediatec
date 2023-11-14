@@ -25,6 +25,7 @@ use Tk;			# The graphical user interface toolkit perl/Tk
 use iCmsg;		# Messaging Toolkit: from Advanced Perl Programming
 			##                   by Sriram Srinivasan
 use strict;
+use X11::Protocol;
 use warnings;
 
 my @ArgNames;		# stores IO names and initialisers in argument list order
@@ -162,10 +163,10 @@ Usage:
 		     separate process; -R ... must be last arguments,
 	    KEYBOARD inputs
 	    q   from keyboard or (X) button: stops iCserver and all apps
-	    Q   from keyboard: exit without stopping iCserver
+	    Q   from keyboard or shift+(X) button: quit without stopping iCserver
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.67 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.68 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -564,9 +565,21 @@ if (@runArgs) {
 ########################################################################
 
 $mw = MainWindow->new(-title => "$name");
-$mw->protocol('WM_DELETE_WINDOW', \&quit_program);	# Windows (X) pressed
+$mw->protocol('WM_DELETE_WINDOW' => sub {
+    my $nullVec  = pack("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh",
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    my $shiftVec = pack("hhhhhhhHhhhhhhhhhhhhhhhhhhhhhhhh",
+    0, 0, 0, 0, 0, 0, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    my $x11 = X11::Protocol->new;
+    my $keyVec = $x11->QueryKeymap;
+    if (($keyVec & $shiftVec) eq $nullVec) {
+	quit_program();		#       (X) quit and stop iCserver
+    } else {
+	quit_program(undef, 1);	# shift+(X) quit without stopping iCserver
+    }
+});
 $mw->bind('<Key-q>',      \&quit_program);		# quit and stop iCserver
-$mw->bind('<Key-Q>',      [ \&quit_program, 1 ]);	# quit without stopping iCserver (for testing)
+$mw->bind('<Key-Q>',      [ \&quit_program, 1 ]);	# quit without stopping iCserver
 
 ########################################################################
 #	Create and display an icon bitmap
@@ -1367,7 +1380,7 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
                  separate process; -R ... must be last arguments,
 	KEYBOARD inputs
         q   from keyboard or (X) button: stops iCserver and all apps
-        Q   from keyboard: exit without stopping iCserver
+        Q   from keyboard or shiftt+(X) button: quit without stopping iCserver
 
 =head1 DESCRIPTION
 
