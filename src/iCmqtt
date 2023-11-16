@@ -35,9 +35,6 @@ my $UnitRegistrations;	# stores the registration string
 my $setButton;		# Set all inputs button
 my $set;		# state of Set button
 my @allButtons = ();	# used to note all buttons to set
-my $indicatoron = 1;	# 0 button    1 checkbox
-my $greenButton = "'green4'";
-my $redButton   = "'red'";
 my @argv = ();
 
 my $Ch = 0;
@@ -47,29 +44,24 @@ my @args;
 my @runArgs = ();
 my $argsP = \@args;			# intially fill @args
 my $Rflag = 0;
-my $opt_Z = 0;		# 1 for debugging sub convertFlags()
+my $opt_Z = 1;		# 1 for debugging sub convertFlags()
 my %commandLineFlags = (
-    'b'   => 0,				# Bool flag
-    'd'   => 0,
-    'r'   => 0,
-    'H'   => 0,
-    'm'   => 0,
-    'x'   => 0,
+    'q'   => 0,				# Bool flag
     't'   => 0,
     'J'   => 0,
     'O'   => 0,
-    'q'   => 0,
-    'z'   => 0,
+    'M'   => 0,
     'T'   => 0,
+    'x'   => 0,
+    'h'   => 0,
     's'   => 1,				# value flag
     'p'   => 1,
-    'n'   => 1,
+    'N'   => 1,
     'i'   => 1,
-    'c'   => 1,
-    'C'   => 1,
-    'S'   => 1,
-    'l'   => 1,
-    'h'   => 0,
+    'm'   => 1,
+    'n'   => 1,
+    'o'   => 1,
+    'P'   => 1,
     'f'   => 1,				# include file
     'R'   => 1,				# Run an app
 );
@@ -103,67 +95,41 @@ my @bitIndex =	(
 my $named = untaint($0); $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-    @<<<< [-qHbdrtJOmTxh][ -s <iC host>][ -p <iC port>][ -N <name>][ -i <inst>]
+ @<<<<< [-qtJOTxh][ -s <iC host>][ -p <iC port>][ -N <name>][ -i <inst>]
 	$named
-          [ -s <MQTT host>][ -p <MQTT port>]
-	  [ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
-	  [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
-	ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
-		Any ID can be preceded by 'I' or 'Q' in which case
-		only that input or output is generated (default is both)
-		default ID is X0 generating input IX0 and output QX0
-		A range of ID's can be specified with -; eg IX0-IX7
-	ID-inst Each ID can be followed by -<inst>, where <inst> consists
-		of up to 3 numeric digits (usually 1 digit).
-		Such an appended instance code takes precedence over the
-		general instance specified with the -i <inst> (see below)
-	ID=ini  initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
-		applies only to input ID's. One =ini applies to each input
-		in a range of ID's; eg X5-X7=0b11 inits IX5 IX6 and IX7 to 3
-	ID,<button_select_mask>,<input_reset_time>,<reset_select_mask>
-	X1,0b11 select digital buttons IX0.0, IX0.1, QX0.0 and QX0.1 only
-		with a bit mask - default X1 (= X1,0b11111111) selects all
-	X1,,200 digital input push-buttons IX1.0 .. IX1.7 reset after 200 ms
-		default on/off buttons, which must be reset by another click
-		outputs QX1.0 .. QX1.7 are not affected by <input_reset time>
-	IX1,,200,0b11  only IX1.0 and IX1.1 are push-buttons - rest are on/off
-	ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
-	B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
-	B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
-	-s host name of iCserver host    (default '127.0.0.1')
-	-p port service port of iCserver (default '8778')
-	-m host name of MQTT broker host    (default '127.0.0.1')
-	-n port service port of MQTT broker (default '8778')
-	-N name registration name (default first full ID)
-	-i inst instance ID for this @<<<<<< (1 to 3 numeric digits)
-				    $named
-	-q      quiet - do not report clients connecting and disconnecting
-	-c col  maximum number of columns in a row (default 12)
-	-C col  absolute maximum number of columns in a row (default 18)
-	-S rows absolute maximum number of rows (default 3)
-	-l len  length of scales (default 170 pixels)
-	-f file read flags and additional ID parameters from this file
-	-H      a Hold button is generated which holds input changes
-	-b      use buttons instead of checkboxes for digital I/O
-	-d      display inputs IMn (no change and no ini values allowed)
-	-r      reverse - display inputs IMn, send outputs QMn like inputs
-	    DEBUG options
-	-t      trace debug messages
-	-J      trace rcv messages in iCmsgM.pm
-	-O      trace send messages in iCmsgM.pm
-	-M      display elapsed time in seconds and microseconds
-	-T      extra static debug messages
-	-x      exit after analyzing input parameters
-	-h      help, ouput this Usage text only
-	    AUXILIARY app   - start a Bernstein chain
-	-R <app ...> run one app followed by -z and its arguments as a
-		     separate process; -R ... must be last arguments,
-	    KEYBOARD inputs
-	    q   from keyboard or (X) button: stops iCserver and all apps
-	    Q   from keyboard: exit without stopping iCserver
+        [ -m <MQTT host>][ -n <MQTT port>][ -o <openHAB control file>]
+        [ -P <topic prefix>] [ -f <file>] <MQTT-topic-IEC ini file.ih>
+        [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
+    -s host name of iCserver host        (default '127.0.0.1')
+    -p port service port of iCserver     (default '8778')
+    -N name iC registration name         - must be unique
+    -i inst instance ID for this iCmqtt  (1 to 3 numeric digits)
+    -m host name of MQTT broker host     (default '127.0.0.1')
+    -n port service port of MQTT broker  (default '1883')
+    -o generated openHAB control file    (optional)
+    -P topic-prefix. Initial part of all topics   (default '')
+    -f file  read flags and additional parameters from this file
+    -q      quiet - do not report clients connecting and disconnecting
+       file.ih - MQTT topic to IEC ini file. The same .ih file is used
+       to define alias names for IEC variables in the iC control program
+       and to generate an openHAB control file.
+        DEBUG options
+    -t      trace debug messages
+    -J      trace rcv messages in iCmsgM.pm
+    -O      trace send messages in iCmsgM.pm
+    -M      display elapsed time in seconds and microseconds
+    -T      extra static debug messages
+    -x      exit after analyzing input parameters
+    -h      help, ouput this Usage text only
+        AUXILIARY app   - start a Bernstein chain
+    -R <app ...> run one app followed by -z and its arguments as a
+                 separate process; -R ... must be last arguments,
+        KEYBOARD inputs
+        q   from keyboard stops iCserver and all apps
+
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCmqtt 1.1 $
+$Id: iCmqtt 1.2 $
 .
 
 ########################################################################
@@ -183,34 +149,28 @@ my ($id, $ini, $from, $to, $res, $argNameRef);
 #	Handle all remaining -switch options and non-switch options
 ########################################################################
 
-use vars qw($opt_ $opt_b $opt_d $opt_r $opt_H $opt_M $opt_x $opt_t $opt_J $opt_O $opt_T);
-use vars qw($opt_q $opt_z $opt_s $opt_p $opt_m $opt_n $opt_N $opt_i $opt_c $opt_C $opt_S $opt_l $opt_h);
+use vars qw($opt_M $opt_x $opt_t $opt_J $opt_O $opt_T);
+use vars qw($opt_q $opt_z $opt_s $opt_p $opt_m $opt_n $opt_o $opt_P $opt_N $opt_i $opt_h);
 use Getopt::Long qw(:config no_ignore_case bundling);
 GetOptions (
     ''    => \$opt_,			# lone - (not used)
     '<>'  => sub { push(@argv, @_); },	# Transfer I/O argument to @argv
-    'b'   => \$opt_b,
-    'd'   => \$opt_d,
-    'r'   => \$opt_r,
-    'H'   => \$opt_H,
-    'M'   => \$opt_M,
-    'x'   => \$opt_x,
+    's=s' => \$opt_s,
+    'p=s' => \$opt_p,
+    'N=s' => \$opt_N,
+    'i=i' => \$opt_i,
+    'm=s' => \$opt_m,
+    'n=s' => \$opt_n,
+    'o=s' => \$opt_o,
+    'P=s' => \$opt_P,
+    'q'   => \$opt_q,
+    'z'   => \$opt_z,	# dummy flag for iCserver calls -R iCmqtt -z (stops error message)
     't'   => \$opt_t,
     'J'   => \$opt_J,
     'O'   => \$opt_O,
-    'q'   => \$opt_q,
-    'z'   => \$opt_z,	# dummy flag for iCserver calls -R iCmqtt -z (stops error message)
+    'M'   => \$opt_M,
     'T'   => \$opt_T,
-    's=s' => \$opt_s,
-    'p=s' => \$opt_p,
-    'm=s' => \$opt_m,
-    'n=s' => \$opt_n,
-    'N=s' => \$opt_N,
-    'i=i' => \$opt_i,
-    'c=i' => \$opt_c,
-    'C=i' => \$opt_C,
-    'S=i' => \$opt_S,
-    'l=i' => \$opt_l,
+    'x'   => \$opt_x,
     'h'   => \$opt_h,
 );
 scalar @ARGV == 0 or die "*** ERROR: $named: '@ARGV' remaining after Getopt::Long GetOptions() ???\n";
@@ -232,27 +192,6 @@ if ($opt_M) {
 }
 $SIG{ALRM} = \&endPulse;	# signal 14 - Timer signal from ualarm()
 
-$opt_c = 12	unless $opt_c;	# default maximum number of columns
-$opt_C = 18	unless $opt_C;	# absolute maximum number of columns
-$opt_c = $opt_C	if $opt_c > $opt_C;
-$opt_S = 3	unless $opt_S;	# absolute maximum number of rows
-$opt_l = 170	unless $opt_l;	# default length of analog scale
-print "c = $opt_c C = $opt_C S = $opt_S l = $opt_l\n" if $opt_t;
-
-if ($opt_b) {
-    $indicatoron = 0;		# 0 button    1 checkbox
-    $greenButton = "'light green'";
-    $redButton   = "'IndianRed1'";
-}
-
-my $QX        = $opt_d ? qr/^[IQ]X/        : $opt_r ? qr/^IX/        : qr/^QX/;
-my $Q_BWL_    = $opt_d ? qr/^[IQ][BWL]/    : $opt_r ? qr/^I[BWL]/    : qr/^Q[BWL]/;
-my $Q__XBWL__ = $opt_d ? qr/^[IQ]([XBWL])/ : $opt_r ? qr/^I([XBWL])/ : qr/^Q([XBWL])/;
-
-my $IX        = $opt_r ? qr/^QX/        : qr/^IX/;
-my $I_BWL_    = $opt_r ? qr/^Q[BWL]/    : qr/^I[BWL]/;
-my $I__XBWL__ = $opt_r ? qr/^Q([XBWL])/ : qr/^I([XBWL])/;
-
 my $instance = '';
 if (defined $opt_i and $opt_i ne '') {
     if ($opt_i =~ /^\d{1,3}$/) {	# INSTSIZE 3 defined in icc.h
@@ -266,45 +205,6 @@ if (defined $opt_i and $opt_i ne '') {
 ########################################################################
 #
 #	Analyse ID parameters
-#
-#	X0 X2	generates inputs and outputs IX0 QX0 IX2 QX2 in that order
-#	B0-B2	generates inputs and outputs IB0 QB0 IB1 QB1 IB2 QB2
-#	IW3 IW7	generates only inputs IW3 and IW7
-#	QL4-QL7 generates only outputs QL4 QL5 QL6 and QL7
-#
-#	Combined input/output or input-only parameters can be initialised
-#	with =<number>.
-#	<number> may be decimal, octal, hexadecimal or binary as follows:
-#	X10=15 X11=017 IX12=0xf IX13=0b1111	all equal decimal 15
-#	only decimal initialisers may be preceded by a minus sign
-#	IW10=-100	initialises IW10 with -100
-#
-#	An initialiser may be placed after the second parameter of a range.
-#	Every input in the range will be initialised to the same value.
-#	IW20-IW27=100	initialises IW20 IW21 .. IW27 with 100
-#	X20-X27=0x3a	initialises IX20 IX21 .. IX27 with 0x3a
-#	Outputs cannot be initialised.
-#
-#	All digital parameters or parameter ranges may optionally be followed
-#	by one number separated by a comma representing a bit-mask defining,
-#	whether a particular bit .0 to .7 is defined and should be implemented.
-#	Default ',255' which defines all 8 bits. The easiest way to declare
-#	the bit mask is as a binary number, eg: ',0b10001111'. This declares
-#	that bits .0, .1, .2, .3 and .7 are defined in the application and
-#	should be implemented. The bits which are not defined are left blank.
-#
-#	All analog parameters or parameter ranges may optionally be followed
-#	by two or three comma-separated numbers naming the start, finish
-#	and optionally the resolution of the numbers displayed by the analog
-#	scale. Default ',0,100' which is equivalent to ',0,100,1'.  A negative
-#	resolution reverses the direction of the slider. (0 not allowed)
-#
-#	ID-parameter, range, initialiser and number-range must be written
-#	without spaces in the command line unless they are quoted. In the
-#	optional INI file which can be read with the -f option, white space
-#	can be placed between parameter, range, initialiser and number-range.
-#	They must only be all in one line. Any text following '#' is ignored
-#	and treated as a comment.
 #
 ########################################################################
 
@@ -497,8 +397,8 @@ print "##### Net::MQTT::Simple->new(\"$m_host:$m_port\");\n" if $opt_t;
 my $mqtt = Net::MQTT::Simple->new("$m_host:$m_port");
 
 # Depending if authentication is required, login to the broker
-$mqtt->subscribe("gf_s/#", \&received);
-$mqtt->subscribe("ff_s/#", \&received);
+$mqtt->subscribe("gf_s/#", \&mqttReceived);
+$mqtt->subscribe("ff_s/#", \&mqttReceived);
 
 ############# send registration ############################
 
@@ -512,14 +412,11 @@ foreach $argNameRef (@ArgNames) {
     ($id, $ini, $from, $to, $res) = @$argNameRef;
     $direction = $label = '';
     if ($id =~ /^I/) {
-	$direction = $opt_d || $opt_r ? 'R' : 'S';
+	$direction = 'S';
     } elsif ($id =~ /^Q/) {
-	$direction = $opt_r ? 'S' : 'R';
+	$direction = 'R';
     } else {
 	die "$named: invalid argument '$id' - internal error";
-    }
-    if ($opt_r and $id =~ /^.X/ and $from < 255) {
-	$id .= "($from)";				# bit-mask for digital I/Os only if -r
     }
     if ((length($UnitRegistrations) + length($id)) > 1396) {	# REPLY 1400 - (1+2+1) in tcpc.h
 	print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
@@ -551,20 +448,6 @@ $register = 0;
 my ($frame, $ch, $maxColumn, $mw, $pane);
 my ($row, $column, $scroll) = (0, 0, 0);
 
-$frameCount++ if $opt_H;			# extra Hold frame
-if ($frameCount > $opt_C*$opt_S) {
-    $maxColumn = $opt_C;
-    $scroll = 1;
-} else {
-    for (my $r = $opt_S; $r > 0; $r--) {
-	my $r1 = $r - 1;
-	if ($frameCount > $opt_c*$r1) {
-	    $maxColumn = int(($frameCount + $r1) / $r);
-	    last;
-	}
-    }
-}
-print "frameCount = $frameCount maxColumn = $maxColumn scroll = $scroll\n" if $opt_t;
 exit if $opt_x;	# deliberate exit with -x option before any network activity
 
 ########################################################################
@@ -577,137 +460,6 @@ if (@runArgs) {
     print "at fork	runArgs: '", join(':', @runArgs), "'\n" if $opt_t;
     fork_and_exec(@runArgs);
 }
-
-########################################################################
-#	Create and display an icon bitmap
-########################################################################
-
-my $icon = pack("b48" x 48,
-    "................................................",
-    "................................................",
-    "................................................",
-    "................................................",
-    "................................................",
-    "................................................",
-    "................................................",
-    ".....111........................................",
-    "....11111.......................................",
-    "...1111111......................................",
-    "...1111111......................................",
-    "...1111111......................................",
-    "....11111.......................................",
-    ".....111........................................",
-    "................................................",
-    "................................................",
-    "................................................",
-    "................................................",
-    "................................................",
-    "...111111...........111111111...111111111.......",
-    "...111111..........1111111111...1111111111......",
-    "...111111.........111111111111.111111111111.....",
-    "....11111........111111...111111111...111111....",
-    "....11111........111111...111111111...111111....",
-    "....11111........11111.....1111111.....11111....",
-    "....11111........11111.....1111111.....11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "....11111........11111......11111......11111....",
-    "...1111111......1111111....1111111....1111111...",
-    "...1111111......1111111....1111111....1111111...",
-    "...1111111......1111111....1111111....1111111...",
-    "................................................",
-    "................................................",
-    "................................................",
-    "................................................",
-    "................................................",
-);
-# $mw->DefineBitmap('icon' => 48, 48, $icon);
-# $mw->iconbitmap("icon");	# could use built in bitmap like "Tk" instead
-
-########################################################################
-#
-#	For each argument generate a frame with
-#
-########################################################################
-
-########################################################################
-#
-#	either 8 output checkbuttons
-#	    my $makeOutCheckbutton = "\
-#	    \$frame->Checkbutton(\
-#		-text               => $text,\
-#		-variable           => \\\$ChannelsQX[$ch][$index],\
-#		-selectcolor        => $redButton,\
-#		-borderwidth        => $borderwidth,\
-#		-takefocus          => 0,\
-#		-state              => 'disabled',\
-#		-disabledforeground => 'dark red',\
-#		-indicatoron        => $indicatoron,\
-#	    )->pack(-side => 'top', -expand => 1,);\
-#
-########################################################################
-
-########################################################################
-#
-#	or 8 input checkbuttons
-#	    my $makeInCheckbutton = ($del ? "\
-#	    my \$myself;" : "") . "\
-#	    my \$thisButton = \$frame->Checkbutton(\
-#		-text        => $text,\
-#		-variable    => \\\$ChannelsIX[$ch][$index],\
-#		-selectcolor => $greenButton,\
-#		-borderwidth => $borderwidth,\
-#		-state       => $state,\
-#		-indicatoron => $indicatoron," . ($sel ? "\
-#		-command     => " . ($del ? "\\(\$myself = " : "") . "sub {\
-#		    my \$val = \$ChannelsI[$ch];" . ($del ? "\
-#		    if (\$val & $masks[$index]) {\
-#			\$ChannelsIX[$ch][$index] = 0;	# reset bit indicator\
-#			\$val &= ~$masks[$index];	# clear bit after time delay\
-#		    } els" : "\
-#		    ") . "if (\$ChannelsIX[$ch][$index]) {\
-#			\$val |= $masks[$index];	# set bit" . ($del ? "\
-#			\$mw->after($del, \$myself) unless \$hold;	# clear bit after $del ms" : "") . "\
-#		    } else {\
-#			\$val &= ~$masks[$index];	# clear bit\
-#		    }\
-#		    if (\$val != \$ChannelsI[$ch]) {\
-#			\$ChannelsI[$ch] = \$val;\
-#			send_input($ch, \$val);\
-#		    }\
-#		}" . ($del ? ")" : "") . "," : "") . "\
-#	    )->pack(-side   => 'top', -expand => 1,);" . (($sel and $opt_H) ? "\
-#	    push \@allButtons, \$thisButton;	# prepare for all set/reset" : "") . "\
-#
-########################################################################
-
-########################################################################
-#
-#	or 1 analog output scale
-#	    -variable    => \$ChannelsQ[$ch],
-#
-########################################################################
-
-########################################################################
-#
-#	or 1 analog input scale
-#	must be processed by eval to make -command a closure
-#	    -variable    => \\\$ChannelsI[$ch],\
-#	    -command     => sub {\
-#		send_input($ch, \$ChannelsI[$ch]);\
-#
-########################################################################
 
 ########################################################################
 #
@@ -731,7 +483,7 @@ iCmsgM->event_loop($mqtt);
 #
 ########################################################################
 
-sub received
+sub mqttReceived
 {
     my ($topic, $message) = @_;
     print "Q< $topic $message\n";
@@ -1127,53 +879,27 @@ __END__
 
 =head1 NAME
 
-iCmqtt - a TK-widget to provide virtual digital and analog I/O
+iCmqtt - a bi-directional interface between MQTT and immediate C
 
 =head1 SYNOPSIS
 
- iCmqtt [-qHbdrtJOmTxh][ -s <iC host>][ -p <iC port>][ -N <name>][ -i <inst>]
-       [ -s <MQTT host>][ -p <MQTT port>]
-       [ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
-       [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
-       [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
-    ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
-            Any ID can be preceded by 'I' or 'Q' in which case
-            only that input or output is generated (default is both)
-            default ID is X0 generating input IX0 and output QX0
-            A range of ID's can be specified with -; eg IX0-IX7
-    ID-inst Each ID can be followed by -<inst>, where <inst> consists
-            of up to 3 numeric digits (usually 1 digit).
-            Such an appended instance code takes precedence over the
-            general instance specified with the -i <inst> (see below)
-    ID=ini  initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
-            applies only to input ID's. One =ini applies to each input
-            in a range of ID's; eg X5-X7=0b11 inits IX5 IX6 and IX7 to 3
-    ID,<button_select_mask>,<input_reset_time>,<reset_select_mask>
-    X1,0b11 select digital buttons IX0.0, IX0.1, QX0.0 and QX0.1 only
-            with a bit mask - default X1 (= X1,0b11111111) selects all
-    X1,,200 digital input push-buttons IX1.0 .. IX1.7 reset after 200 ms
-            default on/off buttons, which must be reset by another click
-            outputs QX1.0 .. QX1.7 are not affected by <input_reset time>
-    IX1,,200,0b11  only IX1.0 and IX1.1 are push-buttons - rest are on/off
-    ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
-    B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
-    B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
-    -s host name of iCserver host    (default '127.0.0.1')
-    -p port service port of iCserver (default '8778')
-    -m host name of MQTT broker host    (default '127.0.0.1')
-    -n port service port of MQTT broker (default '8778')
-    -N name registration name (default first full ID)
-    -i inst instance ID for this iCmqtt (1 to 3 numeric digits)
+ iCmqtt [-qtJOTxh][ -s <iC host>][ -p <iC port>][ -N <name>][ -i <inst>]
+        [ -m <MQTT host>][ -n <MQTT port>][ -o <openHAB control file>]
+        [ -P <topic prefix>] [ -f <file>] <MQTT-topic-IEC ini file.ih>
+        [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
+    -s host name of iCserver host        (default '127.0.0.1')
+    -p port service port of iCserver     (default '8778')
+    -N name iC registration name         - must be unique
+    -i inst instance ID for this iCmqtt  (1 to 3 numeric digits)
+    -m host name of MQTT broker host     (default '127.0.0.1')
+    -n port service port of MQTT broker  (default '1883')
+    -o generated openHAB control file    (optional)
+    -P topic-prefix. Initial part of all topics   (default '')
+    -f file  read flags and additional parameters from this file
     -q      quiet - do not report clients connecting and disconnecting
-    -c col  maximum number of columns in a row (default 12)
-    -C col  absolute maximum number of columns in a row (default 18)
-    -S rows absolute maximum number of rows (default 3)
-    -l len  length of scales (default 170 pixels)
-    -f file read flags and additional ID parameters from this file
-    -H      a Hold button is generated which holds input changes
-    -b      use buttons instead of checkboxes for digital I/O
-    -d      display inputs IMn (no change and no ini values allowed)
-    -r      reverse - display inputs IMn, send outputs QMn like inputs
+       file.ih - MQTT topic to IEC ini file. The same .ih file is used
+       to define alias names for IEC variables in the iC control program
+       and to generate an openHAB control file.
         DEBUG options
     -t      trace debug messages
     -J      trace rcv messages in iCmsgM.pm
@@ -1185,139 +911,83 @@ iCmqtt - a TK-widget to provide virtual digital and analog I/O
         AUXILIARY app   - start a Bernstein chain
     -R <app ...> run one app followed by -z and its arguments as a
                  separate process; -R ... must be last arguments,
-	KEYBOARD inputs
-        q   from keyboard or (X) button: stops iCserver and all apps
-        Q   from keyboard: exit without stopping iCserver
+        KEYBOARD inputs
+        q   from keyboard stops iCserver and all apps
 
 =head1 DESCRIPTION
 
-The B<iCmqtt> widget contains one or more frames - each frame containing one
-digital or analog input or output widget.
+The program B<iCmqtt> is a bi-directional interface between an MQTT
+broker and iCserver. It translates MQTT topics and message content
+to immediate C IEC-1131 external variable names (actully reduced
+to iC channel numbers) and their content. Both type of messages are
+transported by TCP/IP on different ports.
 
-Digital I/O widgets consist of a row of 8 vertical checkbuttons
-labelled .0 to .7 - representing the 8 bits of one digital I/O byte
-IXn or QXn. The address IXn or QXn labels the frame. Input checkbuttons
-are green whereas output checkbuttons are red when on. Only input
-checkbuttons are active when the mouse is over a button and can be
-toggled on or off with mouse button-1.
+The translation between MQTT topic names and iEC-1131 I/O names is
+defined in a .ih file, which can also be used to define iC alias
+names for IEC-1131 I/O names in iC control programs. By doing this
+the IEC-1131 I/O names used for MQTT I/O are completely hidden.
 
-Analog I/O widgets consist of a slider or scale widget allowing the
-display or selection of a range of numbers. Default is a range from 0
-to 100. This range can be changed on creation of the widget (,start,finish
-option). Analog I/O widgets may be generated to deal with single
-byte values, 2 byte or word values and 4 byte or long values. These
-are labelled IBn, IWn, ILn and QBn, QWn, QLn for inputs and outputs
-respectively. Input sliders have a green background and their central
-button may be moved with the mouse to change the value transmitted
-from the widget. To obtain greater precision, the coloured area
-above and below the button may be clicked with the mouse button-1,
-to decrement or increment the value in unit steps. Output sliders have
-a red background and only display the value received by the widget.
+Only names used as topics in MQTT should be used in the shared .ih ini
+file. Other IEC-1131 I/O name aliases must be defined in a separate .ic
+file. If this were not done, MQTT inputs would register as iC inputs,
+which would lead to registration of multiple senders for the same name,
+which is not allowed in iC.
 
- ID parameters
+The MQTT ini file can also contain special commands written as C++
+comments to format MQTT message contents, which is usually ON and
+OFF for bits 0 and 1.
 
- X0 X2    generates inputs and outputs IX0 QX0 IX2 QX2 in that order
- B0-B2    generates inputs and outputs IB0 QB0 IB1 QB1 IB2 QB2
- IW3 IW7  generates only inputs IW3 and IW7
- QL4-QL7  generates outputs QL4 QL5 QL6 QL7
+Since many MQTT messages are finally interpreted by openHAB, the MQTT
+ini file contains all the information to generate an openHAB control
+file from the topic names and other openHAB control information.
+This is optionally done as a first pass. This ensures that openHAB
+topics, MQTT topics and variable names in iC control programs are
+all the same for the same I/O entity.
 
- Combined input/output or input-only parameters may optionally be
- initialised with =<number>.
- <number> may be decimal, octal, hexadecimal or binary as follows:
- X10=15 X11=017 IX12=0xf IX13=0b1111    all equal decimal 15
- only decimal initialisers may be preceded by a minus sign
- IW10=-70 initialises IW10 with -70 (IW10=-70,-100,0 to be useful)
+Actually the names are not exactly the same. MQTT topics are usually
+organized hierarchically.  Topics and sub-topics are separated by a
+forward slash '/'. Forward slashes are not a valid character for C or
+immediate C variables.  For this reason all forward slashes in MQTT
+topics are replaced by a dollar symbol '$', which is valid for C and
+immediate C variables.  The .ih MQTT ini file must be written with
+'$'s instead of '/'s, because the same file can also be a %include
+file for an iC control program.  A '$' in a topic must be replaced by
+'$$' in the .ic ini file.
 
-An optional initialiser may be placed after the second parameter
-of a range.  Every input in the range will be initialised to the
-same value.  Outputs cannot be initialised.
+=head1 SPECIFICATION
 
- IW20-IW27=50  initialises IW20 IW21 .. IW27 with 50
- For analog inputs this means that the slider and the output are
- set to the value of 50, which happens to be in the middle.
+On startup of B<iCmqtt> the following actions are carried out:
 
- X20-X27=0b1011 initialises IX20 IX21 .. IX27 with 0b1011
- For digital inputs X20 this means that IX20.0 IX20.1 and IX20.3 are
- set - all other bits remain reset. Similarly for IX21 to IX27.
+  1) The MQTT  ini file.ic is scanned and an openHAB control file is
+     generated if the command line requests such a file with the -o
+     option.
 
-All analog parameters or parameter ranges may optionally be followed
-by two or three comma-separated numbers naming the start, finish
-and optionally the resolution of the numbers displayed by the analog
-scale. Default ',0,100' which is equivalent to ',0,100,1'.  A negative
-resolution reverses the direction of the slider. (0 is not allowed)
+  2) The MQTT ini file is scanned again and each iC alias statement
+     is separated into an MQTT topic and an iC IEC-1131 I/O name.
 
-All digital parameters or parameter ranges may optionally be followed
-by one, two or three comma-separated numbers. Two consecutive commas
-or any numbers missing at the end will be filled with a default.
+     a) IEC-1131 I/O names starting with 'I' are iC inputs.
 
- Number 1) is a bit-mask defining, whether a particular bit .0 to .7
-           is defined and should be implemented.  Default ',255'
-           defines all 8 bits. The easiest way to declare the bit mask
-           is as a binary number, eg: ',0b10001111'. This declares that
-           bits .0, .1, .2, .3 and .7 are defined in the application
-           and should be implemented. The bits which are not defined
-           are left blank. Default 0b11111111 - all bits are defined.
+        i)  The IEC-1131 I/O name is registerd with iCserver as a
+	    'sender'.
 
- Number 2) is a delay value in milliseconds. Any value 50 and above
-	   is used to reset the button internally after that many
-	   milliseconds, which makes it a push-button that only
-	   needs to be clicked once with the left mouse button.
-	   Non-zero values less than 50 (including negative values)
-	   are set to 50 ms. Default 0 - normal on/off button.
+        ii) The other name is converted to an MQTT topic, extended
+	    with the prefix from the -P option and sent as a 'sub'
+	    command to the MQTT broker. This allows sending data to
+	    iCserver on the equivalent 'I' input when an MQTT client
+	    publishes a message for the topic.
 
- Number 3) is a bit-mask defining, whether a particular bit .0 to .7
-	   is a push-button or is a normal on/off button. This is only
-	   useful if a delay value has been specified. This optional
-	   mask lets you select which bits in one group are to be
-	   push-buttons. Default 0x11111111 - all push-buttons.
+     b) IEC-1131 I/O names starting with 'Q' are iC outputs.
 
-ID-parameter, range, initialiser and number-range must be written
-without spaces in the command line unless they are quoted. In the
-optional INI file which can be read with the -f option, white space
-can be placed between parameter, range, initialiser and number-range.
-They must only be all in one line. In an INI file any text following
-'#' is ignored and treated as a comment.
+        i)  The IEC-1131 I/O name is registerd with iCserver as a
+	    'receiver'.
 
-A separate frame is generated for each input and output ID; two frames
-for an ID not specifying I or Q. Each frame is labelled with the ID
-followed by the optional instance; eg IX0 or IX0-1. The number of
-columns is limited to 12, to prevent the whole widget becoming too
-wide. On the other hand the number of rows is also limited to 3 (has
-precedence). The number of frames in a row (columns) may be specified
-with the -c option (absolute maximum with -C).  If the number of
-I/O frames exceeds an absolute maximum of 18 columns and 3 rows,
-more rows are generated, which can be accessed with a scroll-bar.
+        ii) The other name is converted to an MQTT topic, extended
+	    with the prefix from the -P option and saved in a list
+	    to allow the generation of 'pub' commands sent to the
+	    MQTT broker and hence to all subscribing clients when
+	    the equivalent 'Q' output is received from iCserver.
 
-Digital frames have a vertical row of 8 Checkbuttons labelled .0 .1
-... .7 for IX0.0 IX0.1 ... IX0.7; Input Checkbuttons are green when set
-and may be pressed on and off or on only if they are a push-button;
-Output Checkbuttons are red when set and display an external value
-only - they cannot be pressed.
-
-Analog frames have a vertical slider labelled 0 to 100 by default.
-Analog inputs have a green slider - analog outputs a red slider. Only
-input sliders can be moved to change an input value.
-
-An B<iCmqtt> generated with the -d option will make input frames which
-behave like outputs (except for the labels). This is useful for
-monitoring real external inputs (and outputs).
-
-An B<iCmqtt> generated with the -r option will reverse the functionality
-of inputs and outputs. Frames whose ID starts with a Q can be modified
-whereas frames whose ID starts with I will only monitor. An B<iCmqtt> -r
-mimics an iC application during early development.
-
-An optional frame with a B<Hold> button is generated with the -H
-option showing [II] (press to hold).  After this button is pressed it
-shows [>] (release to continue).  While [>] is pressed, any input
-changes are queued and not transmitted until the [>] button is released.
-This is useful for testing iC programs in a situation when several
-inputs must arrive simultaneously. Analog input scales and Push-buttons
-with an internal reset delay are also held, the latter sending their on
-and delayed off state when the [>] button is released.  Two further
-buttons showing [all] and [~all] are generated. The former sets all
-inputs when pressed and resets all inputs when released. The latter
-inverts all inputs when pressed and inverts them again when released.
+  3) iCserver is started unless it is running already.
 
 =head1 AUTHOR
 
@@ -1330,11 +1000,11 @@ subject field.
 
 =head1 SEE ALSO
 
-L<immcc(1)>, L<iClive(1)>, L<iCserver(1)>
+L<immcc(1)>, L<iClive(1)>, L<iCserver(1)>, L<iCpiI2C(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2017  John E. Wulff
+COPYRIGHT (C) 2000-2023  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.
