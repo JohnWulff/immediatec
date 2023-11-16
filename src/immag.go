@@ -109,7 +109,7 @@ import (
 	"github.com/Knetic/govaluate"
 )
 
-const ID_immag_go = "$Id: immag.go 1.3 $"
+const ID_immag_go = "$Id: immag.go 1.4 $"
 const DEF  = true
 const EVAL = true
 
@@ -2592,6 +2592,12 @@ func main() {
 		}
 		outputError(lineText)					// possible error or warning in previous line
 		if l := len(inFileStk) - 1; l >= 0 {
+			/***********************************************************************
+			 *  If -m -M or -Y then output any blank lines at the end of an include file
+			 ***********************************************************************/
+			if opt_m_M_Y && blankLines > 0 {
+				blanks()						// print blank lines now
+			}
 			inFileC.Close()						// EOF of an include file reached
 			fi := inFileStk[l]
 			inFileStk = inFileStk[:l]			// pop current file info
@@ -2616,6 +2622,12 @@ func main() {
 		}
 		break Level
 	} // exhaust all nested include files
+	/***********************************************************************
+	 *  If -m -M or -Y then output any blank lines at the end of the file
+	 ***********************************************************************/
+	if opt_m_M_Y && blankLines > 0 {
+		blanks()								// print blank lines now
+	}
 	/***********************************************************************
 	 *  All lines in the iCa file have been read
 	 ***********************************************************************/
@@ -2719,16 +2731,14 @@ func tern(cond bool, ifVal, elseVal interface{}) interface{} {
 						if !opt_m_M_Y {
 							outLine = reCommaSemi.ReplaceAllString(outLine, ";")	// remove comma from ,; in generated iCa code
 						}
-						fmt.Print(outLine) // final output to stdout or -o output
+						fmt.Print(outLine)	// final output to stdout or -o output
 					}
 				}
 			}
 		}
-		if *opt_l != "" && *opt_l != genName {
-			err = os.Remove(genName)	// remove generated file unless log file
-			if err != nil {
-				log.Print(err); os.Exit(e)
-			}
+		err = os.Remove(genName)			// remove generated file - log file remains
+		if err != nil {
+			log.Print(err); os.Exit(e)
 		}
 		if *opt_l != "" {
 			err := os.Chmod(*opt_l, 0444)

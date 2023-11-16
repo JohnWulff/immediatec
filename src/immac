@@ -121,9 +121,6 @@
 #   Directory separator for Linux/Unix is:  /
 #   Directory separator for Windows is:     \
 #
-#   This means that #define #if etc macros in C literal blocks will be
-#   written just like in C and passed unchanged to the generated C code.
-#
 ########################################################################
 
 use strict;
@@ -174,7 +171,7 @@ Usage:
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac 1.34 $
+$Id: immac 1.35 $
 .
 
 use vars qw($opt_a $opt_N $opt_L $opt_o $opt_l $opt_e);
@@ -1816,6 +1813,12 @@ use strict 'refs';
 	    output_error($., $listLine) if @lnErr and not $opt_t;
 	}
 	if (@argInfo) {
+	    ########################################################################
+	    #   If -m -M or -Y then output any blank lines at the end of an include file
+	    ########################################################################
+	    if (($opt_m_M_Y) and $blankLines) {
+		blanks();				# print blank lines now
+	    }
 	    close $in;				# EOF of an include file reached
 	    $argRef = pop(@argInfo);
 	    if (defined $argRef) {
