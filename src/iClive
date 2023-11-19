@@ -125,7 +125,7 @@ my %pGroup = (	'{' => [ '}', '-forwards',  '[{}\'"]',     'end', ],
 
 # Tk::Text->search() does not accept a pre-compiled regex qr/.../
 # ^# ^% ^%% ^%{ ^%} /* // */ ' " [ ] %{ %} { } {{ }} word \n$
-my $regx = '(^\d*\s*[#%][%{}]?\s*|^\d+\t|/[/*]|\*/|[\[\'"\]]|%?\{\{?|%?\}\}?|---|[A-Z_a-z][\w\$]*(\.[0-7](_\d+)?)?)';
+my $regx = '(^\s*\d*\s*[#%][%{}]?\s*|^\d+\t|/[/*]|\*/|[\[\'"\]]|%?\{\{?|%?\}\}?|---|[A-Z_a-z][\w\$]*(\.[0-7](_\d+)?)?)';
 
 my %keyWords = (		# $kw & 0x0001 iC only, 0x0002 C only, 0x0003 iC and C
 	imm	=> 0x0001,	# iC type modifiers
@@ -355,7 +355,7 @@ Usage:
 
 Copyright (C) 2000-2021  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.98 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.99 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -559,6 +559,7 @@ my $searchText = '';
 my $breakText = '';
 my $break     = 0;
 my $oldContents = '';
+my $disContents = '';
 my $unknown = 'unknown.ic';
 
 my $fileTypes = [
@@ -1161,7 +1162,7 @@ if ($opt_u) {
 				     -scrollbars => 'osoe',
 				     -setgrid    => 2,
 				     -background => 'cornsilk1',
-				     -wrap       => 'word',	# no horizontal scrollbar
+				     -wrap       => 'none',	# horizontal scrollbar
 				     -font       => $font,
 				    )->pack(-fill => 'both', -expand => 1);
 }
@@ -1483,7 +1484,7 @@ sub tagComments {
 	#  beginning of a line or immediately following %{ starting C code (%})
 	#  %{ #include <stdio.h> %} // is allowed
 	########################################################################
-	if ($prevAtom =~ m/^(\d*\s*)%\{\s*$/ and $space =~ m/^\s*(#|%%?)\s*$/) {
+	if ($prevAtom =~ m/^(\s*\d*\s*)%\{\s*$/ and $space =~ m/^\s*(#|%%?)\s*$/) {
 	    $atom = $space;		# %{ followed by # allowed on same line (%})
 	    $length = length $atom;	# move tagging region back to start of new $atom
 	    $currEnd = $current;	# repeat search without previous space
@@ -1577,7 +1578,7 @@ sub tagComments {
 		    $CbraceCount--;
 		    $err++;
 		}
-	    } elsif ($atom =~ m/^(\d*\s*)%\}\s*$/) {
+	    } elsif ($atom =~ m/^(\s*\d*\s*)%\}\s*$/) {
 		$l = length $1; $l = 0 unless $l;
 		$CbraceCount--;		# "%}" end of C literal block found
 	  EndC:	$text->tagAdd('CTag', $CStart, "$current + $l chars");
@@ -1752,18 +1753,18 @@ sub tagComments {
 			$icaLoop = 0;
 		    }
 		}
-	    } elsif ($atom =~ m/^(\d*\s*)#\s*$/) {
+	    } elsif ($atom =~ m/^(\s*\d*\s*)#\s*$/) {
 		$l = length $1; $l = 0 unless $l;
 		$pp = $atom;		# lead-in for C pre-processor commands #define etc
 		$ppC = "$current + $l chars";
 		print "ppC '$atom' found in C code\n" if $opt_T;
 		goto NextAtom;		# do not clear $pp $ppC
 	    }
-	    if ($atom =~ m/^(\d*\s*)%%?\s*$/) {
+	    if ($atom =~ m/^(\s*\d*\s*)%%?\s*$/) {
 		$l = length $1; $l = 0 unless $l;
 		$pp = $atom;		# lead-in for iC or iCa pre-processor commands %define %%define etc
 		$ppI = "$current + $l chars";
-		print "ppI '$atom' found in C code\n" if $opt_T;
+		print "ppI '$atom' found in iC or iCa code\n" if $opt_T;
 		goto NextAtom;		# do not clear $pp $ppI
 	    }				# end of  $state eq "C" C code
 	} elsif ($atom =~ m/[A-Z_a-z][\w\$]*(\.[0-7](_\d+)?)?/) {	# iC variable names
@@ -1930,7 +1931,7 @@ sub tagComments {
 		    $icaLoop = 0;
 		}
 	    }
-	} elsif ($atom =~ m/^(\d*\s*)%\{\s*$/) {
+	} elsif ($atom =~ m/^(\s*\d*\s*)%\{\s*$/) {
 	    $l = length $1; $l = 0 unless $l;
 	    $el = $l + 2;
     StartC: $state = "C";		# "%{" start of C literal block found (may be in function block definition)
@@ -1963,14 +1964,14 @@ sub tagComments {
 		$text->tagAdd('er', $current, $currEnd);
 		$err++;
 	    }
-	} elsif ($atom =~ m/^(\d*\s*)#\s*$/) {
+	} elsif ($atom =~ m/^(\s*\d*\s*)#\s*$/) {
 	    $l = length $1; $l = 0 unless $l;
 	    $pp = $atom;		# lead-in for C pre-processor commands #define etc
 	    $ppC = "$current + $l chars";
 	    print "ppC '$atom' found in iC code\n" if $opt_T;
 	    goto NextAtom;		# do not clear $pp $ppC
 	}
-	if ($atom =~ m/^(\d*\s*)%%?\s*$/) {
+	if ($atom =~ m/^(\s*\d*\s*)%%?\s*$/) {
 	    $l = length $1; $l = 0 unless $l;
 	    $pp = $atom;		# lead-in for iC or iCa pre-processor commands %define %%define etc
 	    $ppI = "$current + $l chars";
@@ -4202,7 +4203,10 @@ use warnings;
 			    $activeSymbols[$index][0] |= $ts; # 01|02 leaves 03 for both
 			    colourTag($tag, $cs);	# initial tag colour
 			}
-			$text->tagAdd($tag, $current, $currEnd);
+			$current =~ m/(\d+)\.(\d+)/;
+			if ($extnName eq "lst" or $2 >= 6) {
+			    $text->tagAdd($tag, $current, $currEnd);
+			}
 		    }
 		    elsif (($cs == 2 or $cs == 6) and	# ARITH or TIMRL
 			    $iw =~ /[\w.]+(\s*\[\s*\d+\s*\])?\s*=$/) {
@@ -4409,6 +4413,40 @@ sub register_now {
     # will call do_scan() if connect was successful via Request S.T and :2 reply
 } # register_now
 
+########################################################################
+#
+#	Get contents from text
+#	If text has line numbers (not .lst) and text has changed, restore
+#	it and update line numbers to take care of changes in the text
+#
+########################################################################
+
+sub getContents {
+    my ($line, $r);
+    my $wholeContents = $text->get("1.0", "end - 1 chars");	# whole text with or without line numbers
+    if ($extnName ne "lst") {
+	if ($wholeContents ne $disContents) {
+	    my @arrayContents = split "\n", $wholeContents;		# text with line numbers has changed
+	    $text->tagDelete('cTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete really slow if not done
+	    $text->delete("1.0", "end");			# clear the text area
+	    $wholeContents = '';
+	    $disContents = '';
+	    my $disLine = 0;
+	    foreach $line (@arrayContents) {
+		$line =~ s/^ +\d+\t//;				# remove line number
+		$wholeContents .= "$line\n";			# contents without line numbers
+		$disContents .= sprintf(" %4d\t%s\n", ++$disLine, $line);
+	    }
+	    $text->insert("end", $disContents);			# restore text with new line numbers
+	    if ($r = tagComments()) {
+		info_display(2000, 'red', "WARNING: $r syntax errors in $fileName$readOnly");
+	    }
+	} else {
+	    return $oldContents;				# text with line numbers has not changed
+	}
+    }
+    return $wholeContents;
+}
 
 ########################################################################
 #
@@ -4432,7 +4470,7 @@ sub register_now {
 
 sub check_save {
     my $par1 = $_[0];
-    my $contents = $text->get("1.0", "end - 1 chars");	# whole text
+    my $contents = getContents();				# whole text
     if ($contents ne $oldContents) {
 	if ($opt_T) {
 	    my $l1 = length $contents;
@@ -4594,23 +4632,32 @@ sub open_file {
 		if ($readOnly) {		# applies to previously opened file
 		    $text->configure(-state => 'normal');	# allow overwriting with new file
 		}
+		$fileName = $fName;	# alter global $fileName
+		$mainWindow->title("$named$u: $fileName$readOnly $runName");
+		my $m = $fileName =~ m/^((([\w\.\$]*[\\\/])*)([\w\.\$]+))\.(\w+)$/;
+		($processName, $pathName, $procName, $extnName) = ($1, $2, $4, $5);	# used globally
 		$readOnly = (-w $fName) ? '' : ' (RO)';	# set new read-only flag correctly; new stat() because of encoding()
 		print "$fName is read-only\n" if $readOnly and $opt_T;
 		$text->tagDelete('cTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete really slow if not done
 		$text->delete("1.0", "end");	# clear the text area
 		$oldContents = '';
+		$disContents = '';
+		my $disLine = 0;
 		while (<FH>) {
 		    $oldContents .= $_;
+		    if ($extnName ne "lst") {
+			$disContents .= sprintf(" %4d\t%s", ++$disLine, $_);
+		    }
 		}
 		close(FH);
 		## read last modified time from new stat now in case it changed since last stat
 		$fileTime = (stat($fName))[9]; $fileTime = 0 unless defined $fileTime;
-		$text->insert("end", $oldContents);
+		if ($extnName ne "lst") {
+		    $text->insert("end", $disContents);
+		} else {
+		    $text->insert("end", $oldContents);
+		}
 		my $length = length $oldContents;
-		$fileName = $fName;	# alter global $fileName
-		$mainWindow->title("$named$u: $fileName$readOnly $runName");
-		my $m = $fileName =~ m/^((([\w\.\$]*[\\\/])*)([\w\.\$]+))\.(\w+)$/;
-		($processName, $pathName, $procName, $extnName) = ($1, $2, $4, $5);	# used globally
 		my $r;
 		if ($r = tagComments()) {
 		    info_display(2000, 'red', "WARNING: $r syntax errors in $fileName$readOnly - not registered");
@@ -4618,7 +4665,7 @@ sub open_file {
 		} else {
 		    info_display(2000, 'black', "File $fileName$readOnly, $length bytes loaded");
 		}
-		if ($m and $extnName =~ m/^(ic|ica|lst6?|c|h|ini)$/) {
+		if ($m and $extnName =~ m/^(i[ch]a?|lst6?|c|h|ini)$/) {
 		    if ($extnName eq "ic") {
 			$menuFile->entryconfigure(4, -label => "$processName.lst");
 		    } elsif ($extnName eq "ica") {
@@ -4688,7 +4735,7 @@ sub save_file {
 	}
 	deleteAllTags();	# also clears @activeSymbols
 	reset_scan(1);		# take away all live text
-	my $contents = $text->get("1.0", "end - 1 chars");
+	my $contents = getContents();				# whole text
 	if ($unconditional or $contents ne $oldContents) {
 	    ## test read-only. then rename to backup if $fileName exists
 	    ## stat was done above
