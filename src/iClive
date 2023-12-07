@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2021  John E. Wulff
+#	Copyright (C) 2000-2023  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -38,6 +38,9 @@ my $t0 = [gettimeofday()];	# start time of program
 my %delayedColour;	# colour that should be restored after a flash
 my $shift_control_state = 0;
 my @argv = ();
+
+my %iniNames = ();
+my %iniProcs = ();
 
 ########################################################################
 #
@@ -240,7 +243,7 @@ if ($LC_CTYPE) {
     $LC_CTYPE = 'utf-8';
 }
 use vars qw($opt_ $opt_T $opt_q $opt_z $opt_S $opt_t $opt_m $opt_d $opt_s $opt_p $opt_i);
-use vars qw($opt_D $opt_F $opt_E $opt_l $opt_w $opt_g $opt_A @opt_L $opt_u $opt_X $opt_h);
+use vars qw($opt_D $opt_F $opt_E $opt_H $opt_W $opt_g $opt_A @opt_L $opt_u $opt_X $opt_h);
 my $ofh = select(STDERR);	# save old file handle
 $= = 1000;			# stop page overflow (default 60 lines)
 select($ofh);			# retore old file handle
@@ -249,7 +252,7 @@ format STDERR =
 Usage:
 @<<<<< [ -umtTqh][ -s <host>][ -p <port>][ -i <inst>][ -D [@]IXy.z]
  $named,							'~'
-       [ -F <font>][ -E <code>][ -l <num>][ -w <num>][ -g <geometry>]
+       [ -F <font>][ -E <code>][ -H <num>][ -W <num>][ -g <geometry>]
        [ -A <cmd>][ -d <deb>][ <file> ...]
        [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     -s host name of server host    (default '127.0.0.1')
@@ -262,10 +265,10 @@ Usage:
     -E code encoding eg. ISO-8859-1 -  (locale value is @<<<<<<<<<)
 							     $LC_CTYPE
     -u      use edit undo facility (not recommended if using Live display)
-    -l num  height of the Text window (default @<<)
-					$opt_l
-    -w num  width  of the Text window (default @<<) -w0 is terminal width
-					$opt_w
+    -H num  height of the Text window (default @<<)
+					$opt_H
+    -W num  width  of the Text window (default @<<) -w0 is terminal width
+					$opt_W
     -g geom geometry for main window
     -S server +options+equivalences  (default 'iCserver -k -A iCbox')
     -A cmd  use <cmd> to autovivify I/O clients (default 'iCbox')
@@ -273,6 +276,20 @@ Usage:
 					  $named
                       BUILD option
     -L<lx>  link extra library(s) eg -L lm -L rt or -L lm,lrt
+    file ... one or more space separated iC source files or comma
+            separated groups if files. The first will be opened.
+            The rest will be stored in the File menu for later.
+            A comma separated group of files will be stored as a
+            cascade in the File menu. The cascade group will be used
+            to build one iC app from several files. If the first file
+            has no .ic or .ica extension it is the run name of the app
+            to be built and run. Otherwise the base name of the first
+             (usually .ic file) is used as the run name.
+            All other files in the comma separated list must be either
+            .ic or .ica files to build the app.
+            Any .ih %include or .iha %%include files in the nominated
+            iC or iCa files will be automatically included in the
+            cascade menu as relevant sources.
                       DEBUG options
     -d deb  extra debug options (see iC-application -h)
     -d  40  output symbol table received in Live mode
@@ -281,8 +298,6 @@ Usage:
     -T      trace output static debug messages
     -q      quiet - do not report apps connecting and disconnecting
     -h      help, ouput this Usage text only
-    file ... one or more iC source files. The first will be opened. The
-            rest will be stored in the File menu for later selection.
                       AUXILIARY app
     -R <app ...> run auxiliary app followed by -z and its arguments
                  as a separate process; -R ... must be last arguments.
@@ -338,8 +353,8 @@ Usage:
                 goes to the line entered in the Search Entry window
        <>Word   match   (default - useful for finding variables)
        <>Exact  match   (search string matches anywhere in a word)
-       <>Regexp match	(full Perl regular expression search)
-       []Ignore case	(in any of the search modes)
+       <>Regexp match   (full Perl regular expression search)
+       []Ignore case    (in any of the search modes)
        -------- this is followed by a history of previous search
                 strings, which can be selected for a repeat search.
 
@@ -353,9 +368,9 @@ Usage:
     [Help]      Display the @<<<<< man page.                      Alt-h
 			    $named
 
-Copyright (C) 2000-2021  John E. Wulff          <immediateC@gmail.com>
+Copyright (C) 2000-2023  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.99 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.100 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -423,8 +438,8 @@ GetOptions (
     'D=s' => \$opt_D,
     'F=s' => \$opt_F,
     'E=s' => \$opt_E,
-    'l=i' => \$opt_l,
-    'w=i' => \$opt_w,
+    'H=i' => \$opt_H,
+    'W=i' => \$opt_W,
     'g=s' => \$opt_g,
     'A=s' => \$opt_A,
     'L=s' => \@opt_L,
@@ -441,13 +456,13 @@ my $size = `stty size`;
 chomp $size;
 my @sizes = $size ? split ' ', $size : (35, 85);
 print "size = '$size'\n" if $opt_T;
-$opt_l = $sizes[0] unless $opt_l;	# if any higher than 35 on 768 pixel high screen, status bar is hidden
-$opt_w = $sizes[1] if defined $opt_w and $opt_w == 0;	# adjust to terminal width
+$opt_H = $sizes[0] unless $opt_H;	# if any higher than 35 on 768 pixel high screen, status bar is hidden
+$opt_W = $sizes[1] if defined $opt_W and $opt_W == 0;	# adjust to terminal width
 					# @sizes made the same as terminal size because on Debian systems 'man'
 					# generates man pages the full width of the terminal (jw 20130829)
-$opt_w = 85 unless $opt_w;		# 85 just allows all buttons to fit in the top menu bar (this wide anyway)
+$opt_W = 85 unless $opt_W;		# 85 just allows all buttons to fit in the top menu bar (this wide anyway)
 					# also gives a bit more room for oversize texts
-print "opt_l = '$opt_l' opt_w = '$opt_w'\n" if $opt_T;
+print "opt_H = '$opt_H' opt_W = '$opt_W'\n" if $opt_T;
 if ($opt_h) {
     write STDERR; exit;			# -h, ouput Usage only
 }
@@ -548,10 +563,14 @@ my $processName = '';	# full name of runnable iC control program with path
 my $pathName = '';	# full path of runnable iC control program
 my $extnName = '';	# extension of current iC or iCa program or derivative
 my $procName = '';	# name of runnable iC control program without path
+my $cascName = '';	# name of menu cascade if that is selected
+my $cName = '';		# temporary name of menu cascade if that is selected
 my $instName = '';	# name of runnable iC control program with instance extension
 my $regName  = '';
 my $runName  = '';	# name with extension of running iC control program showing window text
 my %runNames = ();	# names with extensions of all iC control prograns currently running
+my $makeName = '';
+my $restartFlag = 0;
 my $C_channel = 0;	# receiver channel from control program
 my $D_channel = 0;	# sender channel to control program
 my $B_channel = 0;	# sender channel for optional Debug Stop signal
@@ -559,6 +578,7 @@ my $searchText = '';
 my $breakText = '';
 my $break     = 0;
 my $oldContents = '';
+my $newContents = '';
 my $disContents = '';
 my $unknown = 'unknown.ic';
 
@@ -758,8 +778,6 @@ $menuBuild->command(-label       => 'iCserver Client Tables',		#7
 $menuBuild->command(-label       => 'Stop iCserver and all iC apps',	# 8
 		    -command     => sub { conn_send_now('X') if $conn; });
 
-my $makeName = '';
-my $restartFlag = 0;
 
 ########################################################################
 #	Run or Stop button
@@ -1167,8 +1185,8 @@ if ($opt_u) {
 				    )->pack(-fill => 'both', -expand => 1);
 }
 unless ($opt_g) {
-    $text->configure (-width  => $opt_w);
-    $text->configure (-height => $opt_l);
+    $text->configure (-width  => $opt_W);
+    $text->configure (-height => $opt_H);
 }
 
 my $yScrollbar = $text->Subwidget('yscrollbar');
@@ -1197,8 +1215,8 @@ $entrySearch->bind('<Alt-Key-h>',		[ \&fork_help             ]); # active in Liv
 ####### X-Movement bindings #### Y-Movement used by Entry #############
 $entrySearch->bind('<Key-Down>',		[ \&scroll_text, 1        ]); # scroll down
 $entrySearch->bind('<Key-Up>',			[ \&scroll_text, -1       ]); # scroll up
-$entrySearch->bind('<Key-Next>',		[ \&scroll_text, $opt_l-2 ]); # next page
-$entrySearch->bind('<Key-Prior>',		[ \&scroll_text, -$opt_l+2]); # prior page
+$entrySearch->bind('<Key-Next>',		[ \&scroll_text, $opt_H-2 ]); # next page
+$entrySearch->bind('<Key-Prior>',		[ \&scroll_text, -$opt_H+2]); # prior page
 $entrySearch->bind('<Alt-Key-plus>',		[ \&change_font, 2        ]); # increase font
 $entrySearch->bind('<Alt-Key-minus>',		[ \&change_font, -2       ]); # decrease font
 ####### Text window bindings ###########################################
@@ -1242,8 +1260,8 @@ $xScrollbar->bind('<KeyPress>',			[ \&set_shift_control     ]); # Set Shift/Cont
 $xScrollbar->bind('<KeyRelease>',		[ \&reset_shift_control   ]); # Reset Shift/Control state
 $xScrollbar->bind('<Key-Down>',			[ \&scroll_text, 1        ]); # scroll down
 $xScrollbar->bind('<Key-Up>',			[ \&scroll_text, -1       ]); # scroll up
-$xScrollbar->bind('<Key-Next>',			[ \&scroll_text, $opt_l-2 ]); # next page
-$xScrollbar->bind('<Key-Prior>',		[ \&scroll_text, -$opt_l+2]); # prior page
+$xScrollbar->bind('<Key-Next>',			[ \&scroll_text, $opt_H-2 ]); # next page
+$xScrollbar->bind('<Key-Prior>',		[ \&scroll_text, -$opt_H+2]); # prior page
 $xScrollbar->bind('<Key-Home>',			[ \&position_text, '1.0'  ]); # beginning
 $xScrollbar->bind('<Key-End>',			[ \&position_text, 'end'  ]); # end
 $xScrollbar->bind('<ButtonRelease>',		[ \&adjust_live           ]);
@@ -3699,7 +3717,7 @@ sub SearchCancel {
 sub search_text {
     my ($buttonFlag, $newSearchText, $direction) = @_;
 no warnings;
-    print "search_text: \$buttonFlag = '$buttonFlag' \$searchText = '$searchText'\n" if $opt_T;
+    print "search_text: \$buttonFlag = '$buttonFlag' \$newSearchText = '$newSearchText' direction = '$direction'\n" if $opt_T;
 use warnings;
     unless ($buttonFlag) {
 	SearchCancel();				# do this first - no delays yet
@@ -4139,17 +4157,6 @@ sub do_scan {
 		return 0;
 	    }
 	}
-	if ($fileName !~ /\b$procName\./) {
-	    info_display(2000, 'red',
-		"WARNING: '$fileName$readOnly' does not match connected control program '$runName'");
-	    $scanFlag = 0;
-	    $liveButton->configure(-text => 'Live');	# no live words scanned yet
-	    $prevText = '';				# start a new search
-	    $gl = 0;
-	    tagDeleteRestore_searchTag();
-	    $debugMenu->entryconfigure(0, -state => 'disabled');	# Debug
-	    return;
-	}
 	$text->configure(-state => 'normal');
 	$current = '1.0' unless defined $current;
 	$last    = 'end' unless defined $last;
@@ -4424,28 +4431,30 @@ sub register_now {
 sub getContents {
     my ($line, $r);
     my $wholeContents = $text->get("1.0", "end - 1 chars");	# whole text with or without line numbers
-    if ($extnName ne "lst") {
-	if ($wholeContents ne $disContents) {
-	    my @arrayContents = split "\n", $wholeContents;		# text with line numbers has changed
-	    $text->tagDelete('cTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete really slow if not done
-	    $text->delete("1.0", "end");			# clear the text area
-	    $wholeContents = '';
-	    $disContents = '';
-	    my $disLine = 0;
-	    foreach $line (@arrayContents) {
-		$line =~ s/^ +\d+\t//;				# remove line number
-		$wholeContents .= "$line\n";			# contents without line numbers
-		$disContents .= sprintf(" %4d\t%s\n", ++$disLine, $line);
-	    }
-	    $text->insert("end", $disContents);			# restore text with new line numbers
-	    if ($r = tagComments()) {
-		info_display(2000, 'red', "WARNING: $r syntax errors in $fileName$readOnly");
-	    }
-	} else {
-	    return $oldContents;				# text with line numbers has not changed
+    if ($extnName eq "lst") {
+	return $wholeContents;					# whole text for listing
+    }
+    if ($wholeContents ne $disContents) {
+	my @arrayContents = split "\n", $wholeContents;		# text with line numbers has changed
+print "getContents: text has changed \@arrayContents\n@arrayContents\n";
+	$text->tagDelete('cTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete really slow if not done
+	$text->delete("1.0", "end");			# clear the text area
+	$newContents = '';
+	$disContents = '';
+	my $disLine = 0;
+	foreach $line (@arrayContents) {
+print "<$line\n";
+	    $line =~ s/^ +\d+\t//;				# remove line number
+print ">$line\n";
+	    $newContents .= "$line\n";			# contents without line numbers
+	    $disContents .= sprintf(" %4d\t%s\n", ++$disLine, $line);
+	}
+	$text->insert("end", $disContents);			# restore text with new line numbers
+	if ($r = tagComments()) {
+	    info_display(2000, 'red', "WARNING: $r syntax errors in $fileName$readOnly");
 	}
     }
-    return $wholeContents;
+    return $newContents;		# $newContents does not change if $disContents has not changed
 }
 
 ########################################################################
@@ -4491,7 +4500,7 @@ sub check_save {
 	    return 0;			# Cancel operation
 	}
     } else {
-	return 1;
+	return 1;			# contents have not changed
     }
 } # check_save
 
@@ -4511,7 +4520,7 @@ sub new_text {
 	}
 	$text->tagDelete('cTag', 'CTag', 'icaTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete all special tags
 	$text->delete("1.0", "end");
-	$oldContents = '';
+	$newContents = $disContents = $oldContents = '';
 	$fileName = $unknown;
 	$mainWindow->title("$named$u: $fileName$readOnly $runName");
     }
@@ -4551,7 +4560,7 @@ sub open_list {
 	    open_file(1, "$1.lst");
 	} elsif ($4 eq "ica") {
 	    open_file(1, "$1.ic");
-	} elsif (-w "$1.ica") {
+	} elsif (-w "$1.ica") {		# now at .lst
 	    open_file(0, "$1.ica");
 	} else {
 	    open_file(0, "$1.ic");	# $1.lst not saved, since generated and RO
@@ -4587,6 +4596,11 @@ sub open_file {
     my ($conditional, $fName) = @_;	# optional parameters
     $conditional = 0 unless $conditional;	# stops trace errors
     print "open_file: \$conditional = '$conditional' \$fName = '$fName'\n" if $opt_T;
+    if ($conditional == 3 and $cName) {
+	$cascName = $cName;		# cascade menu selected
+    } elsif ($conditional == 2) {
+	$cascName = '';			# non-cascade menu selected
+    }					# else do not change $cascName, $procName, $processName
     my $ci = 0;
     my $no = 0;
     if ($scanFlag) {
@@ -4594,7 +4608,7 @@ sub open_file {
 	reset_scan(1);			# $text -state now 'normal' for reading file
 	$scanFlag = 1;			# restore $scanFlag
     }
-    if (not $conditional or check_save()) {
+    if (not $conditional or check_save() or ($cascName !~ m/$processName/)) {
 	unless (defined $fName and $fName ne '') {
 	    $fName = $mainWindow->getOpenFile(-filetypes => $fileTypes);
 	    unless (defined $fName and $fName ne '') {
@@ -4605,7 +4619,7 @@ sub open_file {
 	    $fName =~ s#^C:/cygwin## or $fName =~ s#^([A-Z]):#/cygdrive/\l$1#;
 	    $fName =~ s#^$cwd/##;
 	}
-	if (not $conditional or $fName ne $fileName) {
+	if (not $conditional or $fName ne $fileName or ($cascName !~ m/$processName/)) {
 	    print "open_file: $conditional $fName\n" if $opt_T;
 	    my $rName = $runName;
 	    $rName =~ s/-\d+//;		# check without instance number
@@ -4633,31 +4647,46 @@ sub open_file {
 		    $text->configure(-state => 'normal');	# allow overwriting with new file
 		}
 		$fileName = $fName;	# alter global $fileName
-		$mainWindow->title("$named$u: $fileName$readOnly $runName");
+		########################################################################
+		#  Set global $processName, $pathName, $procName and $extName here using
+		#  $cascName if it is set.
+		#  They are used in run_file() and build_file()
+		#  Only other change is in saveAs_file() when $fileName is changed.
+		########################################################################
 		my $m = $fileName =~ m/^((([\w\.\$]*[\\\/])*)([\w\.\$]+))\.(\w+)$/;
 		($processName, $pathName, $procName, $extnName) = ($1, $2, $4, $5);	# used globally
-		$readOnly = (-w $fName) ? '' : ' (RO)';	# set new read-only flag correctly; new stat() because of encoding()
-		print "$fName is read-only\n" if $readOnly and $opt_T;
+		my $baseName = $procName;	# for diplay switching
+		if ($cascName =~ m/^(([\w\.\$]*[\\\/])*([\w\.\$]+))$/) {
+		    ($processName, $pathName, $procName) = ($1, $2, $3);
+		}
+		if ($processName eq $procName) {
+		    $processName = "./$procName";	# in case . is not in $PATH
+		    $pathName    = "";
+		}
+		$readOnly = (-w $fileName) ? '' : ' (RO)';	# set new read-only flag correctly; new stat() because of encoding()
+		print "$fileName is read-only\n" if $readOnly and $opt_T;
+		$mainWindow->title("$named$u: $fileName$readOnly $runName");
 		$text->tagDelete('cTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete really slow if not done
 		$text->delete("1.0", "end");	# clear the text area
-		$oldContents = '';
+		$newContents = '';
 		$disContents = '';
 		my $disLine = 0;
 		while (<FH>) {
-		    $oldContents .= $_;
+		    $newContents .= $_;
 		    if ($extnName ne "lst") {
 			$disContents .= sprintf(" %4d\t%s", ++$disLine, $_);
 		    }
 		}
 		close(FH);
 		## read last modified time from new stat now in case it changed since last stat
-		$fileTime = (stat($fName))[9]; $fileTime = 0 unless defined $fileTime;
+		$fileTime = (stat($fileName))[9]; $fileTime = 0 unless defined $fileTime;
 		if ($extnName ne "lst") {
 		    $text->insert("end", $disContents);
 		} else {
-		    $text->insert("end", $oldContents);
+		    $text->insert("end", $newContents);
 		}
-		my $length = length $oldContents;
+		my $length = length $newContents;
+		$oldContents = $newContents;
 		my $r;
 		if ($r = tagComments()) {
 		    info_display(2000, 'red', "WARNING: $r syntax errors in $fileName$readOnly - not registered");
@@ -4667,13 +4696,13 @@ sub open_file {
 		}
 		if ($m and $extnName =~ m/^(i[ch]a?|lst6?|c|h|ini)$/) {
 		    if ($extnName eq "ic") {
-			$menuFile->entryconfigure(4, -label => "$processName.lst");
+			$menuFile->entryconfigure(4, -label => "$baseName.lst");
 		    } elsif ($extnName eq "ica") {
-			$menuFile->entryconfigure(4, -label => "$processName.ic");
-		    } elsif (-w "$processName.ica") {
-			$menuFile->entryconfigure(4, -label => "$processName.ica");
+			$menuFile->entryconfigure(4, -label => "$baseName.ic");
+		    } elsif (-w "$baseName.ica") {
+			$menuFile->entryconfigure(4, -label => "$baseName.ica");
 		    } else {
-			$menuFile->entryconfigure(4, -label => "$processName.ic");
+			$menuFile->entryconfigure(4, -label => "$baseName.ic");
 		    }
 		    check_menu($fileName, 'files');		# save files with known extensions in file menu
 		    unless ($no) {
@@ -4723,7 +4752,9 @@ sub save_file {
     if (defined $fileName and $fileName ne $unknown and $fileName ne '') {
 	my ($unconditional) = $_[1];	# optional 2nd parameter
 	my $ftime = (stat($fileName))[9]; $ftime = $fileTime unless defined $ftime;
+	########################################################################
 	## allow non existing file to be written by setting to $fileTime if undef
+	########################################################################
 	if ($ftime != $fileTime) {
 	    info_display(2000, 'red', "'$fileName$readOnly' modified in background");
 	    my $answer = askYesNo('Modified since reading file', 'Save to modified file?', \$fileName);
@@ -4735,10 +4766,12 @@ sub save_file {
 	}
 	deleteAllTags();	# also clears @activeSymbols
 	reset_scan(1);		# take away all live text
-	my $contents = getContents();				# whole text
+	my $contents = getContents();				# whole text without line numbers
 	if ($unconditional or $contents ne $oldContents) {
+	    ########################################################################
 	    ## test read-only. then rename to backup if $fileName exists
 	    ## stat was done above
+	    ########################################################################
 	    if (-f _ and not -w _) {
 		info_display(2000, 'red', "ERROR: Could not save read-only file '$fileName$readOnly'");
 		$ret = 0;	# error return
@@ -4760,7 +4793,6 @@ sub save_file {
 		$fileTime = (stat($fileName))[9]; $fileTime = 0 unless defined $fileTime;
 		$mainWindow->title("$named$u: $fileName$readOnly $runName");
 		info_display(2000, 'black', "File $fileName$readOnly, $length bytes saved (backup $fileName.bak)");
-		check_menu($fileName, 'files');
 	    } else {
 		info_display(2000, 'red', "ERROR: Could not open '$fileName$readOnly' for writing");
 		$ret = 0;	# error return
@@ -4803,14 +4835,41 @@ sub saveAs_file {
 	    $mainWindow->title("$named$u: $fileName$readOnly $runName");
 	    $ret = 0;
 	} elsif ($fileName ne $oldName) {
+	    ########################################################################
+	    #  Set global $processName, $pathName, $procName and $extName here using
+	    #  $cascName if it is set.
+	    #  They are used in run_file() and build_file()
+	    #  Only other change is in saveAs_file() when $fileName is changed.
+	    ########################################################################
 	    my $m = $fileName =~ m/^((([\w\.\$]*[\\\/])*)([\w\.\$]+))\.(\w+)$/;
 	    ($processName, $pathName, $procName, $extnName) = ($1, $2, $4, $5);	# used globally
-	    if ($m and $extnName =~ m/^(ic|ica|lst6?|c|h|ini)$/) {
-		$instanceText = $instance = '';		# reset instance
-		$instName = $procName;
-		change_instance();
+	    my $baseName = $procName;	# for display switching
+	    $cascName = '';			# new file name
+	    if ($processName eq $procName) {
+		$processName = "./$procName";	# in case . is not in $PATH
+		$pathName    = "";
 	    }
-	    $prevText = '';				# start a new search
+print "saveAs_file: fileName = '$fileName$readOnly' cascName = '$cascName' pathName = '$pathName' procName = '$procName' processName = '$processName'\n";
+	    $mainWindow->title("$named$u: $fileName$readOnly $runName");
+	    if ($m and $extnName =~ m/^(i[ch]a?|lst6?|c|h|ini)$/) {
+		if ($extnName eq "ic") {
+		    $menuFile->entryconfigure(4, -label => "$baseName.lst");
+		} elsif ($extnName eq "ica") {
+		    $menuFile->entryconfigure(4, -label => "$baseName.ic");
+		} elsif (-w "$baseName.ica") {
+		    $menuFile->entryconfigure(4, -label => "$baseName.ica");
+		} else {
+		    $menuFile->entryconfigure(4, -label => "$baseName.ic");
+		}
+		check_menu($fileName, 'files');		# save files with known extensions in file menu
+		my $no = 0;
+		unless ($no) {
+		    $instName = "$procName$instanceText";	# previous executable was stopped or is compatible
+		    change_instance();
+		    adjust_live(-1, -1);
+		}
+	    }
+	    $prevText = '';					# start a new search
 	    $gl = 0;
 	    tagDeleteRestore_searchTag();
 	}
@@ -4843,7 +4902,7 @@ sub build_file {
     } else {
 	my $baseName = $1;
 	my $buildName = "$fileName$readOnly";	# $fileName will change in open_file() if error
-	my $targetName = $par2 == 2 ? "$baseName.c" : $baseName;
+	my $targetName = $par2 == 2 ? "$baseName.c" : $cascName ? $procName : $baseName;
 	deleteAllTags();		# also clears @activeSymbols
 	reset_scan(1);			# must be done before save_file, because live expands text
 	if ($par2 == 1) {
@@ -4859,16 +4918,34 @@ sub build_file {
 	    if ($par2 == 1 or $mtime < $ftime) {
 		## system() requires signal CHLD to notify completion
 		$SIG{CHLD} = 'DEFAULT';
-		my @args = ("iCmake", "-fsAd200", $fileName, "2>&1");	# -A useful for live display
-		if ($par2 == 2) {		# link with static (debug) library - generate // x =
-		    splice(@args, 1, 0, '-b');	# iCmake -b to suppress making executable
-		} else {
-		    my $lib;
-		    my $i = 1;
-		    foreach $lib (@opt_L) {
-			splice(@args, $i, 0, '-L', $lib);	# add BUILD library options
-			$i += 2;
+		my @args = ("iCmake", "-fsd200");
+		if ($par2 == 2) {
+		    push(@args, '-b');		# iCmake -b to suppress making executable
+		}
+		my $i = 0;
+		if ($cascName) {
+		    push(@args, '-o', $processName);
+		    foreach my $file (@{ $iniNames{$cascName} }) {
+			if ($file =~ m/\.ica?$/) {
+			    push(@args, $file);
+			    $i++;
+			}
 		    }
+		} else {
+		    push(@args, "-A", $fileName);
+		    $i++;
+		}
+		if ($par2 != 2) {		# link with static (debug) library - generate // x =
+		    my $lib;
+		    foreach $lib (@opt_L) {
+			push(@args, '-L', $lib);	# add BUILD library options
+		    }
+		}
+		push(@args, "2>&1");
+		unless ($i) {
+		    print STDERR "Error: nothing to build with @args\n";
+		    info_display(2000, 'red', "nothing to build with @args");
+		    return;
 		}
 		print STDERR "\$ @args\n" unless $opt_q;
 		my @errText = qx(@args);	# execute iCmake ...
@@ -4879,8 +4956,11 @@ sub build_file {
 		print STDERR @errText;
 		$SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
 		if ($ret or $gr) {
-		    select undef, undef, undef, 2;
-		    # iCmake += 20 for immac errors : += 1 for immcc errors
+		    select undef, undef, undef, 2;	# sleep for 2 seconds
+		    ########################################################################
+		    #  show errors in generated .ic file (immac) or .lst file (immcc)
+		    #  iCmake += 20 for immac errors : += 1 for immcc errors
+		    ########################################################################
 		    my $listName = $ret >= 20 ? "$baseName.ic" : "$baseName.lst";
 		    open_file(0, $listName);	# load the generated file (iC is up to date)
 		    $searchText = '^\*\*\* ';	# regular expression to find errors in listing
@@ -4904,7 +4984,7 @@ sub build_file {
 			warn "WARNING: '$targetName' $build_warnings\n";
 			$build_warnings .= " after pressing Alt-l";
 		    } else {
-			$build_warnings = "successfully built";
+			$build_warnings = "sucessfully built";
 		    }
 		    info_display(2000, 'dark green', "'$targetName' $build_warnings");
 		}
@@ -5061,15 +5141,7 @@ sub run_file {
     if ($runName ne '') {
 	## running - stop application
 	stop_file();
-    } elsif ($m = $fileName =~ m/^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(\w+)$/,
-	    ($processName, $procName, $extnName) = ($1, $3, $4),	# used globally
-	    ! $m or $extnName !~ m/^(ic|ica|lst6?|c|h|ini)$/) {
-	info_display(2000, 'blue', "WARNING: cannot run '$fileName$readOnly' (must end in .ic .ica .lst .lst6 .c .h or .ini)");
     } elsif ($extnName ne 'ic' or check_save()) {
-	if ($processName eq $procName) {
-	    $processName = "./$procName";	# in case . is not in $PATH
-	    $pathName    = "";
-	}
 	deleteAllTags();		# also clears @activeSymbols
 	clear_scan(1);
 	print "run_file: $processName from $fileName\n" if $opt_T;
@@ -5157,6 +5229,91 @@ sub change_instance {
 
 ########################################################################
 #
+#	Auxiliary subroutine for splitFiles() to push $fileName and $procName
+#	This routine avoids pushing duplicate names.
+#
+########################################################################
+
+sub pushNamesProcs {
+    my ($fName, $pName) = @_;
+    if (-w $fName) {
+	foreach my $file (@{ $iniNames{$pName} }) {
+	    goto fileFound if $file eq $fName;	# don't push $fName twice
+	}
+	push @{ $iniNames{$pName} }, $fName;
+      fileFound:
+	foreach my $proc (@{ $iniProcs{$fName} }) {
+	    goto procFound if $proc eq $pName;	# don't push $pName twice
+	}
+	push @{ $iniProcs{$fName} }, $pName;
+      procFound:;
+    } else {
+	$fName = '';		# not for menu
+    }
+    return $fName;
+} # pushNamesProcs
+
+########################################################################
+#
+#	splitFiles() breaks up comma separated lists of process and filenames
+#	and builds the hashes %$iniNames and %iniProcs used later to
+#	populate the file menu and check file dependencies.
+#
+########################################################################
+
+sub splitFiles {
+no warnings;
+    my ($fileList) = @_;
+    my ($pName, $fName);
+    my $fileName = '';
+    my ($word, $rest) = split /,/, $fileList, 2;
+    if ($word =~ m/^(\w+)(\.ica?)?$/) {
+	$pName = $1;
+	if ($2) {
+	    $fileName = $word;		# word ends in .ic or .ica
+	} elsif (not $rest) {
+	    my $firstName = ${ $iniNames{$pName} }[0];
+	    if ($firstName) {
+		$fileName = $firstName;
+	    } else {
+		$fileName = "$pName.ic";
+	    }
+	}
+	if ($fileName) {
+	    $fileName = pushNamesProcs($fileName, $pName);
+	}
+	if ($rest) {
+	    foreach $fName (split /,/, $rest) {
+		if ($fName =~ m/^\w+\.i[ch]a?$/) {
+		    pushNamesProcs($fName, $pName);
+		} else {
+		    print STDERR "Error: '$fName' not an iC or iCa filename\n";
+		    $fileName = $fName;
+		}
+	    }
+	}
+	if ($opt_T) {
+	    print "splitFiles: iniNames\n";
+	    foreach my $pN (keys %iniNames) {
+		print "    $pN: @{ $iniNames{$pN} }\n";
+	    }
+	    print "splitFiles: iniProcs\n";
+	    foreach my $fN (keys %iniProcs) {
+		print "    $fN: @{ $iniProcs{$fN} }\n";
+	    }
+	}
+	unless ($fileName) {
+	    $fileName = ${ $iniNames{$pName} }[0]	# first file name in iniNames for this proc
+	}
+    } else {
+	print STDERR "Error: '$word' not an iC or iCa filename or process name\n";
+    }
+    return ($fileName, $pName);
+use warnings;
+} # splitFiles
+
+########################################################################
+#
 #	check_menu (newEntry, menuKey[, delete])
 #	Enter a new value into a particular menu
 #	    iniMenuData{menuKey} ==> [
@@ -5189,11 +5346,38 @@ sub check_menu {
     my ($newEntry, $menuKey, $delete) = @_;
     my $menuData = $iniMenuData{$menuKey};
     my ($menuRef, $entriesArray, $menuPos, $entriesLim, $commandRef) = @$menuData;
+    my ($firstName, $baseName, $pName);
 
+    if ($menuKey eq 'files') {
+	########################################################################
+	#  Reconstitute $newEntry
+	########################################################################
+	if ($cascName) {
+	    $newEntry = $baseName = $cascName;
+	} else {
+	    ($firstName, $pName) = splitFiles($newEntry);
+	    if ($firstName) {
+		if ($firstName =~ m/^(\w+)\.ica?$/) {
+		    $baseName = $1;		# base name
+		    if ($pName eq $baseName and scalar @{ $iniNames{$pName} } == 1) {
+			$newEntry = $firstName;	# non-cascade menu entry
+			if (scalar @{ $iniProcs{$newEntry} } > 1 and not -w $pName) {
+			    $delete = 1;	# delete iC file used in another cascase group and not built
+			}
+			$baseName = '';
+		    } else {
+			$newEntry = $pName;
+		    }
+		}
+	    } else {
+		return;			# no menu entry for this file
+	    }
+	}
+    }
     my $e;
     my $n = 0;
     foreach $e (@$entriesArray) {
-	if ($e eq $newEntry) {			# find newEntry in entriesArray
+	if ($e and $e eq $newEntry) {		# find newEntry in entriesArray
 	    $e = splice(@$entriesArray, $n, 1);	# remove from middle of entriesArray
 	    die "entry '$e' in entriesArray does not match call parameter '$newEntry', stopped" if $e ne $newEntry;
 	    my $label = $menuRef->entrycget($menuPos+$n, '-label');	# check algorithm
@@ -5204,27 +5388,31 @@ sub check_menu {
 	}
 	$n++;
     }
-    push(@$entriesArray, $newEntry) unless $delete;	# add to end of entriesArray
-
-    if ($opt_T) {
-	if ($delete) {
-	    print "check_menu: [$menuKey] '$newEntry' deleted\n";
-	} else {
-	    print "check_menu: [$menuKey] '$newEntry' added\n";
-	}
-    }
-    if ($menuRef and not $delete) {		# menu for 'file' and 'searches' not 'last open file'
-	if ($commandRef) {
-	    print "check_menu: \$menuRef=$menuRef ->command(-label=>'$newEntry',-command=>['$commandRef',2,'$newEntry',0]\n" if $opt_T;
-	    $menuRef->command(-label   => "$newEntry",	# must use local $newEntry below
-			      -command => [ $commandRef, 2, $newEntry, 0 ]); # define 0 (down for search)
-	}
-	if (scalar @$entriesArray > $entriesLim) {
-	    $e = shift(@$entriesArray);		# remove first entry in entriesArray
-#	    my $label = $menuRef->entrycget($menuPos, '-label');	# check algorithm
-#	    die "entry '$e' in entriesArray does not match menu entry '$label', stopped" if $e ne $label;
-	    print "check_menu: [$menuKey] '$e' removed from front of menu\n" if $opt_T;
-	    $menuRef->delete($menuPos);		# remove first dynamic menu entry
+    if ($delete) {
+	print "check_menu: [$menuKey] '$newEntry' deleted\n" if $opt_T;
+    } else {
+	print "check_menu: [$menuKey] '$newEntry' added\n" if $opt_T;
+	push(@$entriesArray, $newEntry);	# add to end of entriesArray unless deleted
+	if ($menuRef and $commandRef) {		# menu for 'file' and 'searches' not 'last open file'
+	    if ($baseName) {
+		my $cascade = $menuRef->cascade(-label   => "$newEntry",
+					        -tearoff => 0,
+						-postcommand => sub {
+						    $cName = $newEntry;
+						});
+		foreach my $fName (@{ $iniNames{$newEntry} }) {
+		    $cascade->command(-label   => "$fName",	# open(file(3, $fName) uses i$cascName = $cName
+				      -command => [ $commandRef, 3, $fName ]);	# open_file(3, $fName) only
+		}
+	    } else {				# also $menuKey ne 'files'
+		$menuRef->command(-label   => "$newEntry",	# open(file(2, newEntry) resets $cascName = ''
+				  -command => [ $commandRef, 2, $newEntry, 0 ]); # 0 down for search_text_text()
+	    }
+	    if (scalar @$entriesArray > $entriesLim) {
+		$e = shift(@$entriesArray);	# remove first entry in entriesArray
+		print "check_menu: [$menuKey] '$e' removed from front of menu\n" if $opt_T;
+		$menuRef->delete($menuPos);	# remove first dynamic menu entry
+	    }
 	}
     }
 } # check_menu
@@ -5239,8 +5427,9 @@ sub check_menu {
 #
 #	structure of ~/.iC/iClive.ini
 #	[files]
-#		sort5.ic
-#		sort5.lst
+#		sort5.ic		# build sort5 with iCmake -sA sort5.ic
+#		sort sort6.ic timer.ic	# build sort with iCmake -o sort -l sort6.ic timer.ic
+#		sort7.ic sort7.lst	# when viewing listing file, add it to the group
 #		/tmp/trial.ic
 #	[last open file]
 #		sort5.ic		# last open file
@@ -5268,7 +5457,7 @@ sub check_menu {
 ########################################################################
 
 sub ini_program {
-    my ($menuData, $menuKey, $entry, $initialFile, $position, $home);
+    my ($menuData, $menuKey, $entry, $initialFile, $position, $home, $fName, $pName);
     ## restore file and search menu lists from ~/.iC/iClive.ini
     if (($home = $ENV{HOME}) ne '' and
 	(-d "$home/.iC") and
@@ -5287,7 +5476,7 @@ sub ini_program {
 	close(INI);
     }	# ignore if ~/.iC/iClive.ini cannot be opened or found
     $initialFile = shift @argv;			# ARGV may be empty
-    unless (defined $initialFile and $initialFile ne '') {
+    unless ($initialFile and $initialFile ne '') {
 	($initialFile, $position, $entry) = @lastFile;
 	if (not defined $entry and defined $position and $position =~ /^\d+$/) {
 	    $entry = $position;
@@ -5295,22 +5484,57 @@ sub ini_program {
 	if (defined $position and $position !~ /^\d+\.\d+$/) {
 	    $position = undef;
 	}
+    }
 no warnings;
-	print "initialFile = '$initialFile' position = '$position' instance '$entry'\n" if $opt_T;
+    print "initialFile = '$initialFile' position = '$position' instance '$entry'\n" if $opt_T;
 use warnings;
-	if (defined $initialFile and not defined $opt_i) {
-	    $instance = $entry;
-	    if (defined $instance and $instance ne '') {
-		$instanceText = "-$instance";
-		if ($instance !~ /^[0-9]$/) {
-		    push @instanceOptions, [$instanceText, $instance];
-		    $menuInst->configure(-options => \@instanceOptions);
-		}
+    if (defined $initialFile and not defined $opt_i) {
+	$instance = $entry;
+	if (defined $instance and $instance ne '') {
+	    $instanceText = "-$instance";
+	    if ($instance !~ /^[0-9]$/) {
+		push @instanceOptions, [$instanceText, $instance];
+		$menuInst->configure(-options => \@instanceOptions);
 	    }
 	}
     }
+    foreach $fName (@argv) {
+	check_menu($fName, 'files');		# remaining command line arguments
+    }
+    ########################################################################
+    #  When all arguments have been processed, scan all source files in
+    #  %iniProcs for %include "xxx.ih" in .ic files
+    #  and %%include "yyy.iha" in .ica files.
+    #  Push any xxx.ih or yyy.iha to all $iniNames{$procs} for all
+    #  $procs = $iniProcs{$fileName} just scanned and push
+    #  same array $iniProcs{$fileName} for each include file name found.
+    ################ma########################################################
+    foreach $fName (keys %iniProcs) {
+	if (-f $fName and
+	    open(INI, $fName)) {
+	    while (<INI>) {
+		chomp;
+		if (m/^\s*%%?include\s+"(\w+\.iha?)"/) {
+		    foreach $pName (@{ $iniProcs{$fName} }) {
+			pushNamesProcs($1, $pName);
+		    }
+		}
+	    }
+	    close(INI);
+	}
+    }
+    ########################################################################
+    #  Open initial file if it exists - else delete name from the file menu
+    #                                  in check_menu() in open_file()
+    ########################################################################
     if (defined $initialFile and $initialFile ne '') {
-	open_file(0, $initialFile);
+	($fName, $pName) = splitFiles($initialFile);
+	if (("$pName.ic" eq $fName or "$pName.ica" eq $fName) and scalar @{ $iniNames{$pName} } == 1) {
+	    $cascName = '';		# pretend simple menu option selected
+	} else {
+	    $cascName = $pName;		# pretend first cascade menu option selected
+	}
+	open_file(0, $fName);		# calls check_menu() for $initialFile
     }
     if (defined $position and $position ne '' and $position ne "1.0") {
 	$text->see($position);			# Tk has segmentation fault if $position eq ''
@@ -5320,8 +5544,15 @@ use warnings;
 	$position = "1.0";
     }
     $text->markSet('insert', $position);
-    foreach $initialFile (@argv) {
-	check_menu($initialFile, 'files');	# stuff the rest in the file menu list
+    if ($opt_T) {
+	print "ini_program: iniNames\n";
+	foreach $pName (keys %iniNames) {
+	    print "    $pName: @{ $iniNames{$pName} }\n";
+	}
+	print "ini_program: iniProcs\n";
+	foreach $fName (keys %iniProcs) {
+	    print "    $fName: @{ $iniProcs{$fName} }\n";
+	}
     }
 } # ini_program
 
@@ -5343,15 +5574,30 @@ use warnings;
 
 sub quit_program {
     my ($menuKey, $entriesArray, $entry, $home);
+    my ($firstName, $baseName, $fName);
     deleteAllTags();	# also clears @activeSymbols
     clear_scan();
     if (check_save()) {
 	reset_scan();		# also turn debug mode off and clear set/next/watch points
 	@lastFile = ();		# in case not fully shifted in ini_program due to $opt_i
 	if (defined $fileName and $fileName ne $unknown and $fileName ne '') {
-	    push(@lastFile, ($fileName, $text->index('insert')));
-	    if (defined $instance and $instance ne '') {
-		push(@lastFile, $instance);
+	    my $m = $fileName =~ m/^((([\w\.\$]*[\\\/])*)([\w\.\$]+))\.(\w+)$/;
+	    ($processName, $pathName, $procName, $extnName) = ($1, $2, $4, $5);
+	    if ($m and $extnName !~ m/ica?$/) {
+		if (-w "$processName.ica") {
+		    $fileName = "$processName.ica";
+		} elsif (-w "$processName.ic") {
+		    $fileName = "$processName.ic";
+		} else {
+		    goto noLastFile;
+		}
+		push(@lastFile, ($fileName, "1:0"));
+	      noLastFile:;
+	    } else {
+		push(@lastFile, ($fileName, $text->index('insert')));
+		if (defined $instance and $instance ne '') {
+		    push(@lastFile, $instance);
+		}
 	    }
 	}
 	## save file and search menu lists to ~/.iC/iClive.ini
@@ -5364,8 +5610,26 @@ sub quit_program {
 		$entriesArray = @{ $iniMenuData{$menuKey} }[1];	# entriesArray
 		foreach $entry (@$entriesArray) {
 		    if (defined $entry and $entry ne '') {
-			print INI "\t$entry\n";
-			print "INI:	$entry\n" if $opt_T;
+			if ($menuKey eq 'files' and ($firstName = ${ $iniNames{$entry} }[0])) {
+			    if ($firstName and $firstName =~ m/(\w+)\.i[ch]a?/) {
+				$baseName = $1;		# base name
+				if ($entry eq $baseName and scalar @{ $iniNames{$entry} } == 1) {
+				    print INI "\t$firstName\n";
+				    print "INI:	$firstName\n" if $opt_T;
+				} else {
+				    foreach $fName (@{ $iniNames{$entry} }) {
+					$entry .= ",$fName";
+				    }
+				    print INI "\t$entry\n";
+				    print "INI:	$entry\n" if $opt_T;
+				}
+			    } else {
+				print STDERR "Error: \n";
+			    }
+			} else {
+			    print INI "\t$entry\n";
+			    print "INI:	$entry\n" if $opt_T;
+			}
 		    }
 		}
 	    }
@@ -5496,7 +5760,7 @@ iClive - an editor and live debugger for immediate-C apps
 =head1 SYNOPSIS
 
  iClive [ -umtTqh][ -s <host>][ -p <port>][ -i <inst>][ -D [~]IXy.z]
-        [ -F <font>][ -E <code>][ -l <num>][ -w <num>][ -g <geometry>]
+        [ -F <font>][ -E <code>][ -H <num>][ -W <num>][ -g <geometry>]
         [ -A <cmd>][ -d <deb>][ <file> ...]
         [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     -s host name of server host    (default '127.0.0.1')
@@ -5507,14 +5771,28 @@ iClive - an editor and live debugger for immediate-C apps
     -F font or font size to use in Text window  (default '20')
     -E code encoding eg. ISO-8859-1                  (default 'UTF-8')
     -u      use edit undo facility (not recommended if using Live display)
-    -l num  height of the Text window (default 35)
-    -w num  width  of the Text window (default 85) -w0 is terminal width
+    -H num  height of the Text window (default 35)
+    -W num  width  of the Text window (default 85) -w0 is terminal width
     -g geom geometry for main window
     -S server +options+equivalences  (default 'iCserver -k -A iCbox')
     -A cmd  use <cmd> to autovivify I/O clients (default 'iCbox')
             if iCsever is started by this iClive call
                       BUILD option
     -L<lx>  link extra library(s) eg -L lm -L rt or -L lm,lrt
+    file ... one or more space separated iC source files or comma
+            separated groups if files. The first will be opened.
+            The rest will be stored in the File menu for later.
+            A comma separated group of files will be stored as a
+            cascade in the File menu. The cascade group will be used
+            to build one iC app from several files. If the first file
+            has no .ic or .ica extension it is the run name of the app
+            to be built and run. Otherwise the base name of the first
+             (usually .ic file) is used as the run name.
+            All other files in the comma separated list must be either
+            .ic or .ica files to build the app.
+            Any .ih %include or .iha %%include files in the nominated
+            iC or iCa files will be automatically included in the
+            cascade menu as relevant sources.
                       DEBUG options
     -d deb  extra debug options (see iC-application -h)
     -d  40  output symbol table received in Live mode
@@ -5523,8 +5801,6 @@ iClive - an editor and live debugger for immediate-C apps
     -T      trace output static debug messages
     -q      quiet - do not report apps connecting and disconnecting
     -h      help, ouput this Usage text only
-    file ... one or more iC source files. The first will be opened. The
-            rest will be stored in the File menu for later selection.
                       AUXILIARY app
     -R <app ...> run auxiliary app followed by -z and its arguments
                  as a separate process; -R ... must be last arguments.
@@ -5579,8 +5855,8 @@ iClive - an editor and live debugger for immediate-C apps
                 goes to the line entered in the Search Entry window
        <>Word   match   (default - useful for finding variables)
        <>Exact  match   (search string matches anywhere in a word)
-       <>Regexp match	(full Perl regular expression search)
-       []Ignore case	(in any of the search modes)
+       <>Regexp match   (full Perl regular expression search)
+       []Ignore case    (in any of the search modes)
        -------- this is followed by a history of previous search
                 strings, which can be selected for a repeat search.
 
@@ -5622,13 +5898,24 @@ The text in the B<Edit> window is assumed to be an iC or iCa program or
 listing with some optional embedded C code.  When opening a new file
 or saving a modified text, the following formatting is done:
 
+  * Line numbers are shown in a column on the left. While editing
+    line numbers may be temporarily incorrect, but they are re-
+    computed whenever the text is saved. When editing care must be
+    taken to not put any new text before or just after a line number.
+    Apart from that any editing, including moving or deleting
+    blocks of text with their line numbers or adding blocks of
+    text without line numbers is corrected on saving the text.
+    iC listings (extension .lst) do not show extra line numbers.
+    They have correct line numbers for the program text already.
+    Apart from that listings are Read-Only and cannot be edited.
+
   * Any C or C++ style comments in iC and C code are coloured blue.
 
   * Any embedded C code in a literal block bounded by %{ C code %}
     braces as well as C code blocks initiated by the iC operators if
     else or switch and bounded by matching simple braces are marked
     pale grey. Also C code in generated .lst listing files and
-    generated .c C files are als marked pale grey.
+    generated .c C files are also marked pale grey.
 
   * All iC keywords and built-in function block names in iC code
     and C keywords in C code are made bold.  C keywords not also iC
@@ -5716,7 +6003,7 @@ inverse state of the node. This quickly shows the correct logical
 relationships in AND or OR expressions.  Also logical B<Active>
 words which are followed by B<~> are inverted. This shows the correct
 relationships in the expanded logical expressions in listing files.
-Arithmetic nodes are B<blue>, clocks B<brown> and timers B<dark green>.
+Arithmetic nodes are B<blue>, clocks B<brown> and timers B<cadet blue>.
 Clocks and timers as well as data nodes which change for less than
 50 ms flash B<white> briefly (50 ms) every time they fire.
 
@@ -6181,7 +6468,7 @@ L<immcc(1)>, L<iCbox(1)>, L<iCserver(1)>, L<iCmake(1)>, L<iCman(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2021  John E. Wulff
+COPYRIGHT (C) 2000-2023  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

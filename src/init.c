@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c 1.49 $";
+"@(#)$Id: init.c 1.50 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -1137,9 +1137,9 @@ iC_init(void)
 		    } else if (strcmp(tag, "InstanceNum:") == 0) {
 			if ((sp = lookup(ids)) == 0) {
 			    sp = install(ids, IFUNCT, UDFA);	/* function not defined yet */
+			    /* care is taken that union members v.elist and v.glist not used for IFUNCT */
+			    assert(sp->type == IFUNCT && sp->v_cnt == 0);
 			}
-			/* care is taken that union members v.elist and v.glist not used for IFUNCT */
-			assert(sp->type == IFUNCT && sp->v_cnt == 0);
 			sp->v_cnt = num;			/* initialise instance number */
 		    }
 		}

@@ -32,6 +32,8 @@ IX0.2   <
 IX0.7   <
 *** Warning: unused    imm bit: IX0.7 File ./Test0/auto.ic, line 16
 QX0.0   .
+*** Warning: undefined imm bit: QX0.0 File ./Test0/auto.ic, line 16
+*** Warning: unused    imm bit: QX0.0 File ./Test0/auto.ic, line 16
 
 ******* NET STATISTICS  ************************
 
@@ -42,6 +44,6 @@ TOTAL	       5 blocks
 	      10 links
 
 compiled by:
-$Revision: icc_3.7-19-g3372184-dirty $ -O7
-*** Warning: 4 unused gates. File ./Test0/auto.ic, line 16
+$Revision: icc_3.8-1-gfe2d7bb-dirty $ -O7
+*** Warning: 1 undefined gate and 5 unused gates. File ./Test0/auto.ic, line 16
 *** Error: 6 syntax errors - cannot execute. File ./Test0/auto.ic, line 16

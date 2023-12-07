@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.115 $";
+"@(#)$Id: outp.c 1.114 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -500,7 +500,6 @@ iC_listNet(void)
     int		szFlag;
     int		szCount;
     int		icerrFlag;
-    int		unusedFlag;
 
     link_count = revl_count = block_total = undefined = unused = iClockAlias = 0;	/* init each time */
     for (typ = 0; typ < MAX_LS; typ++) {
@@ -1414,86 +1413,6 @@ iC_listNet(void)
 			    fprintf(iC_outFP, "\n");
 			}
 			/* end of output of a NET TOPOLOGY line */
-			/********************************************************************
-			 *  Any imm or immC may be used in iC code, in which case it has sp->list
-			 *  or it may be used in C code in which case EU was set in em.
-			 *
-			 *  A special case is an imm, immC or immC array variable, which has been
-			 *  declared extern (em & EX set). Such a variable may have been used
-			 *  in another module and no unused warnings are issued in this module.
-			 *
-			 *  type NCONST may be generated and only used in an arith expression,
-			 *  in which case the constant is directly in the expression - ignore
-			 *
-			 *  OUTW and OUTX are send nodes which have no linked nodes
-			 *
-			 *  unused iClock only happens if it was made type ERR - no warning
-			 *  iClock used as ERR indicator not used any more	JW 20150603
-			 *
-			 *  An imm variable that has only been declared (typ == UDF) and never
-			 *  assigned or used does not cause a warning		JW 20231031
-			 *  An immC variable that has only been declared and never assigned
-			 *  or used does produce both an unused and undefined warning
-			 *
-			 *  type ERR - ignore
-			 *******************************************************************/
-			unusedFlag = 0;
-			if (sp->list == 0 &&
-			    (sp->em & (EU|EX)) == 0 &&	/* not used and not extern immC */
-			    typ != NCONST &&
-			    sp->ftype != OUTW &&
-			    sp->ftype != OUTX &&
-			    typ != ERR &&
-			    sp != iclock
-			) {
-			    unusedFlag = 1;
-			    if ((iC_Wflag & W_UNUSED) &&
-				typ != UDF
-			    ) {
-				unused++;		/* report total unused only if W_UNUSED */
-				switch (sp->ftype) {
-				case ARITH:
-				    if (typ == ARNC) {
-					warning("unused    immC int:", sp->name);
-				    } else if (typ == LOGC) {
-					warning("unused    immC bit int ???:", sp->name);
-				    } else {
-					warning("unused    imm int:", sp->name);
-				    }
-				    break;
-				case GATE:
-				case GATEX:
-				    if (typ == LOGC) {
-					warning("unused    immC bit:", sp->name);
-				    } else if (typ == ARNC) {
-					warning("unused    immC int bit ???:", sp->name);
-				    } else {
-					warning("unused    imm bit:", sp->name);
-				    }
-				    break;
-				case CLCKL:
-				    warning("unused    imm clock:", sp->name);
-				    break;
-				case TIMRL:
-				    warning("unused    imm timer:", sp->name);
-				    break;
-				case UDFA:
-				    if (typ == ARNC) {
-					warning("unused    immC int array:", sp->name);
-				    } else if (typ == LOGC) {
-					warning("unused    immC bit array:", sp->name);
-				    } else {
-					ierror("unused    variable:", sp->name);
-					unused--;
-				    }
-				    break;
-				default:
-				    ierror("unused    ???:", sp->name);
-				    unused--;
-				    break;
-				}
-			    }
-			}
 			if (iC_Wflag & W_UNDEFINED) {
 			    /********************************************************************
 			     *  imm variables must be assigned (defined) in iC code in the module
@@ -1510,7 +1429,7 @@ iC_listNet(void)
 			     *  defined in another module and no undefined warnings are issued
 			     *  in this module.
 			     *******************************************************************/
-			    if (typ == UDF && ! unusedFlag) {
+			    if (typ == UDF) {
 				undefined++;		/* report total undefined only if W_UNDEFINED */
 				switch (sp->ftype) {	/* undefined and not extern imm */
 				case ARITH:
@@ -1543,6 +1462,76 @@ iC_listNet(void)
 				    undefined++;
 				    warning("undefined immC bit:", sp->name);
 				}
+			    }
+			}
+			if ((iC_Wflag & W_UNUSED) &&
+			    /********************************************************************
+			     *  Any imm or immC may be used in iC code, in which case it has sp->list
+			     *  or it may be used in C code in which case EU was set in em.
+			     *
+			     *  A special case is an imm, immC or immC array variable, which has been
+			     *  declared extern (em & EX set). Such a variable may have been used
+			     *  in another module and no unused warnings are issued in this module.
+			     *
+			     *  type NCONST may be generated and only used in an arith expression,
+			     *  in which case the constant is directly in the expression - ignore
+			     *
+			     *  OUTW and OUTX are send nodes which have no linked nodes
+			     *
+			     *  unused iClock only happens if it was made type ERR - no warning
+			     *  iClock used as ERR indicator not used any more	JW 20150603
+			     *
+			     *  type ERR - ignore
+			     *******************************************************************/
+			    sp->list == 0 &&
+			    (sp->em & (EU|EX)) == 0 &&	/* not used and not extern immC */
+			    typ != NCONST &&
+			    sp->ftype != OUTW &&
+			    sp->ftype != OUTX &&
+			    typ != ERR &&
+			    sp != iclock
+			) {
+			    unused++;		/* report total unused only if W_UNUSED */
+			    switch (sp->ftype) {
+			    case ARITH:
+				if (typ == ARNC) {
+				    warning("unused    immC int:", sp->name);
+				} else if (typ == LOGC) {
+				    warning("unused    immC bit int ???:", sp->name);
+				} else {
+				    warning("unused    imm int:", sp->name);
+				}
+				break;
+			    case GATE:
+			    case GATEX:
+				if (typ == LOGC) {
+				    warning("unused    immC bit:", sp->name);
+				} else if (typ == ARNC) {
+				    warning("unused    immC int bit ???:", sp->name);
+				} else {
+				    warning("unused    imm bit:", sp->name);
+				}
+				break;
+			    case CLCKL:
+				warning("unused    imm clock:", sp->name);
+				break;
+			    case TIMRL:
+				warning("unused    imm timer:", sp->name);
+				break;
+			    case UDFA:
+				if (typ == ARNC) {
+				    warning("unused    immC int array:", sp->name);
+				} else if (typ == LOGC) {
+				    warning("unused    immC bit array:", sp->name);
+				} else {
+				    ierror("unused    variable:", sp->name);
+				    unused--;
+				}
+				break;
+			    default:
+				ierror("unused    ???:", sp->name);
+				unused--;
+				break;
 			    }
 			}
 			if (typ == ERR) {

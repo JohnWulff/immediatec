@@ -171,7 +171,7 @@ Usage:
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac 1.35 $
+$Id: immac 1.36 $
 .
 
 use vars qw($opt_a $opt_N $opt_L $opt_o $opt_l $opt_e);
@@ -773,7 +773,8 @@ sub process_file {
 		    $directive = "$directive$_";	# concatenate new part to previous part(s)
 		    next Line;				# input more
 		} else {
-		    s/\s$//;				# remove final trailing space
+		    s!(\s*(/[*/]).*)$! !;	# change C or C++ comment into 1 trailing space
+		    s/\s+$//;				# remove final trailing spaces
 		    $directive = "$directive$_";	# concatenate last part of #define line
 		    $directive =~ s/\s+/ /g;	# compress groups of spaces into 1 space
 		    $_ = "$directive\n";	# present (concatenated) line for expansion
@@ -1041,8 +1042,9 @@ sub process_file {
 		    }
 		    elsif ($def =~ m/^(%%|[%#])include$/) {
 			my ($file, $f, $p);
-			$macro =~ s/\s+//;			# take out any white space - just in case
-			if ($macro =~ m!^["<](([A-Za-z]:)?[/\\]?[A-Z_a-z.][\w/\\.]*)[">]$!) {
+			$macro =~ s/\s+//g;			# take out any white space - just in case
+			if ($macro =~ m!^["<](([A-Za-z]:)?[/\\]?[A-Z_a-z.][\w/\\.]*)[">];*$!) {
+								# allow trailing ';' after %include "xx.ih";
 			  Include:
 			    while (1) {
 				$f = $1;			# a correct Linux, Unix or Windows path name

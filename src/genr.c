@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.98 $";
+"@(#)$Id: genr.c 1.99 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1207,6 +1207,8 @@ op_asgn(				/* assign List_e stack to links */
 	    rsp->list = tlp;		/* link full list to right */
 	}
 	var->list = right;		/* alias points to original */
+	assert(rsp == right->le_sym);
+	rsp->em |= var->em & EX;	/* extern EX from ALIAS to target - USED if EX == 1 */
 	if (iC_debug & 04) {
 	    iFlag = 1;			/* may need correction by pplstfix */
 	    fprintf(iC_outFP, "\n\t%s\t%c ---%c\t%s", rsp->name,

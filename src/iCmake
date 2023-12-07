@@ -111,7 +111,7 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake 1.56 $' >&2
+  echo '	$Id: iCmake 1.57 $' >&2
 }
 
 lwsock32=""
@@ -572,7 +572,7 @@ if [ $link -eq 1 -a -z "$ic" -a -n "$list" ]; then
 	fi
 	if [ $q -eq 0 ]; then
 	    if [ $z -eq 1 ]; then echo -n "# "; fi
-	    echo $icFile
+	    echo $cFile
 	fi
 	rm -f $cFile		# -f in case read only
 	if [ $z -eq 1 ]; then

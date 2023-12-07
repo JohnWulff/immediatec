@@ -15,8 +15,9 @@
 #	for IX0.7. At the end of their respective timer delays the outputs
 #	QX0.0 to QX0.7 will turn on for 10 ticks.
 #
-#	Stop the demo with ctrl-C
+#	Stop the demo by left mouse clicking (X) in generated iCbox
 #
 ########################################################################
 
-iCserver -kr sortm28 'iCbox -nsortm28-IO IX0,,250 QX0'
+echo '$ iCserver -kr -R sortm28 -l  -R iCbox -nsortm28-IO IX0,,250 QX0'
+iCserver -kr -R sortm28 -l  -R iCbox -nsortm28-IO IX0,,250 QX0

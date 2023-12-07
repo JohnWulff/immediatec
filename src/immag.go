@@ -109,7 +109,7 @@ import (
 	"github.com/Knetic/govaluate"
 )
 
-const ID_immag_go = "$Id: immag.go 1.4 $"
+const ID_immag_go = "$Id: immag.go 1.5 $"
 const DEF  = true
 const EVAL = true
 
@@ -932,7 +932,7 @@ func main() {
 	reResolve    = regexp.MustCompile(`(\(|[A-Z_a-z]\w*|,|\)|\\?["'])`)
 	reTrue       = regexp.MustCompile(`<< >>`)
 	reFalse      = regexp.MustCompile(`>> <<`)
-	reInclude   := regexp.MustCompile(`^["<](([A-Za-z]:)?([/\\]?)[A-Z_a-z.][\w/\\.-]*)[">]$`)
+	reInclude   := regexp.MustCompile(`^["<](([A-Za-z]:)?([/\\]?)[A-Z_a-z.][\w/\\.-]*)[">];*$`)
 	reErrWarn   := regexp.MustCompile(`^(error|warning)$`)
 	reLine      := regexp.MustCompile(`^\s*(\d+)\s+"([A-Z_a-z][\w.]*)"`)
 	reFORin1     = regexp.MustCompile(`^FOR\s*\(\s*((int)\s+)?([a-zA-Z]\w*)\s*=`)
@@ -1641,7 +1641,7 @@ func main() {
 							//		([/\\]?)			# $3 optional Linux or Windows path separator
 							//		[A-Z_a-z.][\w/\\.-]*
 							//	)
-							//	[">]$/x
+							//	[">]$;*/x				# allow trailing ';' after %include "xx.ih";
 						  Include:
 							for {
 								f = m[1]					// a correct Linux, Unix or Windows path name
@@ -3233,6 +3233,21 @@ func pushError(r *int, errorMsg string) {
 
 /***********************************************************************
  *
+ *  Auxiliary function to chop last character from a string if it is a CR
+ *  (Useful Perl function)
+ *
+ ***********************************************************************/
+
+func chomp(s string) string {
+	l := len(s);
+	if s[l-1] == '\n' {
+		return s[:l-1];
+	}
+	return s;
+}
+
+/***********************************************************************
+ *
  *  Output errors and warnings after completing analysis of one line.
  *
  ***********************************************************************/
@@ -3248,9 +3263,9 @@ func outputError(listLine string) {
 		fmt.Fprint(os.Stderr, e)		// output errors and warnings to terminal or error file
 		if *opt_l != "" {
 			if listFlag {
-				fmt.Fprint(genFile, listLine)
+				genLine(chomp(listLine), "\\n")
 			}
-			fmt.Fprint(genFile, e)		// and to generated GO file for log
+			genLine(chomp(e), "\\n")
 		}
 		listFlag = false
 		if (*opt_o != "" || *opt_e != "") {
