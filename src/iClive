@@ -95,26 +95,26 @@ my @colourSelect  = ( 0,2,0,0,0,0,0,2,0,0,0,0,2,2,0,0,0,0,2,2,0,4,6, # cs[ftype]
 		      0,2,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,6, # ALIAS    23 - 45
 		    );
 
-#  live colouring     lo 0             hi 1               cs  ftype
-my @tagBackground = ('PaleGreen1'   , 'yellow2'      ,  # 0 1 GATE
-		     'LightSkyBlue1', 'LightSkyBlue1',  # 2 3 ARITH
-		     'chocolate1'   , 'chocolate1'   ,  # 4 5 CLCKL
-		     'CadetBlue3'   , 'CadetBlue3'   ,  # 6 7 TIMRL
+#  live colouring     lo 0             hi 1                 cs  ftype
+my @tagBackground = ('PaleGreen1'   , 'yellow2'      ,  #  0  1 GATE
+		     'LightSkyBlue1', 'LightSkyBlue1',  #  2  3 ARITH
+		     'chocolate1'   , 'chocolate1'   ,  #  4  5 CLCKL
+		     'CadetBlue3'   , 'CadetBlue3'   ,  #  6  7 TIMRL
 							## cs|010 no change
-		     'PaleGreen1'   , 'yellow2'      ,  # 0 1 GATE
-		     'LightSkyBlue1', 'LightSkyBlue1',  # 2 3 ARITH
-		     'chocolate1'   , 'chocolate1'   ,  # 4 5 CLCKL
-		     'CadetBlue3'   , 'CadetBlue3'   ,  # 6 7 TIMRL
+		     'PaleGreen1'   , 'yellow2'      ,  # 10 11 GATE
+		     'LightSkyBlue1', 'LightSkyBlue1',  # 12 13 ARITH
+		     'chocolate1'   , 'chocolate1'   ,  # 14 15 CLCKL
+		     'CadetBlue3'   , 'CadetBlue3'   ,  # 16 17 TIMRL
 		    );
-my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
-		     'black'        , 'red'          ,  # 2 3 ARITH
-		     'black'        , 'white'        ,  # 4 5 CLCKL
-		     'black'        , 'red'          ,  # 6 7 TIMRL
+my @tagForeground = ('black'        , 'red'          ,  #  0  1 GATE
+		     'black'        , 'red'          ,  #  2  3 ARITH
+		     'black'        , 'white'        ,  #  4  5 CLCKL
+		     'black'        , 'red'          ,  #  6  7 TIMRL
 							## cs|010 flash glitch
-		     'white'        , 'white'        ,  # 0 1 GATE
-		     'white'        , 'white'        ,  # 2 3 ARITH
-		     'white'        , 'white'        ,  # 4 5 CLCKL
-		     'white'        , 'white'        ,  # 6 7 TIMRL
+		     'white'        , 'white'        ,  # 10 11 GATE
+		     'white'        , 'white'        ,  # 12 13 ARITH
+		     'white'        , 'white'        ,  # 14 15 CLCKL
+		     'white'        , 'white'        ,  # 16 17 TIMRL
 		    );
 
 #		key      $c3      $dir       $reg       $stop
@@ -370,7 +370,7 @@ Usage:
 
 Copyright (C) 2000-2023  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.100 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.101 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -3147,7 +3147,7 @@ no warnings;
 				    ## delay the colour change to make it visible
 				    $text->after(50, [ \&restoreTag, "$index" ]);
 				}
-				if ($cs == 5 or $cs == 7) {	# hi CLOCK or TIMER
+				if ($cs == 5) {			# hi CLOCK
 				    ## turn colour off after 50 ms.
 				    $text->after(50, [ \&colourTag, "$index", $cs & ~01 ]);
 				}
@@ -3406,7 +3406,7 @@ sub clearBreak {
 
 sub colourTag {
     my ($tag, $cs) = @_;
-    print "colourTag: $tag $cs\n" if $opt_T;
+    printf "colourTag:  %-4s %02o\n", $tag, $cs if $opt_T;
     $text->tagConfigure($tag,
 			-background => $tagBackground[$cs],
 			-foreground => $tagForeground[$cs],
@@ -3429,7 +3429,7 @@ sub colourTag {
 sub restoreTag {
     my ($tag) = @_;
     my $cs = $delayedColour{$tag} & 07;	# latest colour ignoring flash
-    print "restoreTag: $tag $cs\n" if $opt_T;
+    printf "restoreTag: %-4s %02o\n", $tag, $cs if $opt_T;
     $text->tagConfigure($tag,
 			-background => $tagBackground[$cs],
 			-foreground => $tagForeground[$cs],
@@ -4436,7 +4436,6 @@ sub getContents {
     }
     if ($wholeContents ne $disContents) {
 	my @arrayContents = split "\n", $wholeContents;		# text with line numbers has changed
-print "getContents: text has changed \@arrayContents\n@arrayContents\n";
 	$text->tagDelete('cTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete really slow if not done
 	$text->delete("1.0", "end");			# clear the text area
 	$newContents = '';
@@ -5267,7 +5266,7 @@ no warnings;
     my ($pName, $fName);
     my $fileName = '';
     my ($word, $rest) = split /,/, $fileList, 2;
-    if ($word =~ m/^(\w+)(\.ica?)?$/) {
+    if ($word =~ m/^([\/\w]+)(\.ica?)?$/) {
 	$pName = $1;
 	if ($2) {
 	    $fileName = $word;		# word ends in .ic or .ica
@@ -5484,20 +5483,21 @@ sub ini_program {
 	if (defined $position and $position !~ /^\d+\.\d+$/) {
 	    $position = undef;
 	}
+	if (defined $initialFile and not defined $opt_i) {
+	    $instance = $entry;
+	    if (defined $instance and $instance ne '') {
+		$instanceText = "-$instance";
+		if ($instance !~ /^[0-9]$/) {
+		    push @instanceOptions, [$instanceText, $instance];
+		    $menuInst->configure(-options => \@instanceOptions);
+		}
+	    }
+	}
     }
 no warnings;
     print "initialFile = '$initialFile' position = '$position' instance '$entry'\n" if $opt_T;
 use warnings;
-    if (defined $initialFile and not defined $opt_i) {
-	$instance = $entry;
-	if (defined $instance and $instance ne '') {
-	    $instanceText = "-$instance";
-	    if ($instance !~ /^[0-9]$/) {
-		push @instanceOptions, [$instanceText, $instance];
-		$menuInst->configure(-options => \@instanceOptions);
-	    }
-	}
-    }
+    check_menu($initialFile, 'files');		# initial command line argument
     foreach $fName (@argv) {
 	check_menu($fName, 'files');		# remaining command line arguments
     }
@@ -5581,8 +5581,13 @@ sub quit_program {
 	reset_scan();		# also turn debug mode off and clear set/next/watch points
 	@lastFile = ();		# in case not fully shifted in ini_program due to $opt_i
 	if (defined $fileName and $fileName ne $unknown and $fileName ne '') {
-	    my $m = $fileName =~ m/^((([\w\.\$]*[\\\/])*)([\w\.\$]+))\.(\w+)$/;
-	    ($processName, $pathName, $procName, $extnName) = ($1, $2, $4, $5);
+	    my $m;
+	    if ($cascName) {
+		$fileName = $cascName;
+	    } else {
+		$m = $fileName =~ m/^((([\w\.\$]*[\\\/])*)([\w\.\$]+))\.(\w+)$/;
+		($processName, $pathName, $procName, $extnName) = ($1, $2, $4, $5);
+	    }
 	    if ($m and $extnName !~ m/ica?$/) {
 		if (-w "$processName.ica") {
 		    $fileName = "$processName.ica";
@@ -5594,7 +5599,7 @@ sub quit_program {
 		push(@lastFile, ($fileName, "1:0"));
 	      noLastFile:;
 	    } else {
-		push(@lastFile, ($fileName, $text->index('insert')));
+		push(@lastFile, ($fileName, $cascName ? "1.0" : $text->index('insert')));
 		if (defined $instance and $instance ne '') {
 		    push(@lastFile, $instance);
 		}
@@ -5610,7 +5615,7 @@ sub quit_program {
 		$entriesArray = @{ $iniMenuData{$menuKey} }[1];	# entriesArray
 		foreach $entry (@$entriesArray) {
 		    if (defined $entry and $entry ne '') {
-			if ($menuKey eq 'files' and ($firstName = ${ $iniNames{$entry} }[0])) {
+			if ($menuKey ne 'searches' and ($firstName = ${ $iniNames{$entry} }[0])) {
 			    if ($firstName and $firstName =~ m/(\w+)\.i[ch]a?/) {
 				$baseName = $1;		# base name
 				if ($entry eq $baseName and scalar @{ $iniNames{$entry} } == 1) {
