@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.100 $";
+"@(#)$Id: genr.c 1.101 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1916,7 +1916,7 @@ op_asgn(				/* assign List_e stack to links */
 		cPtr += len;
 	    }					/* END TAIL */
 	    if (sp->u_blist == 0 && gp->ftype < MIN_ACT && gt_count == 0) {
-		if (iFunSymExt && gp->type == NCONST && gp->ftype == ARITH) {
+		if (iFunSymExt && sp->list != 0 && gp->type == NCONST && gp->ftype == ARITH) {
 		    lp = sy_push(gp);
 		    lp->le_val = ((c_number + 1) << FUN_OFFSET)	/* arithmetic case number */
 				 + gt_input + 1;	/* arithmetic input number */
