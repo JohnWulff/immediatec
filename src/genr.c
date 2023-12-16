@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.99 $";
+"@(#)$Id: genr.c 1.100 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1916,10 +1916,18 @@ op_asgn(				/* assign List_e stack to links */
 		cPtr += len;
 	    }					/* END TAIL */
 	    if (sp->u_blist == 0 && gp->ftype < MIN_ACT && gt_count == 0) {
-		right = constExpr_push(tBuf, 0);
-		rsp = right->le_sym;
-		var = sp;				/* tail is a constant expression */
-		goto makeAlias;
+		if (iFunSymExt && gp->type == NCONST && gp->ftype == ARITH) {
+		    lp = sy_push(gp);
+		    lp->le_val = ((c_number + 1) << FUN_OFFSET)	/* arithmetic case number */
+				 + gt_input + 1;	/* arithmetic input number */
+		    sp->u_blist = lp;
+		    gp->name[0] = '\0';			/* do not extend tBuf with this name */
+		} else {
+		    right = constExpr_push(tBuf, 0);
+		    rsp = right->le_sym;
+		    var = sp;				/* tail is a constant expression */
+		    goto makeAlias;
+		}
 	    }
 	    if (sp->ftype != OUTW) {			/* output cexe function */
 		assert(gp);				/* gp must be initialised */
@@ -1946,13 +1954,13 @@ op_asgn(				/* assign List_e stack to links */
 			    if (iFunSymExt ||
 				(iC_optimise & 04) != 0) {	/* save expression for full optimising as well */
 				len = strlen(gBuf);		/* C expression prepared for cloning */
-				cp = iC_emalloc(len+1);	/* +1 for '\0' */
+				cp = iC_emalloc(len+1);		/* +1 for '\0' */
 				strncpy(cp, gBuf, len+1);
 				assert(z1 && z1 < functionUseSize);
 				functionUse[z1].c.expr = cp;
 #ifdef	BOOT_COMPILE
 				len = strlen(inpNM);		/* record input name if iC source for BOOT_COMPILE */
-				cp = iC_emalloc(len+1);	/* +1 for '\0' */
+				cp = iC_emalloc(len+1);		/* +1 for '\0' */
 				strncpy(cp, inpNM, len+1);
 				functionUse[z1].inpNm = cp;
 				functionUse[z1].lineNo = lineno;/* as well as line number at compile time */
@@ -3357,7 +3365,14 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
 		}
 	    }
 	} else {
-	    assert(sp->list && sp->list->le_sym == functionHead);	/* 'this' marked above */
+	    if (!sp->list || sp->list->le_sym != functionHead) {	/* 'this' marked above */
+		if (sp->list) {
+		    fprintf(iC_errFP, "*** Error: %s ->list %s does not equal functionHead %s\n", sp->name, sp->list->le_sym->name, functionHead->name);
+		} else {
+		    fprintf(iC_errFP, "*** Error: %s ->list %p\n", sp->name, sp->list);
+		}
+		exit(-1);
+	    }
 	}
 	lp = lp->le_next;			/* next varList link */
 	assert(lp);				/* statement list is in pairs */
