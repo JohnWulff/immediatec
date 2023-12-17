@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.101 $";
+"@(#)$Id: genr.c 1.102 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1917,10 +1917,20 @@ op_asgn(				/* assign List_e stack to links */
 	    }					/* END TAIL */
 	    if (sp->u_blist == 0 && gp->ftype < MIN_ACT && gt_count == 0) {
 		if (iFunSymExt && sp->list != 0 && gp->type == NCONST && gp->ftype == ARITH) {
+		    /********************************************************************
+		     * nested constant in a cloned function definition must be treated
+		     * like a normal arithmetic variable triggering an expression. jw 17/12/2023
+		     *******************************************************************/
 		    lp = sy_push(gp);
 		    lp->le_val = ((c_number + 1) << FUN_OFFSET)	/* arithmetic case number */
 				 + gt_input + 1;	/* arithmetic input number */
 		    sp->u_blist = lp;
+		    if (iC_debug & 04) {
+			iFlag = 1;			/* may need correction by pplstfix */
+			fprintf(iC_outFP, "\t%s\t%c ---%c\t%s\t%c",
+			    gp->name, iC_fos[gp->ftype],
+			    iC_os[sp->type], sp->name, iC_fos[sp->ftype]);
+		    }
 		    gp->name[0] = '\0';			/* do not extend tBuf with this name */
 		} else {
 		    right = constExpr_push(tBuf, 0);
