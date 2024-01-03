@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: tt 1.42 $' >&2
+  echo '$Id: tt 1.43 $' >&2
 }
 
 usage()
@@ -237,9 +237,9 @@ if [ -n "$test1" ]; then
 		fi
 		if [ -n "$d1" ]; then
 		    if [ -d "$d1$a$d" ]; then
-			echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd$a.lt) $d1$a$d"
+			echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I  '(eval' -I '\.go' -I 'syntax.error' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd$a.lt) $d1$a$d"
 			if ! Mdiff -$l p*.lt $d1$a$d; then echo "**********"; fi
-			Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd$a.lt) $d1$a$d
+			Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I  '(eval' -I '\.go' -I 'syntax.error' -I 'BLTIN' -I 'FUNCTION' $(cat $pd$a.lt) $d1$a$d
 		    else
 			mkdir $d1$a$d
 			if [ -d "$head" ]; then
@@ -256,8 +256,8 @@ if [ -n "$test1" ]; then
 			    done
 			    rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
 			    cd ..
-			    echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd$a.lt) $d1$a$d) $d1$a$d"
-			    cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd$a.lt) $d1$a$d) $d1$a$d 2> /dev/null
+			    echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I  '(eval' -I '\.go' -I 'syntax.error' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd$a.lt) $d1$a$d) $d1$a$d"
+			    cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I  '(eval' -I '\.go' -I 'syntax.error' -I 'BLTIN' -I 'FUNCTION' $(cat $pd$a.lt) $d1$a$d) $d1$a$d 2> /dev/null
 			else
 			    echo; echo "========== $t cp -p \$(cat $pd$a.lt) $d1$a$d"
 			    cp -p $(cat $pd$a.lt) $d1$a$d
@@ -268,8 +268,8 @@ if [ -n "$test1" ]; then
 	    elif [ -d "$d1$a$d" -a -d "$d2$a$d" ]; then
 		cd $d1$a$d
 		eval d4="$d3"
-		echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $d1$a$d/* $d4$a$d"
-		Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat ../$pd$a.lt) $d4$a$d
+		echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I  '(eval' -I '\.go' -I 'syntax.error' -I 'BLTIN' -I 'FUNCTION' $d1$a$d/* $d4$a$d"
+		Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I  '(eval' -I '\.go' -I 'syntax.error' -I 'BLTIN' -I 'FUNCTION' $(cat ../$pd$a.lt) $d4$a$d
 		cd ..
 	    else
 		echo "ERROR: if two <directories> are specified they must exist" >&2
@@ -299,9 +299,9 @@ if [ -n "$test2" ]; then
 	    fi
 	    if [ -n "$d1" ]; then
 		if [ -d "$d1$d" ]; then
-		    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd.lt) $d1$d"
+		    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I  '(eval' -I '\.go' -I 'syntax.error' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd.lt) $d1$d"
 		    if ! Mdiff -$l p*.lt $d1$d; then echo "**********"; fi
-		    Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd.lt) $d1$d
+		    Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I  '(eval' -I '\.go' -I 'syntax.error' -I 'BLTIN' -I 'FUNCTION' $(cat $pd.lt) $d1$d
 		else
 		    mkdir $d1$d
 		    if [ -d "$head" ]; then
@@ -318,8 +318,8 @@ if [ -n "$test2" ]; then
 			done
 			rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
 			cd ..
-			echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd.lt) $d1$d) $d1$d"
-			cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd.lt) $d1$d) $d1$d 2> /dev/null
+			echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I  '(eval' -I '\.go' -I 'syntax.error' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd.lt) $d1$d) $d1$d"
+			cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I  '(eval' -I '\.go' -I 'syntax.error' -I 'BLTIN' -I 'FUNCTION' $(cat $pd.lt) $d1$d) $d1$d 2> /dev/null
 		    else
 			echo; echo "========== $t cp -p \$(cat $pd.lt) $d1$d"
 			cp -p $(cat $pd.lt) $d1$d
@@ -330,8 +330,8 @@ if [ -n "$test2" ]; then
 	elif [ -d "$d1$d" -a -d "$d2$d" ]; then
 	    cd $d1$d
 	    eval d4="$d3"
-	    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $d1$d/* $d4$d"
-	    Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat ../$pd.lt) $d4$d
+	    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I  '(eval' -I '\.go' -I 'syntax.error' -I 'BLTIN' -I 'FUNCTION' $d1$d/* $d4$d"
+	    diff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I  '(eval' -I '\.go' -I 'syntax.error' -I 'BLTIN' -I 'FUNCTION' $(cat ../$pd.lt) $d4$d
 	    cd ..
 	else
 	    echo "ERROR: if two <directories> are specified they must exist" >&2

@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.86 $
+# @(#)$Id: Makefile.in 1.87 $
 
 #######################################################################
 #
@@ -345,14 +345,14 @@ test:
 	@echo "compile and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
 	@-${srcdir}/iCmake -qANIEfw. ${srcdir}/Test0/*.ic*; :
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
-	@if ${srcdir}/AuxTools/Mdiff -kLel -I'(eval' ${srcdir}/Test0/ORG/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
+	@if ${srcdir}/AuxTools/Mdiff -kLel -I'(eval' -I'syntax.error' ${srcdir}/Test0/ORG/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 
 strict:
 	@cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 	@echo "compile with -S option and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
 	@-${srcdir}/iCmake -qSAIEfw. ${srcdir}/Test0/*.ic*; :
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
-	@if ${srcdir}/AuxTools/Mdiff -kLel -I'(eval' ${srcdir}/Test0/STRICT/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
+	@if ${srcdir}/AuxTools/Mdiff -kLel -I'(eval' -I'syntax.error' ${srcdir}/Test0/STRICT/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
 
 ########################################################################
 # Some Linux distributions, in particular openSUSE, set libdir to /usr/local/lib64

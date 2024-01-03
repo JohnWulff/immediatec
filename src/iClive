@@ -263,7 +263,7 @@ Usage:
     '~'
     -F font or font size to use in Text window  (default '20')
     -E code encoding eg. ISO-8859-1 -  (locale value is @<<<<<<<<<)
-							     $LC_CTYPE
+							$LC_CTYPE
     -u      use edit undo facility (not recommended if using Live display)
     -H num  height of the Text window (default @<<)
 					$opt_H
@@ -271,9 +271,9 @@ Usage:
 					$opt_W
     -g geom geometry for main window
     -S server +options+equivalences  (default 'iCserver -k -A iCbox')
-    -A cmd  use <cmd> to autovivify I/O clients (default 'iCbox')
-            if iCsever is started by this @<<<<< call
-					  $named
+    -A cmd  use <cmd> to autovivify I/O clients if iCserver
+            is started by this @<<<<< call (default 'iCbox')
+				$named
                       BUILD option
     -L<lx>  link extra library(s) eg -L lm -L rt or -L lm,lrt
     file ... one or more space separated iC source files or comma
@@ -370,7 +370,7 @@ Usage:
 
 Copyright (C) 2000-2023  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.101 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.102 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -425,7 +425,7 @@ GetOptions (
     '<>'  => sub { push(@argv, @_); },	# Transfer file argument to @argv
     't'   => \$opt_t,
     'T'   => \$opt_T,
-    'S'   => \$opt_S,
+    'S=s' => \$opt_S,
     'm'   => \$opt_m,
     'u'   => \$opt_u,
     'X'   => \$opt_X,
@@ -1333,7 +1333,7 @@ connect_to_server();
 if (@runArgs) {
     splice(@runArgs, 1, 0, "-s", "$host") unless $host eq "localhost" or $host eq "127.0.0.1";
     splice(@runArgs, 1, 0, "-p", "$port") unless $port eq "8778";
-    splice(@runArgs, 1, 0, "-z$opt_q",);	# -z not used in iClive - place holder
+    splice(@runArgs, 1, 0, "-z$opt_q",);
     fork_and_exec(@runArgs);
 }
 
@@ -2882,37 +2882,41 @@ sub conn_send_now {
 
 sub connect_to_server {
     my $i = 0;
+    my @s;
     if ($server >= 0) {
 	iCmsg->inhibit_nagle(1,		# inhibit Nagle's algorithm for real time response
 	    defined $opt_d && ($opt_d & 2),	# trace recv messages
 	    defined $opt_d && ($opt_d & 1));	# trace send messages
-	until ($conn) {
+	while (1) {
 	    $conn = iCmsg->connect($host, $port, \&rcvd_msg_from_server, 1); # return imme if connect fails
 	    if ($conn) {
 		print STDERR "$named connected to server at '$host:$port'\n" unless $opt_q;
 		$mainWindow->fileevent($conn->{sock}, 'readable', sub { iCmsg->event_loop(1); });
 		info_display(2000, 'blue', "Connection to '$host:$port'");
-	    } elsif ($host ne "localhost" and $host ne "127.0.0.1") {
-		warn "$named: '$host:iCserver -p $port -A $opt_A' cannot be started here - start it on $host\n";
-		$server = -1;		# no iCserver possible
 		last;
+	    }
+	    if ($server == 0) {
+		@s = split(" ", $opt_S);
+		print "\@s = '@s'\n" if $opt_T;
+		splice(@s, 1, 0, "-z$opt_q", "-k", "-A", "$opt_A");	# block STDIN for chained iCserver
+		splice(@s, 1, 0, "-p", "$port") unless $port eq "8778";
+		print "\@s = '@s'\n" if $opt_T;
+		if ($host eq "localhost" or $host eq "127.0.0.1") {
+		    fork_and_exec(@s);	# start iCserver
+		    $server = 1;		# remember that this iClive started iCserver
+		} else {
+		    warn "$named: '@s' cannot be started here - start it on '$host' (ctrl-C to stop)\n";
+		    $server = 2;		# waiting for start of iCserver on a remote host
+		}
 	    } elsif ($server > 0) {
-		if ($i++ < 4) {
+		if ($server == 2 or $i++ < 4) {
 		    print "$named: $i: wait 2 seconds for iCserver to start\n" if $opt_T;
 		    select undef, undef, undef, 2;
 		} else {
-		    warn "$named: waited 8 seconds for 'iCserver -p $port -A $opt_A' to start - give up\n";
+		    warn "$named: waited 8 seconds for '@s' to start - give up\n";
 		    $server = -1;	# something wrong with iCserver
-		    last;
+		    exit 3;
 		}
-	    } else {
-		my @s = split(" ", $opt_S);
-		print "\@s = '@s'\n" if $opt_T;
-		splice(@s, 1, 0, "-p", "$port") unless $port eq "8778";
-		splice(@s, 1, 0, "-z$opt_q", "-k", "-A", "$opt_A");	# block STDIN for chained iCserver
-		print "\@s = '@s'\n" if $opt_T;
-		fork_and_exec(@s);	# start iCserver
-		$server = 1;		# remember that this iClive started iCserver
 	    }				# try to connect immediately
 	}
     }
@@ -2947,7 +2951,7 @@ sub register_at_server {
 no warnings;
 	    print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
 	    $i = 1;
-	    REPEAT:
+	  REPEAT:
 	    if ($tmsg !~ /^(\d+),(\d+)(,(\d+))?$/) {	# analyse registration reply from iCserver now
 		rcvd_msg_from_server($conn, $tmsg, $terr);	# not a registration reply - delayed data
 		unless ($conn) {
@@ -2967,7 +2971,7 @@ use warnings;
 	    conn_send_now("$D_channel:2");			# poll application to see if it is live
 	}
     } else {
-	FAILED_TO_REGISTER: info_display(2000, 'red',
+	  FAILED_TO_REGISTER: info_display(2000, 'red',
 	    "Could not connect to '$host:$port' - no live listing - edit only");
     }
 } # register_at_server
@@ -5643,7 +5647,7 @@ sub quit_program {
 	    warn "ERROR: Can't open ~/.iC/$named.ini: $!\n";
 	}
 	print "$named: quit\n" if $opt_T;
-	if ($server > 0) {
+	if ($server == 1) {
 	    print "quit_program() sends 'X$named'\n" if $opt_T;
 	    conn_send_now("X$named") if $conn;	# iClive started iCserver - stop it
 	} elsif ($runName ne '') {

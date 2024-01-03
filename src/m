@@ -33,14 +33,14 @@ usage()
     echo '	-D<OPT>	make all targets with <OPT> defined' >&2
     echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
     echo '	-z	echo compiler calls with all options for debugging' >&2
-    echo "	-I	execute chmod +s /usr/bin/install /usr/bin/ranlib as su once" >&2
+    echo "	-I	execute chmod ugo+s /usr/bin/install /usr/bin/ranlib as su once" >&2
     echo "		this is required to run make install as an ordinary user" >&2
     echo '	-i	make install after programs have been updated' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m 1.28 $' >&2
+    echo '$Id: m 1.29 $' >&2
 }
 
 name=${0##*/}
@@ -96,8 +96,8 @@ while getopts ":aclSNPGVXrtmgpudsyezD:W:Iih" opt; do
     X ) X="X";;
     I )
 	echo "Enter root:" >&2
-	sudo chmod +s /usr/bin/install /usr/bin/ranlib
-	echo "chmod +s /usr/bin/install /usr/bin/ranlib" >&2
+	sudo chmod ugo+s /usr/bin/install /usr/bin/ranlib
+	echo "chmod ugo+s /usr/bin/install /usr/bin/ranlib" >&2
 	echo "Exit  root:" >&2
 	sudo -k
 	exit
