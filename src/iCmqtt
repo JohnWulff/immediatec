@@ -22,7 +22,7 @@ use iCmsgM;		# Messaging Toolkit: from Advanced Perl Programming
 use strict;
 use warnings;
 
-my @ArgNames;		# stores IO names and initialisers in argument list order
+my @ArgNames;		# stores IO base names and bit mask in argument list order
 my @ChannelNames;	# stores IO names with instance for each registered channel
 my @ChannelsQ;		# stores received value for all Q[XBWL]n outputs
 my @ChannelsQX;		# stores computed bit value for all QXn.<0..7> outputs
@@ -31,6 +31,7 @@ my $UnitRegistrations;	# stores the registration string
 my @argv       = ();
 my $server     = 0;
 my $conn;
+my $errorFlag;
 
 my $Ch = 0;
 my $Bit;
@@ -55,8 +56,9 @@ my %commandLineFlags = (
     'T'   => 1,
     'G'   => 0,				# Bool flags
     'E'   => 0,
-    'a'   => 0,
+    'B'   => 0,
     'q'   => 0,
+    'a'   => 0,
     'z'   => 0,	# dummy flag for iCserver calls -R iCmqtt -z (stops error message)
     't'   => 0,
     'J'   => 0,
@@ -96,24 +98,34 @@ my @bitIndex =	(
 my $named = untaint($0); $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
- @<<<<< [-GETaqtJOh] -F <floor> -I <x> -Q <y> <openHAB control>.items
+ @<<<<< [-GEBqatJOh][ -T <z>] -F <floor> -I <x> -Q <y> <openHAB>.items
 	$named
         [ -s <iC host>][ -p <iC port>][ -N <name>][ -i <inst>]
         [ -m <MQTT host>][ -n <MQTT port>][ -f <file>]
         [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
-    -F floor regexp used for selecting a floor in openHAB topics
-             examples: 'gf_[sp]' 'ff_[sp]'     (no default)
-             longer examples: 'home/gelijkvloers' 'home/verdiep'
+                COMMON OPTIONS
+    -F floor regexp used for selecting one or more floors in openHAB topics
+             examples: '[gf]f_[sp]' for two floor topics     (no default)
+                       'gf_[sp]' or 'ff_[sp]' two individual floor topics
+                           ending in 's' for subscribe and 'p for publish
+                       'home/+' many combined floors with same topics for
+                           subscribe and publish
+                       'home/gelijkvloers' or 'home/verdiep' for two floors
     -I <x>   starting input IEC address IX<x>  (no default)
     -Q <y>   starting output IEC address QX<y> (no default)
+    -f file  read flags and additional parameters from this file
+       <openHAB>.items file   from openHAB/configuration/items
+                GENERATE OPTIONS
     -G       generate auxiliary iC include files:
                  <floor>_OHaliasIEC.ih
                  <floor>_OHdeclare.ih
-                 outputs -I <x> and -Q <y> for next floor
-    -E       additionally generate iC extern file:
+             outputs -I <x> and -Q <y> for next floor
+    -E       also generate iC extern file:
                  <floor>_OHextern.ih
-    -T <z>   additionally generate iC test file:
+    -T <z>   also generate iC test file with IX<z> starting input:
                  <floor>_OHtest.ic with virtual I/O inputs IX<z>
+             additionally outputs -T <z> for next floor
+                RUN OPTIONS
     -s host  name of iCserver host        (default '127.0.0.1')
     -p port  service port of iCserver     (default '8778')
     -N name  iC registration name         (default <floor>_iCmqtt)
@@ -124,34 +136,31 @@ Usage:
     -A cmd  use <cmd> to autovivify I/O clients if iCserver
             is started by this @<<<<< call (default 'iCbox')
 				$named
-    -f file  read flags and additional parameters from this file
-    -q       quiet - do not report clients connecting and disconnecting
-       <openHAB control>.items file   from openHAB/configuration/items
-
-	return "IX<next> QX<next>" to allow specifying non-clashing
-	       IX<x> and QX<y> for iCmqtt on another processor. 
-
-        DEBUG options
-    -a       analyse <openHAB control>.items - without -F floor:
+    -B      start iCbox -d to monitor active MQTT iC I/Os
+    -q      quiet - do not report clients connecting and disconnecting
+                DEBUG OPTIONS
+    -a      analyse <openHAB>.items file - without -F floor:
                shows Switch selections where actions are not defined
                            - with -F floor:
                checks Switch selections have different id's
-    -t       trace debug messages
-    -J       trace rcv messages in iCmsgM.pm
-    -O       trace send messages in iCmsgM.pm
-    -M       display elapsed time in seconds and microseconds
-    -h       help, ouput this Usage text only
-
-        AUXILIARY app   - start a Bernstein chain
+    -t      trace debug messages
+    -J      trace rcv messages in iCmsgM.pm
+    -O      trace send messages in iCmsgM.pm
+    -M      display elapsed time in seconds and microseconds
+    -h      help, ouput this Usage text only
+                AUXILIARY APP   - start a Bernstein chain
     -R <app ...> run one app followed by -z and its arguments as a
                  separate process; -R ... must be last arguments,
-
-        KEYBOARD inputs
-        q    from keyboard stops iCserver and all apps
+                KEYBOARD INPUTS
+        q    stops iCserver and all apps if @<<<<< started iCserver
+					$named
+        Q    stops @<<<<< only
+		$named
+        T    output iCserver client tables
 
 Copyright (C) 2023-2024  John E. Wulff        <immediateC@gmail.com>
 							  '@'
-$Id: iCmqtt 1.3 $
+$Id: iCmqtt 1.4 $
 .
 
 ########################################################################
@@ -171,7 +180,7 @@ my $nr = qr/-?[1-9]\d*|0(x[\da-fA-F]+|b[01]+|[0-7]*)/;	# precompiled regex for n
 
 use vars qw($opt_F $opt_I $opt_Q $opt_G $opt_E $opt_T $opt_a);
 use vars qw($opt_s $opt_p $opt_N $opt_m $opt_n $opt_S $opt_A $opt_i $opt_h);
-use vars qw($opt_ $opt_t $opt_J $opt_O $opt_M $opt_q $opt_z);
+use vars qw($opt_ $opt_t $opt_J $opt_O $opt_M $opt_B $opt_q $opt_z);
 use Getopt::Long qw(:config no_ignore_case bundling);
 GetOptions (
     ''    => \$opt_,			# lone - (not used)
@@ -190,8 +199,9 @@ GetOptions (
     'T=i' => \$opt_T,
     'G'   => \$opt_G,
     'E'   => \$opt_E,
-    'a'   => \$opt_a,
+    'B'   => \$opt_B,
     'q'   => \$opt_q,
+    'a'   => \$opt_a,
     'z'   => \$opt_z,	# dummy flag for iCserver calls -R iCmqtt -z (stops error message)
     't'   => \$opt_t,
     'J'   => \$opt_J,
@@ -249,81 +259,147 @@ my %icVars = ();
 my $state  = "B";		# Base state
 my $floor  = $opt_F;
 my $floorO = $floor;
+$floor     =~ s/\/\+$/\/\\w+/;
 $floorO    =~ s/\W/_/g;
+$floorO    =~ s/^_+//;
+$floorO    =~ s/_+/_/g;
+$floorO    =~ s/_$//;
 my %IECs   = ();
 my $Istart = $opt_I;
 my $Qstart = $opt_Q;
+my @Ist    = ($Istart);
+my @Qst    = ($Qstart);
 my $Iadr   = $Istart - 1;
 my $Qadr   = $Qstart - 1;
-my $Ibit    = 7;
-my $Qbit    = 7;
+my @Iad    = ();
+my @Qad    = ();
+my $Ibit   = 7;
+my $Qbit   = 7;
+my @Ibt    = ();
+my @Qbt    = ();
 my %TopicChannels = ();
 my %ChannelTopics = ();
+my %Ips    = ();
+my %Qps    = ();
+my @Iprefs = ();
+my @Qprefs = ();
+my $Ipref  = '';
+my $Qpref  = '';
+my $Icnt   = 65535;			# large
+my $Qcnt;
+my $n;
 
-open IN, $argv[0] or die "Cannot open input file $argv[0]: $!";
-while (<IN>) {
-    if ($state eq "B" and m/^\s*Switch\s+\w+\s+"(.*)"/) {
-	$icVar = $1;
-	$icVar =~ s/[^\w]/ /g;
-	$icVar =~ s/\s+/_/g;
-	$state = "S";		# Switch state
-    } elsif ($state eq "S") {
-	if (m/^\s*{\s*mqtt\s*=\s*"\s*$/) {
-	    $onCnt = $offCnt = $stateCnt = 0;
-	    $state = "M";
-	} else {
-	    $icVars{$icVar} = "ON/OFF action defined in homecontrol.rules";
-	    $state = "B";
-	}
-    } elsif ($state eq "M") {
-	if (m/^\s*>\[\w+:($floor(\/\w+)+):command:ON:/) {
-	    if ($icVar ne $icON) {
-		if (++$Ibit > 7) {
-		    $Iadr++;
-		    $Ibit = 0;
+for ($n = 0; $n <= $Icnt; $n++) {
+    open IN, $argv[0] or die "Cannot open input file $argv[0]: $!";
+    while (<IN>) {
+	if ($state eq "B" and m/^\s*Switch\s+\w+\s+"(.*)"/) {
+	    $icVar = $1;
+	    $icVar =~ s/[^\w]/ /g;
+	    $icVar =~ s/\s+/_/g;
+	    $state = "S";		# Switch state
+	} elsif ($state eq "S") {
+	    if (m/^\s*{\s*mqtt\s*=\s*"\s*$/) {
+		$onCnt = $offCnt = $stateCnt = 0;
+		$state = "M";
+	    } else {
+		$icVars{$icVar} = "ON/OFF action defined in homecontrol.rules";
+		$state = "B";
+	    }
+	} elsif ($state eq "M") {
+	    if (m/^\s*>\[\w+:(($floor)(\/\w+)+):command:ON:/) {
+		if (not $Ipref) {
+		    $Ips{$2}++;
+		} elsif ($2 eq $Ipref) {
+		    if ($icVar ne $icON) {
+			if (++$Ibit > 7) {
+			    $Iadr++;
+			    $Ibit = 0;
+			}
+			$ONadr = $Iadr;
+			$ONbit = $Ibit;
+			$icON = $icVar;
+			push(@{ $IECs{"IX$ONadr"}[$ONbit] }, $icVar."_ON");	# iC variable
+		    }
+		    push(@{ $IECs{"IX$ONadr"}[$ONbit] }, "$1:ON");		# topic:ON
+		    $onCnt++;
 		}
-		$ONadr = $Iadr;
-		$ONbit = $Ibit;
-		$icON = $icVar;
-		push(@{ $IECs{"IX$ONadr"}[$ONbit] }, $icVar."_ON");	# iC variable
-	    }
-	    push(@{ $IECs{"IX$ONadr"}[$ONbit] }, "$1:ON");	# topic:ON
-	    $onCnt++;
-	} elsif (m/^\s*>\[\w+:($floor(\/\w+)+):command:OFF:/) {
-	    if ($icVar ne $icOFF) {
-		if (++$Ibit > 7) {
-		    $Iadr++;
-		    $Ibit = 0;
+	    } elsif (m/^\s*>\[\w+:(($floor)(\/\w+)+):command:OFF:/) {
+		if (not $Ipref) {
+		    $Ips{$2}++;
+		} elsif ($2 eq $Ipref) {
+		    if ($icVar ne $icOFF) {
+			if (++$Ibit > 7) {
+			    $Iadr++;
+			    $Ibit = 0;
+			}
+			$OFFadr = $Iadr;
+			$OFFbit = $Ibit;
+			$icOFF = $icVar;
+			push(@{ $IECs{"IX$OFFadr"}[$OFFbit] }, $icVar."_OFF");	# iC variable
+		    }
+		    push(@{ $IECs{"IX$OFFadr"}[$OFFbit] }, "$1:OFF");	# topic:OFF
+		    $offCnt++;
 		}
-		$OFFadr = $Iadr;
-		$OFFbit = $Ibit;
-		$icOFF = $icVar;
-		push(@{ $IECs{"IX$OFFadr"}[$OFFbit] }, $icVar."_OFF");	# iC variable
-	    }
-	    push(@{ $IECs{"IX$OFFadr"}[$OFFbit] }, "$1:OFF");	# topic:OFF
-	    $offCnt++;
-	} elsif (m/^\s*<\[\w+:($floor(\/\w+)+):state:/) {
-	    if ($icVar ne $icQ) {
-		if (++$Qbit > 7) {
-		    $Qbit = 0;
-		    $Qadr++;
+	    } elsif (m/^\s*<\[\w+:(($floor)(\/\w+)+):state:/) {
+		if (not $Qpref) {
+		    $Qps{$2}++;
+		} elsif ($2 eq $Qpref) {
+		    if ($icVar ne $icQ) {
+			if (++$Qbit > 7) {
+			    $Qbit = 0;
+			    $Qadr++;
+			}
+			$icQ = $icVar;
+			push(@{ $IECs{"QX$Qadr"}[$Qbit] }, $icVar);	# iC variable
+		    }
+		    push(@{ $IECs{"QX$Qadr"}[$Qbit] }, $1);		# topic
+		    $stateCnt++;
 		}
-		$icQ = $icVar;
-		push(@{ $IECs{"QX$Qadr"}[$Qbit] }, $icVar);	# iC variable
+	    } elsif (m/^\s*}\s*$/) {
+		if ($onCnt != $offCnt and $offCnt != $stateCnt) {
+		    print STDERR "*** ERROR: $named: $icVar: onCnt = $onCnt, offCnt = $offCnt stateCnt = $stateCnt\n";
+		    $errorFlag++;
+		}  elsif ($onCnt != 0) {
+		    $icVars{$icVar}++;
+		}
+		$state = "B";
 	    }
-	    push(@{ $IECs{"QX$Qadr"}[$Qbit] }, $1);		# topic
-	    $stateCnt++;
-	} elsif (m/^\s*}\s*$/) {
-	    if ($onCnt != $offCnt and $offCnt != $stateCnt) {
-		print "ERROR: $icVar: onCnt = $onCnt, offCnt = $offCnt stateCnt = $stateCnt\n";
-	    }  elsif ($onCnt != 0) {
-		$icVars{$icVar}++;
-	    }
-	    $state = "B";
 	}
     }
+    close IN;
+    if (not $Ipref) {
+	$Icnt = 0;
+	foreach $Ipref (sort keys %Ips) {
+	    push(@Iprefs, $Ipref);
+	    $Icnt++;
+	}
+	$Qcnt = 0;
+	foreach $Qpref (sort keys %Qps) {
+	    push(@Qprefs, $Qpref);
+	    $Qcnt++;
+	}
+	if ($Icnt == 0 or $Icnt != $Qcnt) {
+	    print STDERR "*** ERROR $named: no topics found\n",
+	                 "                  or number of subscribe topics ($Icnt)\n",
+			 "                  does not match publish topics ($Qcnt)\n";
+	    $errorFlag++;
+	    last;
+	}
+    } else {
+	push(@Ist, $Iadr + 1);
+	push(@Qst, $Qadr + 1);
+	push(@Iad, $Iadr);
+	push(@Qad, $Qadr);
+	push(@Ibt, $Ibit);
+	push(@Qbt, $Qbit);
+	$Ibit = $Qbit = 7;			# start with new IECs
+    }
+    $Ipref = $Iprefs[$n];
+    $Qpref = $Qprefs[$n];
 }
-close IN;
+if ($errorFlag) {
+    exit -2;
+}
 
 if ($opt_a) {
     foreach $icVar (sort keys %icVars) {
@@ -332,146 +408,204 @@ if ($opt_a) {
     exit 0;
 }
 
-if ($opt_G) {
-    open OUT, ">$floorO"."_OHaliasIEC.ih" or die "Cannot open output file '$floorO"."_OHaliasIEC.ih': $!";
-    print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
-    print OUT "// openHAB alias IEC assignments for \"$floor\"\n";
-    print OUT "//   Must be included at the end of one .ic file only.\n";
-    print OUT "//\n";
-    print OUT "// IEC inputs\n";
-    print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
-    $Iflag = 1;
-  IEC1:
-    foreach $IEC (sort keys %IECs) {
-	for ($bit = 0; $bit < 8; $bit++) {
-	    my $IECp = \@{ $IECs{$IEC}[$bit] };
-	    if ($Iflag) {
-		printf OUT "%-34s = %s;", $IECp->[0], "$IEC.$bit";
-	    } else {
-		printf OUT "%-7s= %-34s", "$IEC.$bit", $IECp->[0].";";
-	    }
-	    my $p = "\t";
-	    for (my $i = 1; $i < scalar(@$IECp); $i++) {
-		printf OUT "$p// %s\n", $IECp->[$i];
-		$p = "\t\t\t\t\t\t";
-	    }
-	    if ($Iflag and $bit == $Ibit and $IEC eq "IX$Iadr") {
-		print OUT "\n//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
-		print OUT "// IEC outputs\n";
-		print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
-		$Iflag = 0;
-		next IEC1;
-	    } elsif ($bit == $Qbit and $IEC eq "QX$Qadr") {
-		last;
-	    }
-	}
-    }
-    close OUT;
-    print "$floorO"."_OHaliasIEC.ih generated with IX$Istart - IX$Iadr and QX$Qstart - QX$Qadr\n";
+if ($opt_G or $opt_E or defined $opt_T) {
+    my $Tadr = "";
+    for ($n = 0; $n < $Icnt; $n++) {
+	$Istart = $Ist[$n];
+	$Qstart = $Qst[$n];
+	$Iadr   = $Iad[$n];
+	$Qadr   = $Qad[$n];
+	$Ibit   = $Ibt[$n];
+	$Qbit   = $Qbt[$n];
+	$Ipref  = $Iprefs[$n];
+	$Qpref  = $Qprefs[$n];
+	$floorO = $Ipref;
+	$floorO    =~ s/\W/_/g;
+	$floorO    =~ s/__+/_/g;
+	$floorO    =~ s/^_//;
+	$floorO    =~ s/_$//;
 
-    open OUT, ">$floorO"."_OHdeclare.ih" or die "Cannot open output file '$floorO"."_OHdeclare.ih': $!";
-    print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
-    print OUT "// openHAB declarations for \"$floor\"\n";
-    print OUT "//   Copy lines declaring variables used or assigned in a .ic\n";
-    print OUT "//   file just after the included extern declarations.\n";
-    print OUT "//   Then use the variable names in bit expressions or assignments\n";
-    print OUT "//   or as parameters in iC function block calls.\n";
-    print OUT "//\n";
-    print OUT "// iC input declarations\n";
-    print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
-    $Iflag = 1;
-  IEC2:
-    foreach $IEC (sort keys %IECs) {
-	for ($bit = 0; $bit < 8; $bit++) {
-	    my $IECp = \@{ $IECs{$IEC}[$bit] };
-	    printf OUT "imm bit %-34s", $IECp->[0].";";
-	    my $p = "\t";
-	    for (my $i = 1; $i < scalar(@$IECp); $i++) {
-		printf OUT "$p// %s\n", $IECp->[$i];
-		$p = "\t\t\t\t\t\t";
-	    }
-	    if ($Iflag and $bit == $Ibit and $IEC eq "IX$Iadr") {
-		print OUT "\n//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
-		print OUT "// iC output declarations\n";
-		print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
-		$Iflag = 0;
-		next IEC2;
-	    } elsif ($bit == $Qbit and $IEC eq "QX$Qadr") {
-		last;
-	    }
-	}
-    }
-    close OUT;
-    print "$floorO"."_OHdeclare.ih generated\n";
-
-    if ($opt_E) {
-	open OUT, ">$floorO"."_OHextern.ih" or die "Cannot open output file '$floorO"."_OHextern.ih': $!";
+	open OUT, ">$floorO"."_OHaliasIEC.ih" or die "Cannot open output file '$floorO"."_OHaliasIEC.ih': $!";
 	print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
-	print OUT "// openHAB extern declarations for \"$floor\"\n";
-	print OUT "//   Must be included at the beginning of each .ic file if more\n";
-	print OUT "//   than one .ic file is linked\n";
+	print OUT "// openHAB alias IEC assignments for \"$Ipref\"\n";
+	print OUT "//   Must be included at the end of one .ic file only.\n";
 	print OUT "//\n";
-	print OUT "// iC extern input declarations\n";
+	print OUT "// IEC inputs\n";
 	print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
 	$Iflag = 1;
-      IEC3:
+      IEC1:
 	foreach $IEC (sort keys %IECs) {
 	    for ($bit = 0; $bit < 8; $bit++) {
 		my $IECp = \@{ $IECs{$IEC}[$bit] };
-		printf OUT "extern imm bit %-34s", $IECp->[0].";";
+		for (my $i = 1; $i < scalar(@$IECp); $i++) {
+		    if ($Iflag and $IECp->[$i] =~ m/^$Ipref/ or
+			not $Iflag and $IECp->[$i] =~ m/^$Qpref/) {
+			goto GEN1;
+		    }
+		}
+		next;
+	      GEN1:
+		if ($Iflag) {
+		    printf OUT "%-34s = %s;", $IECp->[0], "$IEC.$bit";
+		} else {
+		    printf OUT "%-7s= %-34s", "$IEC.$bit", $IECp->[0].";";
+		}
 		my $p = "\t";
 		for (my $i = 1; $i < scalar(@$IECp); $i++) {
-		    printf OUT "$p// %s\n", $IECp->[$i];
-		    $p = "\t\t\t\t\t\t";
+		    if ($Iflag and $IECp->[$i] =~ m/^$Ipref/ or
+			not $Iflag and $IECp->[$i] =~ m/^$Qpref/) {
+			printf OUT "$p// %s\n", $IECp->[$i];
+			$p = "\t\t\t\t\t\t";
+		    }
 		}
 		if ($Iflag and $bit == $Ibit and $IEC eq "IX$Iadr") {
 		    print OUT "\n//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
-		    print OUT "// iC extern output declarations\n";
+		    print OUT "// IEC outputs\n";
 		    print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
 		    $Iflag = 0;
-		    next IEC3;
+		    next IEC1;
 		} elsif ($bit == $Qbit and $IEC eq "QX$Qadr") {
 		    last;
 		}
 	    }
 	}
 	close OUT;
-	print "$floorO"."_OHextern.ih generated\n";
-    }
+	print "$floorO"."_OHaliasIEC.ih generated with IX$Istart - IX$Iadr and QX$Qstart - QX$Qadr\n";
 
-    if (defined $opt_T) {
-	open OUT, ">$floorO"."_OHtest.ic" or die "Cannot open output file '$floorO"."_OHtest.ic': $!";
+	open OUT, ">$floorO"."_OHdeclare.ih" or die "Cannot open output file '$floorO"."_OHdeclare.ih': $!";
 	print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
-	print OUT "// openHAB - iC test application for \"$floor\"\n";
+	print OUT "// openHAB declarations for \"$Ipref\"\n";
+	print OUT "//   Copy lines declaring variables used or assigned in a .ic\n";
+	print OUT "//   file just after the included extern declarations.\n";
+	print OUT "//   Then use the variable names in bit expressions or assignments\n";
+	print OUT "//   or as parameters in iC function block calls.\n";
+	print OUT "//\n";
+	print OUT "// iC input declarations\n";
 	print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
-	print OUT "imm bit relay(bit sw, bit ohON, bit ohOFF) {\n";
-	print OUT "    imm bit swR = RISE(sw);\n";
-	print OUT "    this = JK(swR | ohON, swR | ohOFF);\n";
-	print OUT "}\n\n";
-	if ($opt_E) {
-	    print OUT "%include \"$floorO"."_OHextern.ih\"\n";
-	}
-	print OUT "%include \"$floorO"."_OHdeclare.ih\"\n\n";
-	my $Ia = $opt_T;
+	$Iflag = 1;
+      IEC2:
 	foreach $IEC (sort keys %IECs) {
-	    if ($IEC =~ m/^Q/) {
-		for ($bit = 0; $bit < 8; $bit++) {
-		    my $IECp = \@{ $IECs{$IEC}[$bit] };
-		    printf OUT "%-34s = relay(%s, %s, %s);\n",
-			$IECp->[0], "IX$Ia.".$bit,
-			$IECp->[0]."_ON", $IECp->[0]."_OFF";
-		    last if $bit == $Qbit and $IEC eq "QX$Qadr";
+	    for ($bit = 0; $bit < 8; $bit++) {
+		my $IECp = \@{ $IECs{$IEC}[$bit] };
+		for (my $i = 1; $i < scalar(@$IECp); $i++) {
+		    if ($Iflag and $IECp->[$i] =~ m/^$Ipref/ or
+			not $Iflag and $IECp->[$i] =~ m/^$Qpref/) {
+			goto GEN2;
+		    }
 		}
-		$Ia++;
+		next;
+	      GEN2:
+		printf OUT "imm bit %-34s", $IECp->[0].";";
+		my $p = "\t";
+		for (my $i = 1; $i < scalar(@$IECp); $i++) {
+		    if ($Iflag and $IECp->[$i] =~ m/^$Ipref/ or
+			not $Iflag and $IECp->[$i] =~ m/^$Qpref/) {
+			printf OUT "$p// %s\n", $IECp->[$i];
+			$p = "\t\t\t\t\t\t";
+		    }
+		}
+		if ($Iflag and $bit == $Ibit and $IEC eq "IX$Iadr") {
+		    print OUT "\n//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
+		    print OUT "// iC output declarations\n";
+		    print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
+		    $Iflag = 0;
+		    next IEC2;
+		} elsif ($bit == $Qbit and $IEC eq "QX$Qadr") {
+		    last;
+		}
 	    }
 	}
-	print OUT "\n%include \"$floorO"."_OHaliasIEC.ih\"\n";
 	close OUT;
-	print "$floorO"."_OHtest.ic generated\n";
-    }
+	print "$floorO"."_OHdeclare.ih generated\n";
 
+	if ($opt_E) {
+	    open OUT, ">$floorO"."_OHextern.ih" or die "Cannot open output file '$floorO"."_OHextern.ih': $!";
+	    print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
+	    print OUT "// openHAB extern declarations for \"$Ipref\"\n";
+	    print OUT "//   Must be included at the beginning of each .ic file if more\n";
+	    print OUT "//   than one .ic file is linked\n";
+	    print OUT "//\n";
+	    print OUT "// iC extern input declarations\n";
+	    print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
+	    $Iflag = 1;
+	  IEC3:
+	    foreach $IEC (sort keys %IECs) {
+		for ($bit = 0; $bit < 8; $bit++) {
+		    my $IECp = \@{ $IECs{$IEC}[$bit] };
+		    for (my $i = 1; $i < scalar(@$IECp); $i++) {
+			if ($Iflag and $IECp->[$i] =~ m/^$Ipref/ or
+			    not $Iflag and $IECp->[$i] =~ m/^$Qpref/) {
+			    goto GEN3;
+			}
+		    }
+		    next;
+		  GEN3:
+		    printf OUT "extern imm bit %-34s", $IECp->[0].";";
+		    my $p = "\t";
+		    for (my $i = 1; $i < scalar(@$IECp); $i++) {
+			if ($Iflag and $IECp->[$i] =~ m/^$Ipref/ or
+			    not $Iflag and $IECp->[$i] =~ m/^$Qpref/) {
+			    printf OUT "$p// %s\n", $IECp->[$i];
+			    $p = "\t\t\t\t\t\t";
+			}
+		    }
+		    if ($Iflag and $bit == $Ibit and $IEC eq "IX$Iadr") {
+			print OUT "\n//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
+			print OUT "// iC extern output declarations\n";
+			print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
+			$Iflag = 0;
+			next IEC3;
+		    } elsif ($bit == $Qbit and $IEC eq "QX$Qadr") {
+			last;
+		    }
+		}
+	    }
+	    close OUT;
+	    print "$floorO"."_OHextern.ih generated\n";
+	}
+
+	if (defined $opt_T) {
+	    open OUT, ">$floorO"."_OHtest.ic" or die "Cannot open output file '$floorO"."_OHtest.ic': $!";
+	    print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
+	    print OUT "// openHAB - iC test application for \"$Ipref\"\n";
+	    print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
+	    print OUT "imm bit relay(bit sw, bit ohON, bit ohOFF) {\n";
+	    print OUT "    imm bit swR = RISE(sw);\n";
+	    print OUT "    this = JK(swR | ohON, swR | ohOFF);\n";
+	    print OUT "}\n\n";
+	    if ($opt_E) {
+		print OUT "%include \"$floorO"."_OHextern.ih\"\n";
+	    }
+	    print OUT "%include \"$floorO"."_OHdeclare.ih\"\n\n";
+	    my $Ia = $opt_T;
+	    foreach $IEC (sort keys %IECs) {
+		if ($IEC =~ m/^Q/) {
+		    for ($bit = 0; $bit < 8; $bit++) {
+			my $IECp = \@{ $IECs{$IEC}[$bit] };
+			for (my $i = 1; $i < scalar(@$IECp); $i++) {
+			    if ($IECp->[$i] =~ m/^$Qpref/) {
+				goto GEN4;
+			    }
+			}
+			next;
+		      GEN4:
+			printf OUT "%-34s = relay(%s, %s, %s);\n",
+			    $IECp->[0], "IX$Ia.".$bit,
+			    $IECp->[0]."_ON", $IECp->[0]."_OFF";
+			last if $bit == $Qbit and $IEC eq "QX$Qadr";
+		    }
+		    $Ia++;		# is incremented correctly for floors not output here
+		}
+	    }
+	    print OUT "\n%include \"$floorO"."_OHaliasIEC.ih\"\n";
+	    close OUT;
+	    print "$floorO"."_OHtest.ic generated\n";
+	    $Tadr = " -T $Ia";
+	}
+
+    }
     $Iadr++; $Qadr++;
-    print " -I $Iadr -Q $Qadr # input and output IEC addresses for next -G run\n";
+    print " -I $Iadr -Q $Qadr$Tadr # input and output IEC addresses for next -G run\n";
     exit 0;
 }
 print "$named running with IX$Istart - IX$Iadr and QX$Qstart - QX$Qadr registered.\n";
@@ -508,55 +642,73 @@ $ENV{MQTT_SIMPLE_ALLOW_INSECURE_LOGIN} = 1;
 # Connect to broker
 print "##### Net::MQTT::Simple->new(\"$m_host:$m_port\");\n" if $opt_t;
 my $mqtt = Net::MQTT::Simple->new("$m_host:$m_port");
-
-# Depending if authentication is required, login to the broker
-my $floorS = $floor;
-$floorS =~ s/\[(sp|ps)\]/s/;	# gf_[sp] ==> gf_s; ff[ps] ==> ff_s
-$mqtt->subscribe("$floorS/#", \&mqttReceived);
+# subscribe to all topic-prefixes controled by this instance of iCmqtt
+for ($n = 0; $n < $Icnt; $n++) {
+    $Ipref = $Iprefs[$n];
+    print "MQTT: subscribe \"$Ipref/#\"\n" if $opt_t;
+    $mqtt->subscribe("$Ipref/#", \&mqttReceived);
+}
 
 ############# send registration ############################
 
-my $d;				# direction 'S' or 'R'
+my $dir;			# direction 'S' or 'R'
 my $register = 1;		# tested in rcvd_msg_from_server() for registration reply
 my $ri = 0;			# registration index used in rcvd_msg_from_server()
 $UnitRegistrations = "N$name";	# initiate registration string
 
-$Iflag = 1;
-IEC4:
-foreach $IEC (sort keys %IECs) {
-    my $from = 0;
-    if ($IEC =~ /^I/) {
-	$d = 'S';
-    } elsif ($IEC =~ /^Q/) {
-	$d = 'R';
-    } else {
-	die "$named: invalid argument '$IEC' - internal error";
-    }
-    for ($bit = 0; $bit < 8; $bit++) {
-	$from |= $masks[$bit];
-	last if $bit == $Ibit and $IEC eq "IX$Iadr";
-	if ($Iflag and $bit == $Ibit and $IEC eq "IX$Iadr") {
-	    $Iflag = 0;
-	    next IEC4;
-	} elsif ($bit == $Qbit and $IEC eq "QX$Qadr") {
-	    last;
+for ($n = 0; $n < $Icnt; $n++) {
+    $Iadr   = $Iad[$n];
+    $Qadr   = $Qad[$n];
+    $Ibit   = $Ibt[$n];
+    $Qbit   = $Qbt[$n];
+    $Ipref  = $Iprefs[$n];
+    $Qpref  = $Qprefs[$n];
+    $Iflag = 1;
+  IEC4:
+    foreach $IEC (sort keys %IECs) {
+	my $from = 0;
+	if ($IEC =~ /^I/) {
+	    $dir = 'S';
+	} elsif ($IEC =~ /^Q/) {
+	    $dir = 'R';
+	} else {
+	    die "$named: invalid argument '$IEC' - internal error";
+	}
+	for ($bit = 0; $bit < 8; $bit++) {
+	    my $IECp = \@{ $IECs{$IEC}[$bit] };
+	    for (my $i = 1; $i < scalar(@$IECp); $i++) {
+		if ($Iflag and $IECp->[$i] =~ m/^$Ipref/ or
+		    not $Iflag and $IECp->[$i] =~ m/^$Qpref/) {
+		    goto RUN1;
+		}
+	    }
+	    next;
+	  RUN1:
+	    $from |= $masks[$bit];
+	    if ($Iflag and $bit == $Ibit and $IEC eq "IX$Iadr") {
+		$Iflag = 0;
+		last;
+	    } elsif ($bit == $Qbit and $IEC eq "QX$Qadr") {
+		last;
+	    }
+	}
+	next IEC4 if $from == 0;
+	push @ArgNames, [ $IEC, $from ];		# argument order for handling ack
+	if ($from < 255) {
+	    $IEC .= "($from)";
+	}
+	print "register: $dir$IEC\n" if $opt_t;
+	if ((length($UnitRegistrations) + length($IEC)) > 1396) {	# REPLY 1400 - (1+2+1) in tcpc.h
+	    print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
+	    $conn->send_now($UnitRegistrations);		# unlikely to overflow - tested with length() < 139
+	    my ($tmsg, $terr) = $conn->rcv_now();		# receive registration acknowledgment
+	    print "$named: Reply: $tmsg\n" if $opt_t;
+	    rcvd_msg_from_server($conn, $tmsg, $terr);	# process registration acknowledgment
+	    $UnitRegistrations = "$dir$IEC"	# start new $unitRegistrations without comma
+	} else {
+	    $UnitRegistrations .= ",$dir$IEC";	# direction 1 ',Z' 2 term 1
 	}
     }
-    push @ArgNames, [ $IEC, $from ];		# argument order for handling ack
-    if ($from < 255) {
-	$IEC .= "($from)";
-    }
-    if ((length($UnitRegistrations) + length($IEC)) > 1396) {	# REPLY 1400 - (1+2+1) in tcpc.h
-	print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
-	$conn->send_now($UnitRegistrations);		# unlikely to overflow - tested with length() < 139
-	my ($tmsg, $terr) = $conn->rcv_now();		# receive registration acknowledgment
-	print "$named: Reply: $tmsg\n" if $opt_t;
-	rcvd_msg_from_server($conn, $tmsg, $terr);	# process registration acknowledgment
-	$UnitRegistrations = "$d$IEC"	# start new $unitRegistrations without comma
-    } else {
-	$UnitRegistrations .= ",$d$IEC";	# direction 1 ',Z' 2 term 1
-    }
-    print "register: $d$IEC\n" if $opt_t;
 }
 $UnitRegistrations .= ",Z";			# terminate registration string
 print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
@@ -571,8 +723,24 @@ $ri == scalar @ArgNames or
 $register = 0;
 ############# correct number of registration replies #######
 
-my ($frame, $ch, $maxColumn, $mw, $pane);
-my ($row, $column, $scroll) = (0, 0, 0);
+########################################################################
+#	Optionally start an iCbox -d to monitor all MQTT iC I/Os
+########################################################################
+
+if ($opt_B) {
+    my $boxParams = "iCbox -d -n $named-IO";
+    $boxParams .= " -s $host" unless $host eq "localhost" or $host eq "127.0.0.1";
+    $boxParams .= " -p $port" unless $port eq "8778";
+    for (my $i = 0; $i < scalar @ArgNames; $i++) {
+	my ($IEC, $from) = @{$ArgNames[$i]};	# all argument base names and bit masks
+	if ($from < 255) {
+	    $IEC .= ",$from";
+	}
+	$boxParams .= " $IEC";
+    }
+    print "MONITOR: '$boxParams'\n" if $opt_t;
+    fork_and_exec($boxParams);			# run iCbox -d
+}
 
 ########################################################################
 #	Optionally run -R option
@@ -614,7 +782,6 @@ sub mqttReceived
     my $topicP = \@{ $TopicChannels{"$topic:$message"} };
     if ($topicP) {
 	my ($channel, $mask) = @$topicP;
-##  print "--- $channel:$mask\n";
 	send_input($channel, $mask);		# rise of the iC output pulse
 	########################################################################
 	#  Avoid using ualarm() because pulses for different topics cannot
@@ -671,7 +838,6 @@ sub mqttReceived
 
 sub convertFlags {
     my ($argp) = @_;
-    my ($ch);
     print "cF:	*argp = '", join(" ", @{$argp}), "'\n" if $opt_Z;
     my $Fflag = 0;
     foreach my $arg (@{$argp}) {
@@ -752,7 +918,6 @@ sub quit_program {
 	}
 	$conn->disconnect();
     }
-    $mw->destroy() if $mw;
     $mqtt->disconnect();
     exit(0);
 } # quit_program
@@ -875,7 +1040,7 @@ sub rcvd_msg_from_server {
 				my $IECp = \@{ $IECs{$IEC}[$bit] };
 				for (my $i = 1; $i < scalar(@$IECp); $i++) {
 				    my $topic = $IECp->[$i];
-				    printf ">>> %s.%d '%s' %d:%02x\n", $IEC, $bit, $topic, $channel, $masks[$bit];
+				    printf ">>> %s.%d '%s' %d:%02x\n", $IEC, $bit, $topic, $channel, $masks[$bit] if $opt_t;
 				    push(@{ $ChannelTopics{$channel}[$bit] }, $topic);		# topic
 				}
 			    }
@@ -895,7 +1060,7 @@ sub rcvd_msg_from_server {
 			    my $IECp = \@{ $IECs{$IEC}[$bit] };
 			    for (my $i = 1; $i < scalar(@$IECp); $i++) {
 				my $topic = $IECp->[$i];
-				printf "<<< %s.%d '%s' %d:%02x\n", $IEC, $bit, $topic, $channel, $masks[$bit];
+				printf "<<< %s.%d '%s' %d:%02x\n", $IEC, $bit, $topic, $channel, $masks[$bit] if $opt_t;
 				$TopicChannels{$topic} = [ $channel, $masks[$bit] ];
 			    }
 			}
@@ -943,10 +1108,10 @@ sub connect_to_server {
 	    }
 	    if ($server == 0) {
 		@s = split(" ", $opt_S);
-		print "\@s = '@s'\n" if $opt_T;
+		print "\@s = '@s'\n" if $opt_t;
 		splice(@s, 1, 0, "-z$opt_q", "-k", "-A", "$opt_A");	# block STDIN for chained iCserver
 		splice(@s, 1, 0, "-p", "$port") unless $port eq "8778";
-		print "\@s = '@s'\n" if $opt_T;
+		print "\@s = '@s'\n" if $opt_t;
 		if ($host eq "localhost" or $host eq "127.0.0.1") {
 		    fork_and_exec(@s);	# start iCserver
 		    $server = 1;		# remember that this iC app started iCserver
@@ -956,7 +1121,7 @@ sub connect_to_server {
 		}
 	    } elsif ($server > 0) {
 		if ($server == 2 or $i++ < 4) {
-		    print "$named: $i: wait 2 seconds for iCserver to start\n" if $opt_T;
+		    print "$named: $i: wait 2 seconds for iCserver to start\n" if $opt_t;
 		    select undef, undef, undef, 2;
 		} else {
 		    warn "$named: waited 8 seconds for '@s' to start - give up\n";
@@ -977,15 +1142,17 @@ sub connect_to_server {
 sub readStdin {
     my $line = readline(STDIN);
     if (not defined $line or $line =~ m/^q/) {	# ctrl+D (EOF) or q
-	if ($server == 1) {
-	    $conn->send_now("X$named") if $conn;	# this iC app started iCserver - stop it
+	if ($server >= 1) {
+	    quit_program();				# this iC app started iCserver - stop it
 	} else {
 	    print "$named: stopped from terminal\n";
-	    exit 0;
+	    quit_program(undef, 1);			# quit without stopping iCserver
 	}
+    } elsif ($line =~ m/^Q/) {
+	quit_program(undef, 1);				# quit without stopping iCserver
     } elsif ($line =~ m/^T/) {
 	$conn->send_now("T") if $conn;			# show iCserver client tables
-    } else {
+    } elsif ($line !~ m/^$/) {
 	warn("*** WARNING: $named: not recognised: $line");
     }
 } # readStdin
@@ -1073,23 +1240,33 @@ iCmqtt - a bi-directional interface between openHAB MQTT and immediate C
 
 =head1 SYNOPSIS
 
- iCmqtt [-GETaqtJOh] -F <floor> -I <x> -Q <y> <openHAB control>.items
+ iCmqtt [-GEBqatJOh][ -T <z>] -F <floor> -I <x> -Q <y> <openHAB>.items
         [ -s <iC host>][ -p <iC port>][ -N <name>][ -i <inst>]
         [ -m <MQTT host>][ -n <MQTT port>][ -f <file>]
         [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
-    -F floor regexp used for selecting a floor in openHAB topics
-             examples: 'gf_[sp]' 'ff_[sp]'     (no default)
-             longer examples: 'home/gelijkvloers' 'home/verdiep'
+                COMMON OPTIONS
+    -F floor regexp used for selecting one or more floors in openHAB topics
+             examples: '[gf]f_[sp]' for two floor topics     (no default)
+                       'gf_[sp]' or 'ff_[sp]' two individual floor topics
+                           ending in 's' for subscribe and 'p for publish
+                       'home/+' many combined floors with same topics for
+                           subscribe and publish
+                       'home/gelijkvloers' or 'home/verdiep' for two floors
     -I <x>   starting input IEC address IX<x>  (no default)
     -Q <y>   starting output IEC address QX<y> (no default)
+    -f file  read flags and additional parameters from this file
+       <openHAB>.items file   from openHAB/configuration/items
+                GENERATE OPTIONS
     -G       generate auxiliary iC include files:
                  <floor>_OHaliasIEC.ih
                  <floor>_OHdeclare.ih
-                 outputs -I <x> and -Q <y> for next floor
-    -E       additionally generate iC extern file:
+             outputs -I <x> and -Q <y> for next floor
+    -E       also generate iC extern file:
                  <floor>_OHextern.ih
-    -T <z>   additionally generate iC test file:
+    -T <z>   also generate iC test file with IX<z> starting input:
                  <floor>_OHtest.ic with virtual I/O inputs IX<z>
+             additionally outputs -T <z> for next floor
+                RUN OPTIONS
     -s host  name of iCserver host        (default '127.0.0.1')
     -p port  service port of iCserver     (default '8778')
     -N name  iC registration name         (default <floor>_iCmqtt)
@@ -1099,30 +1276,25 @@ iCmqtt - a bi-directional interface between openHAB MQTT and immediate C
     -S server +options+equivalences  (default 'iCserver -k -A iCbox')
     -A cmd  use <cmd> to autovivify I/O clients if iCserver
             is started by this iCmqtt call (default 'iCbox')
-    -f file  read flags and additional parameters from this file
-    -q       quiet - do not report clients connecting and disconnecting
-       <openHAB control>.items file   from openHAB/configuration/items
-
-        return "IX<next> QX<next>" to allow specifying non-clashing
-               IX<x> and QX<y> for iCmqtt on another processor. 
-
-        DEBUG options
-    -a       analyse <openHAB control>.items - without -F floor:
+    -B      start iCbox -d to monitor active MQTT iC I/Os
+    -q      quiet - do not report clients connecting and disconnecting
+                DEBUG OPTIONS
+    -a      analyse <openHAB>.items file - without -F floor:
                shows Switch selections where actions are not defined
                            - with -F floor:
                checks Switch selections have different id's
-    -t       trace debug messages
-    -J       trace rcv messages in iCmsgM.pm
-    -O       trace send messages in iCmsgM.pm
-    -M       display elapsed time in seconds and microseconds
-    -h       help, ouput this Usage text only
-
-        AUXILIARY app   - start a Bernstein chain
+    -t      trace debug messages
+    -J      trace rcv messages in iCmsgM.pm
+    -O      trace send messages in iCmsgM.pm
+    -M      display elapsed time in seconds and microseconds
+    -h      help, ouput this Usage text only
+                AUXILIARY APP   - start a Bernstein chain
     -R <app ...> run one app followed by -z and its arguments as a
                  separate process; -R ... must be last arguments,
-
-        KEYBOARD inputs
-        q    from keyboard stops iCserver and all apps
+                KEYBOARD INPUTS
+        q    stops iCserver and all apps if iCmqtt started iCserver
+        Q    stops iCmqtt only
+        T    output iCserver client tables
 
 =head1 DESCRIPTION
 
@@ -1143,7 +1315,7 @@ for every floor to provide descriptive iC variable alias names for
 IX... and QX...
 
 The translation between MQTT topic names and iEC-1131 I/O names is
-extracted from 'openHAB/configurations/items/<control>.items'.
+extracted from 'openHAB/configurations/items/<openHAB>.items'.
 The following are two typical entries:
 
 Switch Sw_Sitting_Area "Sitting area" <switchnew> (OD_Crossing, Lights)
@@ -1205,13 +1377,13 @@ entries above:
 On startup of B<iCmqtt> the following actions are carried out:
 
   1) If command line parameter -G is given, the openHAB ini
-     file 'openHAB/configurations/items/<control>.items' is used as
+     file 'openHAB/configurations/items/<openHAB>.items' is used as
      described above to generate include files and optionally an iC
      test program to assist in placing the genrated iC variable names
      for connecting from and to openHAB via iCmqtt and the MQTT broker.
 
   2) When run without ithe -G command line flag he openHAB ini file
-     'openHAB/configurations/items/<control>.items' is scanned again
+     'openHAB/configurations/items/<openHAB>.items' is scanned again
      and MQTT topics` and iC IEC-1131 I/O names are  extracted.
 
      a) The <floor> topic prefix associated with the IX... variables
@@ -1264,7 +1436,7 @@ subject field.
 
 =head1 SEE ALSO
 
-L<immcc(1)>, L<iClive(1)>, L<iCserver(1)>, L<iCpiI2C(1)>
+L<iCbox(1)>, L<iClive(1)>, L<iCpiI2C(1)>, L<iCserver(1)>, L<immcc(1)>
 
 =head1 COPYRIGHT
 
