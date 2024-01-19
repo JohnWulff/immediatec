@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c 1.23 $";
+"@(#)$Id: misc.c 1.24 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -435,7 +435,7 @@ iC_quit(int sig)
     }
 #ifdef	TCP
     if (iC_sockFN > 0) {
-	if (sig <= SIGUSR1 || sig == QUIT_TERMINAL || sig == QUIT_DEBUGGER) {	/* but not QUIT_SERVER */
+	if (sig <= SIGUSR2 || sig == QUIT_TERMINAL || sig == QUIT_DEBUGGER) {	/* but not QUIT_SERVER */
 #ifdef	LOAD
 	    if (C_channel) {
 		/* disconnect iClive - follow with '0' for iCserver */
@@ -451,7 +451,7 @@ iC_quit(int sig)
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    }
 #endif /* LOAD */
-	    if (iC_Xflag) {			/* stop iCserver if this process started it */
+	    if (iC_Xflag || sig == SIGUSR2) {		/* stop iCserver if this process started it */
 		snprintf(regBuf, REQUEST, "X%s", iC_iccNM);
 		iC_send_msg_to_server(iC_sockFN, regBuf);
 	    }
@@ -486,6 +486,8 @@ iC_quit(int sig)
     } else if (sig == SIGSEGV) {
 	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_iccNM);
     } else if (sig == SIGUSR1) {
+	fprintf(iC_errFP, "\n'%s' stopped by 'run-time error'\n", iC_iccNM);
+    } else if (sig == SIGUSR2) {
 	fprintf(iC_errFP, "\n'%s' stopped by 'non-recoverable run-time error'\n", iC_iccNM);
     }
 #if defined(TCP) && defined(LOAD)

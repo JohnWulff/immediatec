@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c 1.35 $";
+"@(#)$Id: tcpc.c 1.36 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -305,6 +305,9 @@ iC_connect_to_server(const char *	host,
 		perror("connect failed");
 		iC_quit(SIGUSR1);
 	    }
+	} else if (r++ == 0  && (iC_debug & DQ) == 0 || iC_debug & 0100) {
+	    fprintf(iC_errFP, "'%s' waiting for iCserver to start at '%s:%d'\n",
+		iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 	}
 #ifdef	_WIN32
 	Sleep(200);				/* 200 ms in ms */
@@ -314,7 +317,7 @@ iC_connect_to_server(const char *	host,
     }
 
     if (iC_osc_lim != 0 && (iC_debug & DQ) == 0) { /* suppress connection info for unlimited oscillations */
-	fprintf(iC_errFP, "'%s' connected to server at '%s:%d'\n",
+	fprintf(iC_errFP, "'%s' connected to iCserver at '%s:%d'\n",
 	    iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
     }
 

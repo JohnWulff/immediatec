@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.88 $";
+"@(#)$Id: icc.c 1.89 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -1019,13 +1019,13 @@ main(
 #endif	/* TCP */
 	}
     }
+  break3:
 #if defined(RUN) || defined(TCP)
 #ifdef	TCP
-    if (strcmp(iC_iccNM, "stdin") != 0 && strlen(iC_iidNM) > 0) {
+    if (strcmp(iC_iccNM, "stdin") != 0 && *iC_iidNM != '\0') {
 	snprintf(iC_iccNM + strlen(iC_iccNM), INSTSIZE+2, "-%s", iC_iidNM);
     }
 #endif	/* TCP */
-  break3:
     /********************************************************************
      *  Extra option switches and other arguments have been isolated after
      *  -R or alternatively option -- (cannot have both)

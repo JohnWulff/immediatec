@@ -117,7 +117,7 @@ Usage:
        <openHAB>.items file   from openHAB/configuration/items
                 GENERATE OPTIONS
     -G       generate auxiliary iC include files:
-                 <floor>_OHaliasIEC.ih
+                 <floor>_OHalias.ih
                  <floor>_OHdeclare.ih
              outputs -I <x> and -Q <y> for next floor
     -E       also generate iC extern file:
@@ -160,7 +160,7 @@ Usage:
 
 Copyright (C) 2023-2024  John E. Wulff        <immediateC@gmail.com>
 							  '@'
-$Id: iCmqtt 1.4 $
+$Id: iCmqtt 1.5 $
 .
 
 ########################################################################
@@ -237,7 +237,10 @@ if (defined $opt_i and $opt_i ne '') {
 	print "instance = '$instance'\n" if $opt_t;
     } else {
 	warn "$named: badly formed option -i $opt_i - ignored\n";
+	$opt_i = '';
     }
+} else {
+    $opt_i = '';
 }
 if (not $opt_a and (not defined $opt_F or not defined $opt_I or not defined $opt_Q)) {
     print STDERR "*** ERROR $named: -F <floor>, -I <x> and -Q <y> must be defined\n";
@@ -425,13 +428,27 @@ if ($opt_G or $opt_E or defined $opt_T) {
 	$floorO    =~ s/^_//;
 	$floorO    =~ s/_$//;
 
-	open OUT, ">$floorO"."_OHaliasIEC.ih" or die "Cannot open output file '$floorO"."_OHaliasIEC.ih': $!";
+	open OUT, ">$floorO"."_OHalias.ih" or die "Cannot open output file '$floorO"."_OHalias.ih': $!";
 	print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
 	print OUT "// openHAB alias IEC assignments for \"$Ipref\"\n";
 	print OUT "//   Must be included at the end of one .ic file only.\n";
 	print OUT "//\n";
 	print OUT "// IEC inputs\n";
 	print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
+	if ($instance) {
+	    print OUT  "%{\n";
+	    print OUT  "#include <stdio.h>\n";
+	    print OUT  "#include <string.h>\n";
+	    print OUT  "extern char * iC_iccNM;\n";
+	    print OUT  "extern char * iC_iidNM;\n";
+	    print OUT  "%}\n";
+	    print OUT "if (EOI) {\n";
+	    printf OUT "    if (strcmp(iC_iidNM, \"%s\") != 0) {\n", $opt_i;
+	    printf OUT "	printf(\"*** ERROR: %%s: instance = '%%s' - should be '%s'\\n\", iC_iccNM, iC_iidNM);\n", $opt_i;
+	    print  OUT "	iC_quit(SIGUSR2);\n";
+	    print OUT  "    }\n";
+	    print OUT  "}\n\n";
+	}
 	$Iflag = 1;
       IEC1:
 	foreach $IEC (sort keys %IECs) {
@@ -470,7 +487,7 @@ if ($opt_G or $opt_E or defined $opt_T) {
 	    }
 	}
 	close OUT;
-	print "$floorO"."_OHaliasIEC.ih generated with IX$Istart - IX$Iadr and QX$Qstart - QX$Qadr\n";
+	print "$floorO"."_OHalias.ih generated with IX$Istart - IX$Iadr and QX$Qstart - QX$Qadr\n";
 
 	open OUT, ">$floorO"."_OHdeclare.ih" or die "Cannot open output file '$floorO"."_OHdeclare.ih': $!";
 	print OUT "//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
@@ -597,7 +614,7 @@ if ($opt_G or $opt_E or defined $opt_T) {
 		    $Ia++;		# is incremented correctly for floors not output here
 		}
 	    }
-	    print OUT "\n%include \"$floorO"."_OHaliasIEC.ih\"\n";
+	    print OUT "\n%include \"$floorO"."_OHalias.ih\"\n";
 	    close OUT;
 	    print "$floorO"."_OHtest.ic generated\n";
 	    $Tadr = " -T $Ia";
@@ -694,9 +711,8 @@ for ($n = 0; $n < $Icnt; $n++) {
 	}
 	next IEC4 if $from == 0;
 	push @ArgNames, [ $IEC, $from ];		# argument order for handling ack
-	if ($from < 255) {
-	    $IEC .= "($from)";
-	}
+	$IEC .= $instance if $instance ne '';
+	$IEC .= "($from)" if $from < 255;
 	print "register: $dir$IEC\n" if $opt_t;
 	if ((length($UnitRegistrations) + length($IEC)) > 1396) {	# REPLY 1400 - (1+2+1) in tcpc.h
 	    print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
@@ -733,9 +749,8 @@ if ($opt_B) {
     $boxParams .= " -p $port" unless $port eq "8778";
     for (my $i = 0; $i < scalar @ArgNames; $i++) {
 	my ($IEC, $from) = @{$ArgNames[$i]};	# all argument base names and bit masks
-	if ($from < 255) {
-	    $IEC .= ",$from";
-	}
+	$IEC .= $instance if $instance ne '';
+	$IEC .= ",$from" if $from < 255;
 	$boxParams .= " $IEC";
     }
     print "MONITOR: '$boxParams'\n" if $opt_t;
@@ -748,6 +763,7 @@ if ($opt_B) {
 if (@runArgs) {
     splice(@runArgs, 1, 0, "-s", "$host") unless $host eq "localhost" or $host eq "127.0.0.1";
     splice(@runArgs, 1, 0, "-p", "$port") unless $port eq "8778";
+    splice(@runArgs, 1, 0, "-i", "$opt_i") unless $opt_i eq "";
     splice(@runArgs, 1, 0, "-z$opt_q",);
     print "at fork	runArgs: '", join(':', @runArgs), "'\n" if $opt_t;
     fork_and_exec(@runArgs);
@@ -778,7 +794,7 @@ iCmsgM->event_loop($mqtt);
 sub mqttReceived
 {
     my ($topic, $message) = @_;
-    print "Q< $topic $message\n" if $opt_t;
+    print "M: $named:	< $topic $message\n" if $opt_t;
     my $topicP = \@{ $TopicChannels{"$topic:$message"} };
     if ($topicP) {
 	my ($channel, $mask) = @$topicP;
@@ -954,10 +970,11 @@ sub convert_nr {
 
 sub send_input {
     my ($ch, $val) = @_;
-    printMicroSeconds();
     if ($val != $ChannelsI[$ch]) {
 	$ChannelsI[$ch] = $val;		# always save latest value sent on this channel
-	print "M: $named: $ch:$val	< $ChannelNames[$ch]\n" if $opt_t;
+	printMicroSeconds();
+	print "M: $named: " if $opt_t and not $opt_M;
+	print "$ch:$val	> $ChannelNames[$ch]\n" if $opt_t;
 	printf "%s	> %2d:%d\n", $ChannelNames[$ch], $ch, $val if $opt_O;
 	$conn->send_now("$ch:$val");		# send latest value
     }
@@ -971,7 +988,6 @@ sub send_input {
 
 sub rcvd_msg_from_server {
     my ($conn, $msg, $err) = @_;
-    printMicroSeconds();
     if (defined $msg) {
         my $len = length $msg;
 	if ($len == 0) {
@@ -986,7 +1002,9 @@ sub rcvd_msg_from_server {
 		$old = $ChannelsQ[$channel];
 		if (defined $old) {
 		    if ($value != $old) {
-			print "M: $named: $msg1	> $ChannelNames[$channel]\n" if $opt_t;
+			printMicroSeconds();
+			print "M: $named: " if $opt_t and not $opt_M;
+			print "$msg1	< $ChannelNames[$channel]\n" if $opt_t;
 			printf "%s	< %2d:%d\n", $ChannelNames[$channel], $channel, $value if $opt_J;
 			# stores computed bit value for all QXn.<0..7> outputs
 			$bitRef = $ChannelsQX[$channel];
@@ -1003,7 +1021,7 @@ sub rcvd_msg_from_server {
 				my $ChannelTopicP = \@{ $ChannelTopics{$channel}[$bitIndex[$mask]] };
 				for (my $i = 0; $i < scalar(@$ChannelTopicP); $i++) {
 				    my $topic = $ChannelTopicP->[$i];
-				    print "Q> $topic $state\n" if $opt_t;
+				    print "M: $named:	> $topic $state\n" if $opt_t;
 				    $mqtt->publish($topic, $state);
 				}
 			    }
@@ -1206,9 +1224,9 @@ sub printMicroSeconds {
 	    $usec += 1000000;
 	}
 	if ($opt_t) {
-	    printf "B%3d.%03d,%03d: ", $sec, int($usec/1000), $usec%1000;
+	    printf "M: $named: %3d.%03d,%03d: ", $sec, int($usec/1000), $usec%1000;
 	} else {
-	    printf "B%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
+	    printf "M: $named: %3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
 	}
 	$t0 = $t1;
     }
@@ -1258,7 +1276,7 @@ iCmqtt - a bi-directional interface between openHAB MQTT and immediate C
        <openHAB>.items file   from openHAB/configuration/items
                 GENERATE OPTIONS
     -G       generate auxiliary iC include files:
-                 <floor>_OHaliasIEC.ih
+                 <floor>_OHalias.ih
                  <floor>_OHdeclare.ih
              outputs -I <x> and -Q <y> for next floor
     -E       also generate iC extern file:
@@ -1308,7 +1326,7 @@ from iCserver from an IEC output variable eg QX10.0, B<iCmqtt>
 publishes the openHAB topic and state.
 
 As an extra service B<iCmqtt> -G generates the include files:
-     <floor>_OHaliasIEC.ih and <floor>_OHdeclare.ih and optionally
+     <floor>_OHalias.ih and <floor>_OHdeclare.ih and optionally
      <floor>_OHextern.ih with the additional -E flag and a test app
      <floor>_OHtest.ic with virtual I/O inputs IX<z> with -T <z>
 for every floor to provide descriptive iC variable alias names for
@@ -1335,7 +1353,7 @@ Switch Sw_Bedroom "Bedroom" <switchnew> (OD_Crossing, Lights)
 iCmqtt generates two files for each floor - example from the 'ff'
 entries above:
 
-    1. The actual alias assignments - home_ff_OHaliasIEC.ih,
+    1. The actual alias assignments - home_ff_OHalias.ih,
     which is included last in the iC control program.
     The iC names are developed from the parenthesized text in the 'Switch' (first) line
     of each openHAB item.

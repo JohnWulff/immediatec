@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.81 $";
+"@(#)$Id: load.c 1.82 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2020  John E. Wulff
@@ -501,9 +501,10 @@ main(
 			fprintf(iC_errFP, "ERROR: %s: '-i %s' is non numeric or longer than %d digits\n",
 			    iC_progname, *argv, INSTSIZE);
 			errorFlag++;
+		    } else if (*iC_iidNM != '\0') {
+			fprintf(iC_errFP, "WARNING '-i %s' called a second time - ignored\n", *argv);
 		    } else {
 			iC_iidNM = *argv;
-			snprintf(iC_iccNM + strlen(iC_iccNM), INSTSIZE+2, "-%s", iC_iidNM);
 #ifdef	RASPBERRYPI
 			iidN = (unsigned short)atoi(iC_iidNM);	/* internal instance from command line -i<instance> */
 #endif	/* RASPBERRYPI */
@@ -702,6 +703,11 @@ main(
 	}
     }
   break3:
+#ifdef	TCP
+    if (*iC_iidNM != '\0') {
+	snprintf(iC_iccNM + strlen(iC_iccNM), INSTSIZE+2, "-%s", iC_iidNM);
+    }
+#endif	/* TCP */
     /********************************************************************
      *  Extra option switches and other arguments have been isolated after
      *  -R or alternatively option -- (cannot have both)
