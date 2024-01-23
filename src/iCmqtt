@@ -160,14 +160,14 @@ Usage:
 
 Copyright (C) 2023-2024  John E. Wulff        <immediateC@gmail.com>
 							  '@'
-$Id: iCmqtt 1.5 $
+$Id: iCmqtt 1.6 $
 .
 
 ########################################################################
 #	convert POSIX flags to individual flags - process -f -R
 ########################################################################
 
-convertFlags(\@ARGV);
+my $f = convertFlags(\@ARGV);
 print "args    = '", join(" ", @args), "'\n" if $opt_Z;
 print "runArgs = '", join(" ", @runArgs), "'\n" if $opt_Z;
 @ARGV = @args;
@@ -210,6 +210,7 @@ GetOptions (
     'h'   => \$opt_h,
 );
 scalar @ARGV == 0 or die "*** ERROR: $named: '@ARGV' remaining after Getopt::Long GetOptions() ???\n";
+print "\$ $named ", join(" ", @args), " -R ", join(" ", @runArgs), "\n" if $f;
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -253,7 +254,7 @@ if (not $opt_a and (not defined $opt_F or not defined $opt_I or not defined $opt
 #
 ########################################################################
 
-my ($icVar, $ONadr, $ONbit, $OFFadr, $OFFbit, $onCnt, $offCnt, $stateCnt);
+my ($icVar, $group, $ONadr, $ONbit, $OFFadr, $OFFbit, $onCnt, $offCnt, $stateCnt);
 my ($Iflag, $IEC, $bit);
 my $icON    = "";
 my $icOFF    = "";
@@ -295,9 +296,10 @@ my $n;
 for ($n = 0; $n <= $Icnt; $n++) {
     open IN, $argv[0] or die "Cannot open input file $argv[0]: $!";
     while (<IN>) {
-	if ($state eq "B" and m/^\s*Switch\s+\w+\s+"(.*)"/) {
-	    $icVar = $1;
-	    $icVar =~ s/[^\w]/ /g;
+	if ($state eq "B" and m/^\s*Switch\s+\w+\s+"(.*)"(\s+<.*>)?\s+\((.*)\)/) {
+	    ($group) = split /,/, $3;
+	    $icVar = "$group $1";
+	    $icVar =~ s/\W/ /g;
 	    $icVar =~ s/\s+/_/g;
 	    $state = "S";		# Switch state
 	} elsif ($state eq "S") {
@@ -894,7 +896,6 @@ sub convertFlags {
 		push(@{$argsP}, $arg);		# append a value after a value flag
 	    } else {
 		my @incArgs;
-		$Fflag = 0;
 		open IN, $arg or die "can't open ID file $arg! $!";
 		LINE:
 		while (<IN>) {			# read next entry from include file into $_
@@ -914,6 +915,7 @@ sub convertFlags {
 	    }
 	}
     }
+    return $Fflag;
 } # convertFlags
 
 ########################################################################
@@ -1336,59 +1338,72 @@ The translation between MQTT topic names and iEC-1131 I/O names is
 extracted from 'openHAB/configurations/items/<openHAB>.items'.
 The following are two typical entries:
 
-Switch Sw_Sitting_Area "Sitting area" <switchnew> (OD_Crossing, Lights)
+Switch Sw_Sitting_Area "Sitting area" <switchnew> (ff_RBD, Lights)
     {mqtt="
-    >[geertvc:home/ff/LightChange/Lt_Sitting_Area:command:ON:MAP(openclose.map)],
-    >[geertvc:home/ff/LightChange/Lt_Sitting_Area:command:OFF:MAP(openclose.map)],
-    <[geertvc:home/ff/LightChange/Lt_Sitting_Area:state:MAP(openclose.map)]"
+    >[geertvc:home/ff_s/LightChange/Lt_Sitting_Area:command:ON:MAP(openclose.map)],
+    >[geertvc:home/ff_s/LightChange/Lt_Sitting_Area:command:OFF:MAP(openclose.map)],
+    <[geertvc:home/ff_p/LightChange/Lt_Sitting_Area:state:MAP(openclose.map)]"
     }
 
-Switch Sw_Bedroom "Bedroom" <switchnew> (OD_Crossing, Lights)
+Switch Sw_Bedroom "Bedroom" <switchnew> (ff_RBD, Lights)
     {mqtt="
-    >[geertvc:home/ff/LightChange/Lt_Bedroom:command:ON:MAP(openclose.map)],
-    >[geertvc:home/ff/LightChange/Lt_Bedroom:command:OFF:MAP(openclose.map)],
-    <[geertvc:home/ff/LightChange/Lt_Bedroom:state:MAP(openclose.map)]"
+    >[geertvc:home/ff_s/LightChange/Lt_Bedroom:command:ON:MAP(openclose.map)],
+    >[geertvc:home/ff_s/LightChange/Lt_Bedroom:command:OFF:MAP(openclose.map)],
+    <[geertvc:home/ff_p/LightChange/Lt_Bedroom:state:MAP(openclose.map)]"
     }
 
-iCmqtt generates two files for each floor - example from the 'ff'
-entries above:
+It is strongly recommended, that the prefix of the topic for
+subscribing to ON and OFF openHAB messages be different from the prefix
+of the similar topic for publishing the state. In the examples the
+prefixes are home/ff_s for subscribing and home/ff_p for publishing
+to openHAB. If the prefixes and hence the whole topic for subsribing
+and publishing are the same, state messages published by iCmqtt are
+immediately sent back by MQTT to iCmqtt, which then transmits them to
+the immediate C app. Usually this does not do any harm, because the
+value received (ON=1 or OFF=0) by the iC app will try to maintain the
+state just published. But it does mean the data traffic is doubled
+for no reason.
+
+iCmqtt generates two files for each floor - example for one floor from the entries above:
 
     1. The actual alias assignments - home_ff_OHalias.ih,
-    which is included last in the iC control program.
-    The iC names are developed from the parenthesized text in the 'Switch' (first) line
-    of each openHAB item.
+       which is included last in the iC control program.
+       The iC names are generated from the the 'Switch' line of each openHAB item, derived
+       from the first group identifier in the finial group list in round brackets and the
+       parenthesized text earlier in the Switch line.
 
-    ff_RBD_SittingArea_ON  = IX10.0;    // home/ff/LightChange/Lt_Sitting_Area:command:ON
-    ff_RBD_SittingArea_OFF = IX10.1;    // home/ff/LightChange/Lt_Sitting_Area:command:OFF
-    QX10.0 = ff_RBD_SittingArea_state;  // home/ff/LightChange/Lt_Sitting_Area:state
+    ff_RBD_SittingArea_ON  = IX10.0;    // home/ff_s/LightChange/Lt_Sitting_Area:command:ON
+    ff_RBD_SittingArea_OFF = IX10.1;    // home/ff_s/LightChange/Lt_Sitting_Area:command:OFF
+    QX10.0 = ff_RBD_SittingArea;        // home/ff_p/LightChange/Lt_Sitting_Area:state
 
-    ff_RBD_Bedroom_ON      = IX10.2;    // home/ff/LightChange/Lt_Bedroom:command:ON
-    ff_RBD_Bedroom_OFF     = IX10.3;    // home/ff/LightChange/Lt_Bedroom:command:OFF
-    QX10.1 = ff_RBD_Bedroom_state;      // home/ff/LightChange/Lt_Bedroom:state
+    ff_RBD_Bedroom_ON      = IX10.2;    // home/ff_s/LightChange/Lt_Bedroom:command:ON
+    ff_RBD_Bedroom_OFF     = IX10.3;    // home/ff_s/LightChange/Lt_Bedroom:command:OFF
+    QX10.1 = ff_RBD_Bedroom;            // home/ff_p/LightChange/Lt_Bedroom
 
-    IX<x> and QX<y> variable names are chosen by iCmqtt starting with the IX<x> and QX<y>
-    command line parameters. Bit 0 - 7 are used for the first 8 entries. Then <x> or <y>
-    is incremented. The final IX... and QX... generated is output after generation to
-    allow selection of a second inon-clashing range of IX... and QX... for the other floor.
+       IX<x> and QX<y> variable names are chosen by iCmqtt starting with the I <x> and
+       Q <y> command line parameters. Bit 0 - 7 are used for the first 8 entries. Then
+       <x> or <y> is incremented. The final IX... and QX... generated is output after
+       generation to allow selection of a second inon-clashing range of IX... and QX...
+       for another floor.
 
     2. The declarations of those variables - home_ff_OHdeclare.ih,
-    which is included early in the iC control program.
+       which is included early in the iC control program.
 
-    imm bit   ff_RBD_SittingArea_ON;    // home/ff/LightChange/Lt_Sitting_Area:command:ON
-    imm bit   ff_RBD_SittingArea_OFF;   // home/ff/LightChange/Lt_Sitting_Area:command:OFF
-    imm bit   ff_RBD_SittingArea_state; // home/ff/LightChange/Lt_Sitting_Area:state
+    imm bit   ff_RBD_SittingArea_ON;    // home/ff_s/LightChange/Lt_Sitting_Area:command:ON
+    imm bit   ff_RBD_SittingArea_OFF;   // home/ff_s/LightChange/Lt_Sitting_Area:command:OFF
+    imm bit   ff_RBD_SittingArea;       // home/ff_p/LightChange/Lt_Sitting_Area:state
 
-    imm bit   ff_RBD_Bedroom_ON;        // home/ff/LightChange/Lt_Bedroom:command:ON
-    imm bit   ff_RBD_Bedroom_OFF;       // home/ff/LightChange/Lt_Bedroom:command:OFF
-    imm bit   ff_RBD_Bedroom_state;     // home/ff/LightChange/Lt_Bedroom:state
+    imm bit   ff_RBD_Bedroom_ON;        // home/ff_s/LightChange/Lt_Bedroom:command:ON
+    imm bit   ff_RBD_Bedroom_OFF;       // home/ff_s/LightChange/Lt_Bedroom:command:OFF
+    imm bit   ff_RBD_Bedroom;           // home/ff_p/LightChange/Lt_Bedroom
 
-    All iC variables declared above must be used in the iC control programs
-    if they are _ON or _OFF and input as IX...
-    or assigned if they are _state variables output as QX....
+       All iC variables declared above must be used as inputs in the iC control program
+       if they are _ON or _OFF and input as IX...
+       or assigned if they are state variables output as QX....
 
-    3. The topics between the first pair of colons in the openHab
-    items file and the 'ON' and 'OFF' commands as well as the 'state'
-    are used to subsribe and publish openHAB messages from and to MQTT.
+    3. The topics between the first pair of colons in the openHab items file and the 'ON'
+       and 'OFF' commands as well as the 'state' values ON and OFF derived from Q... values
+       1 and 0 are used to subsribe and publish openHAB messages from and to MQTT.
 
 =head1 SPECIFICATION
 
