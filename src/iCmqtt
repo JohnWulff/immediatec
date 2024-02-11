@@ -160,7 +160,7 @@ Usage:
 
 Copyright (C) 2023-2024  John E. Wulff        <immediateC@gmail.com>
 							  '@'
-$Id: iCmqtt 1.6 $
+$Id: iCmqtt 1.7 $
 .
 
 ########################################################################
@@ -661,12 +661,6 @@ $ENV{MQTT_SIMPLE_ALLOW_INSECURE_LOGIN} = 1;
 # Connect to broker
 print "##### Net::MQTT::Simple->new(\"$m_host:$m_port\");\n" if $opt_t;
 my $mqtt = Net::MQTT::Simple->new("$m_host:$m_port");
-# subscribe to all topic-prefixes controled by this instance of iCmqtt
-for ($n = 0; $n < $Icnt; $n++) {
-    $Ipref = $Iprefs[$n];
-    print "MQTT: subscribe \"$Ipref/#\"\n" if $opt_t;
-    $mqtt->subscribe("$Ipref/#", \&mqttReceived);
-}
 
 ############# send registration ############################
 
@@ -772,6 +766,17 @@ if (@runArgs) {
 }
 
 ########################################################################
+#	Subscribe to all topic-prefixes controlled by this instance of iCmqtt
+#	Do this after all iC registrations and miscellaneous actions
+########################################################################
+
+for ($n = 0; $n < $Icnt; $n++) {
+    $Ipref = $Iprefs[$n];
+    print "MQTT: subscribe \"$Ipref/#\"\n" if $opt_t;
+    $mqtt->subscribe("$Ipref/#", \&mqttReceived);
+}
+
+########################################################################
 #
 #	Register an event handler callback for STDIN to recognise
 #	q or ctrl+D from the keyboard to terminate the program
@@ -789,7 +794,7 @@ iCmsgM->event_loop($mqtt);
 ########################################################################
 #
 #	This is the MQTT callback function, when a message arrives for
-#	the subscribed topic
+#	a subscribed topic
 #
 ########################################################################
 
@@ -797,20 +802,14 @@ sub mqttReceived
 {
     my ($topic, $message) = @_;
     print "M: $named:	< $topic $message\n" if $opt_t;
-    my $topicP = \@{ $TopicChannels{"$topic:$message"} };
-    if ($topicP) {
-	my ($channel, $mask) = @$topicP;
+    if (exists $TopicChannels{"$topic:$message"}) {
+	my ($channel, $mask) = @{ $TopicChannels{"$topic:$message"} };
+	die "\$channel or \$mask not > 0\n" unless $channel or $mask;
 	send_input($channel, $mask);		# rise of the iC output pulse
-	########################################################################
-	#  Avoid using ualarm() because pulses for different topics cannot
-	#  be high simultaneously and terminated correctly with SIG{ALRM}.
-	#  usleep() makes pulses sequential with 50 ms resolution, which
-	#  should be sufficient for manual events from openHAB.
-	########################################################################
-	usleep(100_000);				# sleep 100 ms
-	send_input($channel, 0);			# fall of the iC output pulse
+	usleep(100_000);			# sleep 100 ms
+	send_input($channel, 0);		# fall of the iC output pulse
     } else {
-	print STDERR "*** ERROR $named: received '$topic:$message' not ON or OFF\n";
+	print STDERR "*** ERROR $named: received '$topic:$message' unknown topic or message\n";
     }
 } # mqttReceived
 
