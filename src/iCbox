@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2017  John E. Wulff
+#	Copyright (C) 2000-2024  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -111,62 +111,65 @@ format STDERR =
 Usage:
     @<<<< [-qHbdrtJOmTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
 	$named
-	  [ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
-	  [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
-	ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
-		Any ID can be preceded by 'I' or 'Q' in which case
-		only that input or output is generated (default is both)
-		default ID is X0 generating input IX0 and output QX0
-		A range of ID's can be specified with -; eg IX0-IX7
-	ID-inst Each ID can be followed by -<inst>, where <inst> consists
-		of up to 3 numeric digits (usually 1 digit).
-		Such an appended instance code takes precedence over the
-		general instance specified with the -i <inst> (see below)
-	ID=ini  initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
-		applies only to input ID's. One =ini applies to each input
-		in a range of ID's; eg X5-X7=0b11 inits IX5 IX6 and IX7 to 3
-	ID,<button_select_mask>,<input_reset_time>,<reset_select_mask>
-	X1,0b11 select digital buttons IX0.0, IX0.1, QX0.0 and QX0.1 only
-		with a bit mask - default X1 (= X1,0b11111111) selects all
-	X1,,200 digital input push-buttons IX1.0 .. IX1.7 reset after 200 ms
-		default on/off buttons, which must be reset by another click
-		outputs QX1.0 .. QX1.7 are not affected by <input_reset time>
-	IX1,,200,0b11  only IX1.0 and IX1.1 are push-buttons - rest are on/off
-	ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
-	B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
-	B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
-	-s host name of server host    (default '127.0.0.1')
-	-p port service port of server (default '8778')
-	-n name registration name (default first full ID)
-	-i inst instance ID for this @<<<<<< (1 to 3 numeric digits)
-				    $named
-	-q      quiet - do not report clients connecting and disconnecting
-	-c col  maximum number of columns in a row (default 12)
-	-C col  absolute maximum number of columns in a row (default 18)
-	-S rows absolute maximum number of rows (default 3)
-	-l len  length of scales (default 170 pixels)
-	-f file read flags and additional ID parameters from this file
-	-H      a Hold button is generated which holds input changes
-	-b      use buttons instead of checkboxes for digital I/O
-	-d      display inputs IMn (no change and no ini values allowed)
-	-r      reverse - display inputs IMn, send outputs QMn like inputs
-	    DEBUG options
-	-t      trace debug messages
-	-J      trace rcv messages in iCmsg.pm
-	-O      trace send messages in iCmsg.pm
-	-m      display elapsed time in seconds and microseconds
-	-T      extra static debug messages
-	-x      exit after analyzing input parameters
-	-h      help, ouput this Usage text only
-	    AUXILIARY app   - start a Bernstein chain
-	-R <app ...> run one app followed by -z and its arguments as a
-		     separate process; -R ... must be last arguments,
-	    KEYBOARD inputs
-	    q   from keyboard or (X) button: stops iCserver and all apps
-	    Q   from keyboard or shift+(X) button: quit without stopping iCserver
-Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
+      [ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
+      [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
+    ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
+            Any ID can be preceded by 'I' or 'Q' in which case
+            only that input or output is generated (default is both)
+            default ID is X0 generating input IX0 and output QX0
+            A range of ID's can be specified with -; eg IX0-IX7
+    ID-inst Each ID can be followed by -<inst>, where <inst> consists
+            of up to 3 numeric digits (usually 1 digit).
+            Such an appended instance code takes precedence over the
+            general instance specified with the -i <inst> (see below)
+    ID=ini  initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
+            applies only to input ID's. One =ini applies to each input.
+                    Digital I/O
+    ID,<button_select_mask>,<input_reset_time>,<reset_select_mask>
+    X1,0b11 select digital buttons IX0.0, IX0.1, QX0.0 and QX0.1 only
+            with a bit mask - default X1 (= X1,0b11111111) selects all
+    X1,,200 digital input push-buttons IX1.0 .. IX1.7 reset after 200 ms
+            default on/off buttons, which must be reset by another click
+    X1,,-1  digital input press-on/release-off buttons IX1.0 .. IX1.7
+            these buttons follow the left mouse button
+    IX1,,200,0b11  only IX1.0 and IX1.1 are push-buttons - rest are on/off
+                    Analog I/O
+    ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
+    B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
+    B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
+                    Options
+    -s host name of server host    (default '127.0.0.1')
+    -p port service port of server (default '8778')
+    -n name registration name (default first full ID)
+    -i inst instance ID for this @<<<< (1 to 3 numeric digits)
+    			    $named
+    -q      quiet - do not report clients connecting and disconnecting
+    -c col  maximum number of columns in a row (default 12)
+    -C col  absolute maximum number of columns in a row (default 18)
+    -S rows absolute maximum number of rows (default 3)
+    -l len  length of scales (default 170 pixels)
+    -f file read flags and additional ID parameters from this file
+    -H      a Hold button is generated which holds input changes
+    -b      use buttons instead of checkboxes for digital I/O
+    -d      display inputs IMn (no change and no ini values allowed)
+    -r      reverse - display inputs IMn, send outputs QMn like inputs
+                    DEBUG Options
+    -t      trace debug messages
+    -J      trace rcv messages in iCmsg.pm
+    -O      trace send messages in iCmsg.pm
+    -m      display elapsed time in seconds and microseconds
+    -T      extra static debug messages
+    -x      exit after analyzing input parameters
+    -h      help, ouput this Usage text only
+                    AUXILIARY app   - start a Bernstein chain
+    -R <app ...> run one app followed by -z and its arguments as a
+                 separate process; -R ... must be last arguments,
+                    KEYBOARD inputs
+        q   from keyboard or (X) button: stops iCserver and all apps
+        Q   from keyboard or shift+(X) button: quit without stopping iCserver
+Copyright (C) 2000-2024  John E. Wulff          <immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.68 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.69 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -181,7 +184,7 @@ print "runArgs = '", join(" ", @runArgs), "'\n" if $opt_Z;
 
 my $nr = qr/-?[1-9]\d*|0(x[\da-fA-F]+|b[01]+|[0-7]*)/;	# precompiled regex for number in all representations
 							# NOTE: oct() only handles lower case 0b, 0x
-my ($id, $ini, $from, $to, $res, $argNameRef);
+my ($id, $ini, $from, $to, $res, $onoff, $argNameRef);
 
 ########################################################################
 #	Handle all remaining -switch options and non-switch options
@@ -389,7 +392,8 @@ while ($argv = shift @argv) {
 	    ## $from contains the bit mask defining which bits are to be used
 	    ##   if $from eq '' it is set to 255 - all 8 buttons present
 	    ##   if $from == 0 it becomes a dummy frame with no buttons
-	    ## $to is the pushbutton delay in ms (default '' or 0 is normal on/off button)
+	    ## $to is the pushbutton delay in ms (default '' or 0 is normal press-on/press-off button)
+	    ## $to == -1 the button becomes a press-on/release-off button (button follows mouse-button)
 	    ## $res contains the bit mask defining which bits are push buttons if $to != 0
 	    ########################################################################
 	    if ($start_xbwl eq 'X') {
@@ -399,13 +403,18 @@ while ($argv = shift @argv) {
 		    warn "$named: $argv: digital output argument cannot have a time delay - used 0\n";
 		    $to = 0;
 		} else {
-		    $to = convert_nr($to, 0, $argv);	# default 0 is normal Input on/off button
+		    $to = convert_nr($to, 0, $argv);	# default 0 is normal Input press-on/press-off button
 		}
-		if ($to and $to < 50) {
+		$onoff = 0;
+		if ($to == -1) {
+		    $to = 0;
+		    $onoff = 1;
+		} elsif ($to and $to < 50) {
 		    warn "$named: $argv: push button time delay '$to' must be >= 50 - used 50 ms\n";
 		    $to = 50;				# minimum push button time delay is 50 ms (not -ve)
 		}
-		$res = convert_nr($res, $to ? 0xff : 0, $argv);# push-button I/O default bit mask for all 8 bits if $to
+		warn "$argv: \$to = $to \$onoff = $onoff\n";
+		$res = convert_nr($res, $to || $onoff ? 0xff : 0, $argv);# push-button I/O default bit mask for all 8 bits if $to
 		$res &= $from;				# $res should not have more bits than defined bits
 	    } else {
 		$from = convert_nr($from, 0, $argv);	# analog I/O default from = 0
@@ -440,7 +449,7 @@ while ($argv = shift @argv) {
 		} else {
 		    $IONames{$id} = -1;			# mark as unregistered IO
 		    print " $id=$ini" if $opt_t;
-		    push @ArgNames, [ $id, $ini, $from, $to, $res ];	# argument order for generating widgets
+		    push @ArgNames, [ $id, $ini, $from, $to, $res, $onoff ];	# argument order for generating widgets
 		}
 	    }
 	}
@@ -488,7 +497,7 @@ my $frameCount = 0;		# number of frames in the box
 $UnitRegistrations = "N$name";	# initiate registration string
 
 foreach $argNameRef (@ArgNames) {
-    ($id, $ini, $from, $to, $res) = @$argNameRef;
+    ($id, $ini, $from, $to, $res, $onoff) = @$argNameRef;
     $direction = $label = '';
     if ($id =~ /^I/) {
 	$direction = $opt_d || $opt_r ? 'R' : 'S';
@@ -688,7 +697,7 @@ if ($opt_H) {
 		    $val = $HoldQueue{$ch};	# retrieve latest value
 		    if ($val != $ChannelsIq[$ch]) {
 			send_input($ch, $val);	# send hold value
-			($id, $ini, $from, $to, $res) = @{$ArgNames[$ChannelsRI[$ch]]};	# all argument values
+			($id, $ini, $from, $to, $res, $onoff) = @{$ArgNames[$ChannelsRI[$ch]]};	# all argument values
 			if ($to and				# process held delayed push-buttons
 			    $id =~ /$I__XBWL__/o and		# /^I([XBWL])/ or /^Q([XBWL])/ if $opt_r
 			    $1 eq 'X') {			# only IXx.y
@@ -760,7 +769,7 @@ if ($opt_H) {
 ########################################################################
 
 foreach $argNameRef (@ArgNames) {
-    ($id, $ini, $from, $to, $res) = @$argNameRef;
+    ($id, $ini, $from, $to, $res, $onoff) = @$argNameRef;
     $direction = $label = '';
     if ($id =~ /^I/) {
 	$direction = $opt_d || $opt_r ? 'R' : 'S';
@@ -777,7 +786,7 @@ foreach $argNameRef (@ArgNames) {
 	    next;			# multiple input not registered
 	}
     }
-    print "$named: [$row:$column] label = '$label' ch = '$ch' ini = '$ini' from = '$from' to = '$to' res = '$res'\n" if $opt_t;
+    print "$named: [$row:$column] label = '$label' ch = '$ch' ini = '$ini' from = '$from' to = '$to' res = '$res onoff = '$onoff''\n" if $opt_t;
 
     $frame  = $pane->Frame(-label       => $label,
 			   -relief      => 'groove',
@@ -804,7 +813,7 @@ foreach $argNameRef (@ArgNames) {
 #
 ########################################################################
 
-    my ($index, $text, $sel, $del, $state, $borderwidth);
+    my ($index, $text, $sel, $del, $oo, $do, $state, $borderwidth);
     if ($id =~ /$QX/o) {		# /^QX/ or /^[IQ]X/ if $opt_d or /^IX/ if $opt_r
 	for $index (0 .. 7) {
 	    $sel = $from & (1 << $index);
@@ -843,11 +852,14 @@ foreach $argNameRef (@ArgNames) {
 	for $index (0 .. 7) {
 	    $sel = $from & (1 << $index);
 	    $del = ($res & (1 << $index)) ? $to : 0;			# select bits which are push-buttons
+	    $oo  = ($res & (1 << $index)) ? $onoff : 0;			# select bits which are press-on/release-off buttons
+	    $do  = $del || $oo;
 	    $text        = $sel ? "'.$index'" : "''";
 	    $borderwidth = $sel ? 2 : 0;
 	    $state       = $sel ? "'normal'" : "'disabled'";
-	    my $makeInCheckbutton = ($del ? "\
+	    my $makeInCheckbutton = ($do ? "\
 	    my \$myself;" : "") . "\
+	    my \$val;
 	    my \$thisButton = \$frame->Checkbutton(\
 		-text        => $text,\
 		-variable    => \\\$ChannelsIX[$ch][$index],\
@@ -855,8 +867,8 @@ foreach $argNameRef (@ArgNames) {
 		-borderwidth => $borderwidth,\
 		-state       => $state,\
 		-indicatoron => $indicatoron," . ($sel ? "\
-		-command     => " . ($del ? "\\(\$myself = " : "") . "sub {\
-		    my \$val = \$ChannelsI[$ch];" . ($del ? "\
+		-command     => " . ($do ? "\\(\$myself = " : "") . "sub {\
+		    \$val = \$ChannelsI[$ch];" . ($do ? "\
 		    if (\$val & $masks[$index]) {\
 			\$ChannelsIX[$ch][$index] = 0;	# reset bit indicator\
 			\$val &= ~$masks[$index];	# clear bit after time delay\
@@ -871,16 +883,19 @@ foreach $argNameRef (@ArgNames) {
 			\$ChannelsI[$ch] = \$val;\
 			send_input($ch, \$val);\
 		    }\
-		}" . ($del ? ")" : "") . "," : "") . "\
+		}" . ($do ? ")" : "") . "," : "") . "\
 	    )->pack(-side   => 'top', -expand => 1,);" . (($sel and $opt_H) ? "\
-	    push \@allButtons, \$thisButton;	# prepare for all set/reset" : "") . "\
+	    push \@allButtons, \$thisButton;	# prepare for all set/reset" : "") . ($oo ? "\
+	    \$thisButton->bind('<ButtonRelease-1>' => sub {\$val &= ~$masks[$index];\
+							    &\$myself;\
+							});" : "") . "\
 ";									# end of eval
 	    print $makeInCheckbutton if $opt_T;
 	    eval $makeInCheckbutton;
 	    print $@;
 	}
 	send_input($ch, $ChannelsI[$ch]);				# send initial values at build time (set in registration)
-	if ($to) {							# process initial delayed push-buttons
+	if ($to or $onoff) {						# process initial delayed push-buttons
 	    my $resolution = $res & $ini;				# no need to clear uninitialised bits
 	    if ($resolution) {
 		my $channel = $ch;
@@ -1182,7 +1197,7 @@ sub rcvd_msg_from_server {
 	    } elsif ($register and $msg1 =~ /^(-?\d+)$/) {
 		next if $1 eq '-0';		## null acknowledgment
 		$channel = $1;			## receive channel of a registration acknowledgment
-		($id, $ini, $from, $to, $res) = @{$ArgNames[$ri]};	# all argument values
+		($id, $ini, $from, $to, $res, $onoff) = @{$ArgNames[$ri]};	# all argument values
 		defined $id or
 		    die "$named: too many registration acknowledgments from iCserver - system error";
 		print "$named: $ri: registering '$id' on channel '$channel'\n" if $opt_t;
@@ -1232,7 +1247,7 @@ sub rcvd_msg_from_server {
 		    $ChannelNames[$channel] = "$id";
 		    $IONames{$regId} = $channel;
 		    ## build only boxes whose IONames entry is defined
-		    print "register: $regId channel = $channel ini = '$ini' from = '$from' to = '$to' res = '$res'\n" if $opt_t;
+		    print "register: $regId channel = $channel ini = '$ini' from = '$from' to = '$to' res = '$res' onoff = '$onoff'\n" if $opt_t;
 		}
 	    } else {
 	      WrongFormat:
@@ -1328,9 +1343,8 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
 =head1 SYNOPSIS
 
  iCbox [-qHbdrtJOmTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
-       [ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
-       [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
-       [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
+      [ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
+      [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
     ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
             Any ID can be preceded by 'I' or 'Q' in which case
             only that input or output is generated (default is both)
@@ -1341,18 +1355,21 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
             Such an appended instance code takes precedence over the
             general instance specified with the -i <inst> (see below)
     ID=ini  initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
-            applies only to input ID's. One =ini applies to each input
-            in a range of ID's; eg X5-X7=0b11 inits IX5 IX6 and IX7 to 3
+            applies only to input ID's. One =ini applies to each input.
+                    Digital I/O
     ID,<button_select_mask>,<input_reset_time>,<reset_select_mask>
     X1,0b11 select digital buttons IX0.0, IX0.1, QX0.0 and QX0.1 only
             with a bit mask - default X1 (= X1,0b11111111) selects all
     X1,,200 digital input push-buttons IX1.0 .. IX1.7 reset after 200 ms
             default on/off buttons, which must be reset by another click
-            outputs QX1.0 .. QX1.7 are not affected by <input_reset time>
+    X1,,-1  digital input press-on/release-off buttons IX1.0 .. IX1.7
+            these buttons follow the left mouse button
     IX1,,200,0b11  only IX1.0 and IX1.1 are push-buttons - rest are on/off
+                    Analog I/O
     ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
     B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
     B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
+                    Options
     -s host name of server host    (default '127.0.0.1')
     -p port service port of server (default '8778')
     -n name registration name (default first full ID)
@@ -1367,7 +1384,7 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     -b      use buttons instead of checkboxes for digital I/O
     -d      display inputs IMn (no change and no ini values allowed)
     -r      reverse - display inputs IMn, send outputs QMn like inputs
-        DEBUG options
+                    DEBUG Options
     -t      trace debug messages
     -J      trace rcv messages in iCmsg.pm
     -O      trace send messages in iCmsg.pm
@@ -1375,12 +1392,12 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     -T      extra static debug messages
     -x      exit after analyzing input parameters
     -h      help, ouput this Usage text only
-        AUXILIARY app   - start a Bernstein chain
+                    AUXILIARY app   - start a Bernstein chain
     -R <app ...> run one app followed by -z and its arguments as a
                  separate process; -R ... must be last arguments,
-	KEYBOARD inputs
+                    KEYBOARD inputs
         q   from keyboard or (X) button: stops iCserver and all apps
-        Q   from keyboard or shiftt+(X) button: quit without stopping iCserver
+        Q   from keyboard or shift+(X) button: quit without stopping iCserver
 
 =head1 DESCRIPTION
 
@@ -1452,17 +1469,22 @@ or any numbers missing at the end will be filled with a default.
            are left blank. Default 0b11111111 - all bits are defined.
 
  Number 2) is a delay value in milliseconds. Any value 50 and above
-	   is used to reset the button internally after that many
-	   milliseconds, which makes it a push-button that only
-	   needs to be clicked once with the left mouse button.
-	   Non-zero values less than 50 (including negative values)
-	   are set to 50 ms. Default 0 - normal on/off button.
+           is used to reset the button internally after that many
+           milliseconds, which makes it a push-button that only
+           needs to be clicked once with the left mouse button.
+           Non-zero values less than 50 (including negative values)
+           are set to 50 ms. Default 0 - normal press-on/press-off
+           button.
+           A special case is delay value of -1, which makes the
+           button a press-on/release-off button - the button simply
+           follows mouse-button-1.
 
  Number 3) is a bit-mask defining, whether a particular bit .0 to .7
-	   is a push-button or is a normal on/off button. This is only
-	   useful if a delay value has been specified. This optional
-	   mask lets you select which bits in one group are to be
-	   push-buttons. Default 0x11111111 - all push-buttons.
+           is a push-button or a press-on/release-off button or a
+           normal on/off button. This is only useful if a delay value
+           has been specified. This optional mask lets you select which
+           bits in one group are to be push-buttons.  Default is
+           0x11111111 - all push-buttons or press-on/release-off.
 
 ID-parameter, range, initialiser and number-range must be written
 without spaces in the command line unless they are quoted. In the
@@ -1527,7 +1549,7 @@ L<immcc(1)>, L<iClive(1)>, L<iCserver(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2017  John E. Wulff
+COPYRIGHT (C) 2000-2024  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

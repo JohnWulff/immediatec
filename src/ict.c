@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.88 $";
+"@(#)$Id: ict.c 1.89 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -1932,11 +1932,11 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 				    (cps = strchr(cp, ':')) != NULL &&	/* strip only first ':' separating channel and data */
 				    (channel = (unsigned short)atoi(cp)) > 0 &&
 				    channel <= topChannel &&
-#ifndef	RASPBERRYPI
-				    (gp = Channels[channel]) != NULL
-#else	/* RASPBERRYPI */
+#ifdef	RASPBERRYPI
 				    ((gp = Channels[channel].g) != NULL ||
 				    (pqSel = Channels[channel].pqs) != 0)
+#else	/* RASPBERRYPI */
+				    (gp = Channels[channel]) != NULL
 #endif	/* RASPBERRYPI */
 				) {
 #if	INT_MAX == 32767 && defined (LONG16)
