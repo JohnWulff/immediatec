@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.82 $";
+"@(#)$Id: load.c 1.83 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2020  John E. Wulff
@@ -722,8 +722,6 @@ main(
     }
     iC_argc = argc;		/* actual global variables passed to iCbegin() */
     iC_argv = argv;
- //    if (iC_debug & 0200) fprintf(iC_outFP, "Extra arguments:\n"
- //					   "argc %d	%s\n", argc, *argv);
     if (argc < 0) argc = -argc; /* -R call + options */
     while (--argc > 0) {
 	if (iC_argc > 0) { 	/* else -- + options */
@@ -747,7 +745,6 @@ main(
 	} else {
 	    ++argv;
 	}
- //	if (iC_debug & 0200) fprintf(iC_outFP, "	%s\n", *argv);
     }
     if (*++argv != NULL) {
 	fprintf(iC_errFP, "WARNING: extra arguments are not NULL terminated: '%s'\n", *argv);
@@ -1406,7 +1403,6 @@ main(
  *  (except the TX0 entry) are the only candidates for such direct I/O
  *
  *******************************************************************/
-
     if (df) { fprintf(iC_outFP, "PASS 0\n"); fflush(iC_outFP); }
     val = e_cnt = 0;
     for (oppp = iC_list; (opp = *oppp++) != 0; ) {
@@ -1730,7 +1726,6 @@ main(
  *  Sort the symbol table in order of gt_ids.
  *
  *******************************************************************/
-
     {	/* ! iC_opt_P or ! RASPBERRYPI */
 	if (e_list) {
 	    ttgp->gt_next = *iC_list[0];	/* link iClist[0] to last entry in e_list  */
@@ -1792,7 +1787,6 @@ main(
  *  After this pass the input lists contain no aliases.
  *
  *******************************************************************/
-
     if (df) { fprintf(iC_outFP, "PASS 1 - name gt_ini gt_fni: input list\n"); fflush(iC_outFP); }
     for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;

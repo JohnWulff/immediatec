@@ -169,7 +169,7 @@ Usage:
         Q   from keyboard or shift+(X) button: quit without stopping iCserver
 Copyright (C) 2000-2024  John E. Wulff          <immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.69 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.70 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -413,7 +413,6 @@ while ($argv = shift @argv) {
 		    warn "$named: $argv: push button time delay '$to' must be >= 50 - used 50 ms\n";
 		    $to = 50;				# minimum push button time delay is 50 ms (not -ve)
 		}
-		warn "$argv: \$to = $to \$onoff = $onoff\n";
 		$res = convert_nr($res, $to || $onoff ? 0xff : 0, $argv);# push-button I/O default bit mask for all 8 bits if $to
 		$res &= $from;				# $res should not have more bits than defined bits
 	    } else {

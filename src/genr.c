@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.102 $";
+"@(#)$Id: genr.c 1.103 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -509,7 +509,7 @@ op_push(					/* reduce List_e stack to links */
 	    if ((lp = lsp->u_blist) == 0 ||	/* 'left' not a @ symbol */
 		rsp == lsp ||			/* or 'right' == 'left' */
 		(typ != op && typ != TIM) ||	/* or new operator but 'left' is not a timer */
-			/* TD watch this when typ is ALIAS or UDF */
+			/* TODO watch this when typ is ALIAS or UDF */
 		(typ == op &&			/* or operator is same as type of 'left' */
 		right->le_val == (unsigned)-1))	/* and 'right' is a delay for a timer */
 	    {
@@ -1917,12 +1917,21 @@ op_asgn(				/* assign List_e stack to links */
 	    }					/* END TAIL */
 	    if (sp->u_blist == 0 && gp->ftype < MIN_ACT && gt_count == 0) {
 		if (iFunSymExt && sp->list != 0 && gp->type == NCONST && gp->ftype == ARITH) {
+		    z1 = c_number + 1;			/* YES */
+		    if ((iC_optimise & 04) != 03 &&	/* for full optimising */
+			(!iC_gflag || !functionUse[z1].c_cnt)) {
+			for (z1 = 1; z1 <= c_number; z1++) {
+			    if (functionUse[z1].c.expr && strcmp(gBuf, functionUse[z1].c.expr) == 0) {
+				break;			/* identical expression found */
+			    }
+			}
+		    }
 		    /********************************************************************
 		     * nested constant in a cloned function definition must be treated
 		     * like a normal arithmetic variable triggering an expression. jw 17/12/2023
 		     *******************************************************************/
 		    lp = sy_push(gp);
-		    lp->le_val = ((c_number + 1) << FUN_OFFSET)	/* arithmetic case number */
+		    lp->le_val = ((z1) << FUN_OFFSET)	/* arithmetic case number */
 				 + gt_input + 1;	/* arithmetic input number */
 		    sp->u_blist = lp;
 		    if (iC_debug & 04) {
@@ -3463,8 +3472,9 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
 	    for (lp1 = sp->u_blist; lp1; lp1 = lp1->le_next) {
 		if ((sp1 = lp1->le_sym) != 0) {	/* input to this target */
 		    if (sp1->type == ALIAS) {
-			vlp = sp1->u_blist;	/* inversion is taken care of */
-			assert(vlp);
+			if ((vlp = sp1->u_blist) == 0 && (vlp = sp1->list) == 0) {
+			    assert(0);		/* ALIAS without right or left link */
+			}			/* inversion is taken care of */
 			if (((sp1->fm & FM) != 0 || sp1->name == 0) &&	/* no globals, no '@' in Pass 1 */
 			    (sp1->fm & FU) <= 1) {/* target not used more than once */
 			    sp1->fm++;		/* count ALIAS use in merge candidate */
@@ -3754,7 +3764,7 @@ clearFunDef(Symbol * functionHead)
 /********************************************************************
  *
  *	Check if a terminal Symbol in a function expression is declared
- *	extern if global.
+ *	extern if global. ALIASes in function blocks are resolved first.
  *
  *	Normal global variables must be declared extern in or before
  *	use in a function.  Like all variables declared extern, these
@@ -3777,20 +3787,31 @@ clearFunDef(Symbol * functionHead)
 List_e *
 checkDecl(Symbol * terminal)
 {
-    int		typ;
+    int		 typ;
+    List_e *	 vlp;
+    unsigned int inv = 0;
     if (terminal) {
-	typ = terminal->type;
-	if (iFunSymExt &&
-	    strncmp(terminal->name, iFunBuffer, iFunSymExt - iFunBuffer) != 0 &&
-	    (terminal->em & EM) == 0 &&
-	    typ != NCONST &&
-	    typ != INPX &&
-	    typ != INPW &&
-	    typ != ERR &&
-	    terminal != iclock) {
-	    warning("global variable not declared extern:", terminal->name);
+	if (iFunSymExt) {
+	    while ((typ = terminal->type) == ALIAS) {	/* scan down list of aliases */
+		vlp = terminal->list;
+		assert(vlp);				/* TODO handle FM */
+		inv = vlp->le_val;
+		terminal = vlp->le_sym;
+		assert(terminal);
+	    }
+	    if (strncmp(terminal->name, iFunBuffer, iFunSymExt - iFunBuffer) != 0 &&
+		(terminal->em & EM) == 0 &&
+		typ != NCONST &&
+		typ != INPX &&
+		typ != INPW &&
+		typ != ERR &&
+		terminal != iclock) {
+		warning("global variable not declared extern:", terminal->name);
+	    }
 	}
-	return sy_push(terminal);		/* link for expression expansion */
+	vlp = sy_push(terminal);		/* link for expression expansion */
+	vlp->le_val = inv;
+	return vlp;
     }
     execerror("terminal Symbol not defined ???", NS, __FILE__, __LINE__);
     return 0;					/* never gets here - for -Wall */

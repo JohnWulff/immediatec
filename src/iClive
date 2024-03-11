@@ -370,7 +370,7 @@ Usage:
 
 Copyright (C) 2000-2023  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.102 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.103 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -4707,7 +4707,9 @@ sub open_file {
 		    } else {
 			$menuFile->entryconfigure(4, -label => "$baseName.ic");
 		    }
-		    check_menu($fileName, 'files');		# save files with known extensions in file menu
+		    if ($extnName =~ m/^ica?$/) {
+			check_menu($fileName, 'files');		# save files with known extensions in file menu
+		    }
 		    unless ($no) {
 			$instName = "$procName$instanceText";	# previous executable was stopped or is compatible
 			$ci = change_instance();
@@ -5365,7 +5367,7 @@ sub check_menu {
 		    if ($pName eq $baseName and scalar @{ $iniNames{$pName} } == 1) {
 			$newEntry = $firstName;	# non-cascade menu entry
 			if (scalar @{ $iniProcs{$newEntry} } > 1 and not -w $pName) {
-			    $delete = 1;	# delete iC file used in another cascase group and not built
+			    $delete = 1;	# delete iC file used in another cascade group and not built
 			}
 			$baseName = '';
 		    } else {

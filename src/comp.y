@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.137 $";
+"@(#)$Id: comp.y 1.138 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -5133,8 +5133,7 @@ yylex(void)
 			/********************************************************************
 			 *  Variable names with '@' are only legal if part of this
 			 *  function definition in which case they match iFunBuffer
-			 *  and no second '@' occurs - alternate syntax used previously
-			 *  with '$' as the function variable separator
+			 *  and no second '@' occurs
 			 *******************************************************************/
 			cp++;
 			if (strchr(cp, '@') ||
@@ -5154,7 +5153,8 @@ yylex(void)
 	    } else if (strchr(iCtext, '@')) {
 		ierror("'@' only allowed if it follows function name in a function definition:", iCtext);
 		return LEXERR;
-	    } else if (iC_Pflag && strchr(iCtext, '$')) {
+	    }
+	    if (iC_Pflag && strchr(iCtext, '$')) {
 		/********************************************************************
 		 *  This and the test just above, are the only places, where variables
 		 *  containing the '$' symbol may be marked erroneous in iC code.
