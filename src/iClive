@@ -67,10 +67,10 @@ my %iniProcs = ();
 #	ftype-abbreviations are used for debugging to list the Symbol Table.
 #	They are also indexed by gt_fni (holds ftype). (lines up with FOPS in icc.h)
 #
-## #define	FOPS	"UA _EsrHVSRDvIFGCTBWX:!e"	/* DEBUG display of ftypes */
+#   #define	FOPS	"UA _EsrHVSRDvIFGCTBWX:!e"	/* DEBUG display of ftypes */
 #
-## list of ftypes fromm icc.h
-## #define	FULL_FTYPE
+#   list of ftypes fromm icc.h
+#   #define	FULL_FTYPE
 #	"UDFA","ARITH","GATE","GATEX","RI_BIT","S_SH","R_SH","D_SH",
 #	"CH_BIT","S_FF","R_FF","D_FF","CH_AR","F_SW","F_CF","F_CE","CLCK","TIMR",
 #	"TRAB","OUTW","OUTX","CLCKL","TIMRL","F_ERR",
@@ -370,7 +370,7 @@ Usage:
 
 Copyright (C) 2000-2023  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.103 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.104 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1226,6 +1226,8 @@ $text      ->bind('<Button-1>',			[ \&report_cursor         ]); # change in curs
 $text      ->bind('<ButtonRelease>',		[ \&adjust_live           ]);
 $text      ->bind('<Double-1>',			[ \&pick_word             ]); # select a search word in Live mode
 $text      ->bind('<Alt-Key-slash>',		[ \&new_search            ]); # simulate vi Search operator /
+$text      ->bind('<Key-F2>',			[ \&function2             ]); # write to /tmp/vim_buffer
+$text      ->bind('<Shift-Key-F2>',		[ \&functionS2            ]); # read from /tmp/vim_buffer
 ####### Y-Scrollbar bindings ###########################################
 $yScrollbar->bind('<KeyPress>',			[ \&set_shift_control     ]); # Set Shift/Control state
 $yScrollbar->bind('<KeyRelease>',		[ \&reset_shift_control   ]); # Reset Shift/Control state
@@ -4446,9 +4448,7 @@ sub getContents {
 	$disContents = '';
 	my $disLine = 0;
 	foreach $line (@arrayContents) {
-print "<$line\n";
 	    $line =~ s/^ +\d+\t//;				# remove line number
-print ">$line\n";
 	    $newContents .= "$line\n";			# contents without line numbers
 	    $disContents .= sprintf(" %4d\t%s\n", ++$disLine, $line);
 	}
@@ -4458,7 +4458,7 @@ print ">$line\n";
 	}
     }
     return $newContents;		# $newContents does not change if $disContents has not changed
-}
+} # getContents
 
 ########################################################################
 #
@@ -4526,6 +4526,7 @@ sub new_text {
 	$newContents = $disContents = $oldContents = '';
 	$fileName = $unknown;
 	$mainWindow->title("$named$u: $fileName$readOnly $runName");
+	info_display(2000, 'black', "New text window opened");
     }
 } # new_text
 
@@ -4633,46 +4634,45 @@ sub open_file {
 		if ($answer eq 'Yes') {
 		    print "open_file: open '$fName' stop '$runName'\n" if $opt_T;
 		    conn_send_now('X') if $conn;
-		    stop_file();			# $runName = ''
+		    stop_file();				# $runName = ''
 		} else {
 		    if ($answer eq 'No') {
 			print "open_file: open '$fName' leave '$runName' running in background\n" if $opt_T;
 			info_display(2000, 'blue', "'$runName' is still running in background");
-		    } else {				# 'Cancel'
+		    } else {					# 'Cancel'
 			info_display(2000, 'blue', "'$fName' was not loaded - '$runName' is still running");
-			return 0;			# cancel operation
+			return 0;				# cancel operation
 		    }
 		}
 	    }
+	    if ($readOnly) {					# applies to previously opened file
+		$text->configure(-state => 'normal');		# allow overwriting with new file
+	    }
+	    $fileName = $fName;					# alter global $fileName
+	    ########################################################################
+	    #  Set global $processName, $pathName, $procName and $extName here using
+	    #  $cascName if it is set.
+	    #  They are used in run_file() and build_file()
+	    #  Only other change is in saveAs_file() when $fileName is changed.
+	    ########################################################################
+	    my $m = $fileName =~ m/^((([\w\.\$]*[\\\/])*)([\w\.\$]+))\.(\w+)$/;
+	    ($processName, $pathName, $procName, $extnName) = ($1, $2, $4, $5);	# used globally
+	    if ($cascName =~ m/^(([\w\.\$]*[\\\/])*([\w\.\$]+))$/) {
+		($processName, $pathName, $procName) = ($1, $2, $3);
+	    }
+	    if ($processName eq $procName) {
+		$processName = "./$procName";		# in case . is not in $PATH
+		$pathName    = "";
+	    }
+	    $mainWindow->title("$named$u: $fileName$readOnly $runName");
+	    $text->tagDelete('cTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete really slow if not done
+	    $text->delete("1.0", "end");			# clear the text area
+	    $newContents = $disContents = '';
 	    stat($fName);
 	    if (-f _ and -r _ and open(FH, "<$encoding", $fName)) {	# :encoding($opt_E) calls stat()
-		if ($readOnly) {		# applies to previously opened file
-		    $text->configure(-state => 'normal');	# allow overwriting with new file
-		}
-		$fileName = $fName;	# alter global $fileName
-		########################################################################
-		#  Set global $processName, $pathName, $procName and $extName here using
-		#  $cascName if it is set.
-		#  They are used in run_file() and build_file()
-		#  Only other change is in saveAs_file() when $fileName is changed.
-		########################################################################
-		my $m = $fileName =~ m/^((([\w\.\$]*[\\\/])*)([\w\.\$]+))\.(\w+)$/;
-		($processName, $pathName, $procName, $extnName) = ($1, $2, $4, $5);	# used globally
-		my $baseName = $procName;	# for diplay switching
-		if ($cascName =~ m/^(([\w\.\$]*[\\\/])*([\w\.\$]+))$/) {
-		    ($processName, $pathName, $procName) = ($1, $2, $3);
-		}
-		if ($processName eq $procName) {
-		    $processName = "./$procName";	# in case . is not in $PATH
-		    $pathName    = "";
-		}
+		my $baseName = $procName;			# for diplay switching
 		$readOnly = (-w $fileName) ? '' : ' (RO)';	# set new read-only flag correctly; new stat() because of encoding()
 		print "$fileName is read-only\n" if $readOnly and $opt_T;
-		$mainWindow->title("$named$u: $fileName$readOnly $runName");
-		$text->tagDelete('cTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete really slow if not done
-		$text->delete("1.0", "end");	# clear the text area
-		$newContents = '';
-		$disContents = '';
 		my $disLine = 0;
 		while (<FH>) {
 		    $newContents .= $_;
@@ -4697,16 +4697,13 @@ sub open_file {
 		} else {
 		    info_display(2000, 'black', "File $fileName$readOnly, $length bytes loaded");
 		}
-		if ($m and $extnName =~ m/^(i[ch]a?|lst6?|c|h|ini)$/) {
-		    if ($extnName eq "ic") {
-			$menuFile->entryconfigure(4, -label => "$baseName.lst");
-		    } elsif ($extnName eq "ica") {
-			$menuFile->entryconfigure(4, -label => "$baseName.ic");
-		    } elsif (-w "$baseName.ica") {
-			$menuFile->entryconfigure(4, -label => "$baseName.ica");
-		    } else {
-			$menuFile->entryconfigure(4, -label => "$baseName.ic");
-		    }
+		if ($m and $extnName =~ m/^(i[ch]a?|lst6?|c|h|ini)$/) { if
+		($extnName eq "ic") { $menuFile->entryconfigure(4, -label =>
+		"$baseName.lst"); } elsif ($extnName eq "ica") {
+		$menuFile->entryconfigure(4, -label => "$baseName.ic"); } elsif
+		(-w "$baseName.ica") { $menuFile->entryconfigure(4, -label =>
+		"$baseName.ica"); } else { $menuFile->entryconfigure(4, -label
+		=> "$baseName.ic"); }
 		    if ($extnName =~ m/^ica?$/) {
 			check_menu($fileName, 'files');		# save files with known extensions in file menu
 		    }
@@ -4722,11 +4719,15 @@ sub open_file {
 		if ($readOnly) {
 		    $text->configure(-state => 'disabled');	# read-only file
 		}
-		return if $ci;		# global $fileName and application has altered
+		return if $ci;					# global $fileName and application has altered
 	    } else {
-		print "open_file: $conditional ERROR: Could not open $fName\n" if $opt_T;
-		check_menu($fName, 'files', 1);		# delete fName in the menu
-		info_display(2000, 'red', "-f and -r and open(FH, \"<$encoding\", $fName) failed ($?)");
+		# file does not exixt yet - open a new text window
+		$readOnly = $oldContents = '';			# can modify new text
+		info_display(2000, 'black', "File $fileName does not exist yet - new text window opened");
+		if ($extnName =~ m/^ica?$/) {
+		    print "open not existing file - check menu\n" if $opt_T;
+		    check_menu($fileName, 'files');		# save files with known extensions in file menu
+		}
 	    }
 	    adjust_live();
 	}
@@ -4797,7 +4798,14 @@ sub save_file {
 		## read last modified time from new stat now as it changed since last stat and :encoding()
 		$fileTime = (stat($fileName))[9]; $fileTime = 0 unless defined $fileTime;
 		$mainWindow->title("$named$u: $fileName$readOnly $runName");
-		info_display(2000, 'black', "File $fileName$readOnly, $length bytes saved (backup $fileName.bak)");
+		if (-f "$fileName.bak") {
+		    info_display(2000, 'black', "File $fileName$readOnly, $length bytes saved (backup $fileName.bak)");
+		} else {
+		    info_display(2000, 'black', "File $fileName$readOnly, $length bytes saved");
+		}
+		if ($fileName =~m/^\w+\.ica?$/) {
+		    check_menu($fileName, 'files');		# save files with extensions .ic or .ica in file menu
+		}
 	    } else {
 		info_display(2000, 'red', "ERROR: Could not open '$fileName$readOnly' for writing");
 		$ret = 0;	# error return
@@ -4854,7 +4862,6 @@ sub saveAs_file {
 		$processName = "./$procName";	# in case . is not in $PATH
 		$pathName    = "";
 	    }
-print "saveAs_file: fileName = '$fileName$readOnly' cascName = '$cascName' pathName = '$pathName' procName = '$procName' processName = '$processName'\n";
 	    $mainWindow->title("$named$u: $fileName$readOnly $runName");
 	    if ($m and $extnName =~ m/^(i[ch]a?|lst6?|c|h|ini)$/) {
 		if ($extnName eq "ic") {
@@ -4866,7 +4873,6 @@ print "saveAs_file: fileName = '$fileName$readOnly' cascName = '$cascName' pathN
 		} else {
 		    $menuFile->entryconfigure(4, -label => "$baseName.ic");
 		}
-		check_menu($fileName, 'files');		# save files with known extensions in file menu
 		my $no = 0;
 		unless ($no) {
 		    $instName = "$procName$instanceText";	# previous executable was stopped or is compatible
@@ -4993,6 +4999,8 @@ sub build_file {
 		    }
 		    info_display(2000, 'dark green', "'$targetName' $build_warnings");
 		}
+	    } elsif ($ftime == 0) {
+		info_display(2000, 'red', "'$targetName' norhing to build");
 	    } else {
 		info_display(2000, 'blue', "'$targetName' is up to date");
 	    }
@@ -5241,20 +5249,16 @@ sub change_instance {
 
 sub pushNamesProcs {
     my ($fName, $pName) = @_;
-    if (-w $fName) {
-	foreach my $file (@{ $iniNames{$pName} }) {
-	    goto fileFound if $file eq $fName;	# don't push $fName twice
-	}
-	push @{ $iniNames{$pName} }, $fName;
-      fileFound:
-	foreach my $proc (@{ $iniProcs{$fName} }) {
-	    goto procFound if $proc eq $pName;	# don't push $pName twice
-	}
-	push @{ $iniProcs{$fName} }, $pName;
-      procFound:;
-    } else {
-	$fName = '';		# not for menu
+    foreach my $file (@{ $iniNames{$pName} }) {
+	goto fileFound if $file eq $fName;	# don't push $fName twice
     }
+    push @{ $iniNames{$pName} }, $fName;
+  fileFound:
+    foreach my $proc (@{ $iniProcs{$fName} }) {
+	goto procFound if $proc eq $pName;	# don't push $pName twice
+    }
+    push @{ $iniProcs{$fName} }, $pName;
+  procFound:;
     return $fName;
 } # pushNamesProcs
 
@@ -5310,8 +5314,8 @@ no warnings;
 	unless ($fileName) {
 	    $fileName = ${ $iniNames{$pName} }[0]	# first file name in iniNames for this proc
 	}
-    } else {
-	print STDERR "Error: '$word' not an iC or iCa filename or process name\n";
+    } elsif ($word) {
+	print STDERR "Error: '$word' not an iC or iCa filename - no menu entry\n";
     }
     return ($fileName, $pName);
 use warnings;
@@ -5379,17 +5383,27 @@ sub check_menu {
 	    }
 	}
     }
-    my $e;
+    my ($e, $g);
     my $n = 0;
     foreach $e (@$entriesArray) {
-	if ($e and $e eq $newEntry) {		# find newEntry in entriesArray
-	    $e = splice(@$entriesArray, $n, 1);	# remove from middle of entriesArray
-	    die "entry '$e' in entriesArray does not match call parameter '$newEntry', stopped" if $e ne $newEntry;
-	    my $label = $menuRef->entrycget($menuPos+$n, '-label');	# check algorithm
-	    die "entry '$e' in entriesArray does not match menu entry '$label', stopped" if $e ne $label;
-	    print "check_menu: [$menuKey] '$e' removed from position $n of menu\n" if $opt_T;
-	    $menuRef->delete($menuPos+$n) if $menuRef;	# delete old entry from menu
-	    last;				# avoids indexing with a pattern, which fails
+	if ($e) {
+	    if ($e eq $newEntry) {		# find newEntry in entriesArray
+		$g = splice(@$entriesArray, $n, 1);	# remove from middle of entriesArray
+		die "entry '$g' in entriesArray does not match call parameter '$newEntry', stopped" if $g ne $newEntry;
+		my $label = $menuRef->entrycget($menuPos+$n, '-label');	# check algorithm
+		die "entry '$g' in entriesArray does not match menu entry '$label', stopped" if $g ne $label;
+		print "check_menu: [$menuKey] '$g' removed from position $n of menu\n" if $opt_T;
+		$menuRef->delete($menuPos+$n) if $menuRef;	# delete old entry from menu
+		last;				# avoids indexing with a pattern, which fails
+	    } elsif ($menuKey eq 'files' and $baseName eq $newEntry and "$baseName.ic" eq $e and exists $iniProcs{$e}) {
+		# delete duplicate source file - continue scan of @$entriesArray
+		$g = splice(@$entriesArray, $n, 1);	# remove from middle of entriesArray
+		die "entry '$g' in entriesArray does not match call parameter '$e', stopped" if $g ne $e;
+		my $label = $menuRef->entrycget($menuPos+$n, '-label');	# check algorithm
+		die "entry '$g' in entriesArray does not match menu entry '$label', stopped" if $g ne $label;
+		print "check_menu: [$menuKey] '$g' removed from position $n of menu\n" if $opt_T;
+		$menuRef->delete($menuPos+$n) if $menuRef;	# delete old entry from menu
+	    }
 	}
 	$n++;
     }
@@ -5480,6 +5494,7 @@ sub ini_program {
 	}
 	close(INI);
     }	# ignore if ~/.iC/iClive.ini cannot be opened or found
+    $entry = '';
     $initialFile = shift @argv;			# ARGV may be empty
     unless ($initialFile and $initialFile ne '') {
 	($initialFile, $position, $entry) = @lastFile;
@@ -5520,7 +5535,7 @@ use warnings;
 	    open(INI, $fName)) {
 	    while (<INI>) {
 		chomp;
-		if (m/^\s*%%?include\s+"(\w+\.iha?)"/) {
+		if (m/^\s*%%?include\s+"([\w.\/\\]+)"/) {
 		    foreach $pName (@{ $iniProcs{$fName} }) {
 			pushNamesProcs($1, $pName);
 		    }
@@ -5533,14 +5548,14 @@ use warnings;
     #  Open initial file if it exists - else delete name from the file menu
     #                                  in check_menu() in open_file()
     ########################################################################
-    if (defined $initialFile and $initialFile ne '') {
-	($fName, $pName) = splitFiles($initialFile);
+    ($fName, $pName) = splitFiles($initialFile);
+    if ($fName) {
 	if (("$pName.ic" eq $fName or "$pName.ica" eq $fName) and scalar @{ $iniNames{$pName} } == 1) {
-	    $cascName = '';		# pretend simple menu option selected
+	    $cascName = '';			# pretend simple menu option selected
 	} else {
-	    $cascName = $pName;		# pretend first cascade menu option selected
+	    $cascName = $pName;			# pretend first cascade menu option selected
 	}
-	open_file(0, $fName);		# calls check_menu() for $initialFile
+	open_file(0, $fName);			# calls check_menu() for $initialFile
     }
     if (defined $position and $position ne '' and $position ne "1.0") {
 	$text->see($position);			# Tk has segmentation fault if $position eq ''
@@ -5759,6 +5774,76 @@ sub output_symbol_table {
 	info_display(2000, 'red', "No Symbol Table - not connected to a running control program");
     }
 } # output_symbol_table
+
+########################################################################
+#
+#	Write to the temporary buffer /tmp/vim_buffer for transfer
+#	between text windows with function key <F2>
+#
+#	This function allows transferring selections of whole lines
+#	between 'iClive' and 'vim' if 'map <S-F2> :r /tmp/vim_buffer<CR>'
+#	for reading  /tmp/vim_buffer is part of .exrc
+#
+#	If no lines are selected the whole text is written
+#
+#	John Wulff's 'Super-Stutter-Sequences' map both <S-F2> and <F2>
+#	plus many interesting :ab abbreviations for fast program entry
+#
+########################################################################
+
+sub function2 {
+    if (open(FH, ">$encoding", "/tmp/vim_buffer")) {
+	my ($sel, $line, $lineCount);
+	if ($text->tagRanges('sel')) {
+	    $sel = $text->getSelected;			# get selection only
+	} else {
+	    $sel = $text->get("1.0", "end - 1 chars");	# no selection - get whole text
+	}
+	my @arrayContents = split "\n", $sel;
+	if ($extnName eq "lst") {
+	    print FH "$sel";				# output selection without line numbers
+	    $lineCount = scalar @arrayContents;
+	} else {
+	    $lineCount = 0;				# selection with line numbers
+	    foreach $line (@arrayContents) {
+		$line =~ s/^ +\d+\t//;			# remove line number
+		print FH "$line\n";			# output selection line without line numbers
+		$lineCount++;
+	    }
+	}
+	info_display(0, 'black', "$lineCount lines written to /tmp/vim_buffer");
+	print "function2: lineCount = $lineCount\n" if $opt_T;
+	close(FH);
+    } else {
+	info_display(0, 'red', "cannot open /tmp/vim_buffer for writing");
+    }
+} # function2
+
+########################################################################
+#
+#	Read from the temporary buffer /tmp/vim_buffer for transfer
+#	between text windows with function key <Shift-F2>
+#
+#	This function allows transferring selections of whole lines
+#	between 'vim' and 'iClive' if 'map <F2> :w! /tmp/vim_buffer<CR>'
+#	for writing /tmp/vim_buffer is part of .exrc
+#
+########################################################################
+
+sub functionS2 {
+    if (open(FH, "<$encoding", "/tmp/vim_buffer")) {
+	local $/ = undef;				# no input separator
+	my $sel = <FH>;					# slurp whole /tmp/vim_buffer
+	my @arrayContents = split "\n", $sel;
+	my $lineCount = scalar @arrayContents;
+	$text->insert("insert linestart + 1 lines", $sel);
+	info_display(0, 'black', "$lineCount lines read from /tmp/vim_buffer");
+	print "functionS2: lineCount = $lineCount\n" if $opt_T;
+	close(FH);
+    } else {
+	info_display(0, 'red', "cannot open /tmp/vim_buffer for reading");
+    }
+} # functionS2
 __END__
 ############ POD to generate man page ##################################
 
@@ -6061,11 +6146,11 @@ enter/delete/disable a B<WatchPoint> or an B<IgnorePoint>.
 The following buttons control debug actions:
 
   Debug     Turn Debug mode on and off. When turned off the Search
-	    Entry window is gray. It turns pale green when the program
-	    is running and Debug mode is on.  At the next change of
-	    any WatchPoint the program will stop and the Search Entry
-	    window will turn pink.  With Debug mode on the following
-	    three buttons, which control debug actions, are activated:
+            Entry window is gray. It turns pale green when the program
+            is running and Debug mode is on.  At the next change of
+            any WatchPoint the program will stop and the Search Entry
+            window will turn pink.  With Debug mode on the following
+            three buttons, which control debug actions, are activated:
 
   Step      run the program until the next change of any Active variable
             in the current source. Since intermediate variables
@@ -6075,10 +6160,10 @@ The following buttons control debug actions:
             also be seen. (Switch between .ic and .lst with Alt-l).
 
   Next      run the program until the next change of any output variable
-	    (Q...) in the current source.
+            (Q...) in the current source.
 
-	    Step or Next can be pressed at any time while the program
-	    is running and Debug mode is on to interrupt the program.
+            Step or Next can be pressed at any time while the program
+            is running and Debug mode is on to interrupt the program.
 
   Continue  run the program until a WatchPoint is reached and its
             condition is satisfied. If there are no WatchPoints the
@@ -6099,10 +6184,10 @@ found by initiating a search with the [/] button or the Return key.
 There are three further buttons in the Debug menu:
 
   WatchPoints list all Watch and Ignore points. Selected points may
-	    be deleted, disabled, enabled or have their conditions
-	    changed from this list. The 'Lookup' button starts a full
-	    search for all instances of a selected Watch or Ignore
-	    point in the program. ('Lookup' turns Debug mode off).
+            be deleted, disabled, enabled or have their conditions
+            changed from this list. The 'Lookup' button starts a full
+            search for all instances of a selected Watch or Ignore
+            point in the program. ('Lookup' turns Debug mode off).
 
   Trace     toggles a trace output of every action of the data driven
             execution of the iC code in the terminal window iClive
@@ -6416,6 +6501,33 @@ The following extra Bindings have been defined for iClive:
    Alt +   Dynamically increase font size
    Alt -   Dynamically decrease font size
 
+Because of line numbering the method of copying blocks
+of text with ctrl+C and pasting it with ctrl+V is not
+easy in iClive. The following are useful alternatives in
+'Edit' mode:
+
+[iC2]
+   <F2>    Write to the temporary buffer /tmp/vim_buffer for
+           transfer between text windows with function key <F2>.
+           If no lines  are selected the whole text is written.
+           Line numbers are removed from the text written to the
+           clipboard /tmp/vim_buffer.
+           This function allows transferring selections of whole
+           lines between iClive and VIM if
+               map <S-F2> :r /tmp/vim_buffer<CR>
+           for reading  /tmp/vim_buffer is part of .exrc for VIM.
+    <S-F2> Read from the temporary buffer /tmp/vim_buffer for
+           transfer between text windows with function key <S-F2>.
+           This function allows transferring selections of whole
+           lines between VIM and iClive if
+               map <F2> :w! /tmp/vim_buffer<CR>
+           for writing /tmp/vim_buffer is part of .exrc for VIM.
+The clipboard buffer /tmp/vim_buffer is best owned by the
+user 'root' with:
+    sudo chown root:root /tmp/vim_buffer
+and made read and writable for everybody with:
+    sudo chmod 666 /tmp/vim_buffer
+
 If the widget is read-only, as it is in 'Live' mode, then its view can
 still be adjusted and text can still be selected, but no insertion
 cursor will be displayed and no text modifications will take place.
@@ -6423,29 +6535,29 @@ In 'Live' mode the focus is normally on the y-Scrollbar or on the
 search-Entry window.  The following Bindings have been programmed for
 'Live' mode.
 
-[iC2]
+[iC3]
    The Left and Right keys scroll the whole text left and right one
    character at a time.
 
-[iC3]
+[iC4]
    The Up and Down keys scroll the text up and down one line at a time.
 
-[iC4]
+[iC5]
    The Next and Prior keys scroll the text up and down one page at
    a time.
 
-[iC5]
+[iC6]
    The Home and End keys move the text to the beginning or end.
 
 These scroll modes are also available in 'Edit' mode, by putting
 the focus in the 'search-Entry' window by clicking in it. To
 continue editing click in the text window again.
 
-[iC6]
+[iC7]
    The view in the widget can be adjusted by dragging with mouse
    button 3. (same in both modes)
 
-[iC7]
+[iC8]
    In 'Live' mode the following Accelerators work without
    the Alt-Key pressed:
     l   switch beteen iC-source and iC-Listing
