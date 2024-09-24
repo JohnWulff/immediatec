@@ -370,7 +370,7 @@ Usage:
 
 Copyright (C) 2000-2023  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.104 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.105 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -4930,7 +4930,12 @@ sub build_file {
 		## system() requires signal CHLD to notify completion
 		$SIG{CHLD} = 'DEFAULT';
 		my @args = ("iCmake", "-fsd200");
-		if ($par2 == 2) {
+		if ($par2 != 2) {		# link with static (debug) library - generate // x =
+		    my $lib;
+		    foreach $lib (@opt_L) {
+			push(@args, '-L', $lib);	# add BUILD library options
+		    }
+		} else {			# $par2 == 2 - Build C file only
 		    push(@args, '-b');		# iCmake -b to suppress making executable
 		}
 		my $i = 0;
@@ -4945,12 +4950,6 @@ sub build_file {
 		} else {
 		    push(@args, "-A", $fileName);
 		    $i++;
-		}
-		if ($par2 != 2) {		# link with static (debug) library - generate // x =
-		    my $lib;
-		    foreach $lib (@opt_L) {
-			push(@args, '-L', $lib);	# add BUILD library options
-		    }
 		}
 		push(@args, "2>&1");
 		unless ($i) {
