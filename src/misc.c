@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c 1.24 $";
+"@(#)$Id: misc.c 1.25 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -338,6 +338,7 @@ iC_fork_and_exec(char ** argv)
 	perror("fork failed");		/* hard ERROR */
 	iC_quit(SIGUSR1);		/* still parent */
     }
+    iC_Xflag = 0;			/* retain iCserver when this app stops */
     /* continue parent process with extended privileges */
 } /* iC_fork_and_exec */
 
