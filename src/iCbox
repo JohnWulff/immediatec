@@ -71,6 +71,7 @@ my %commandLineFlags = (
     'p'   => 1,
     'n'   => 1,
     'i'   => 1,
+    'P'   => 1,
     'c'   => 1,
     'C'   => 1,
     'S'   => 1,
@@ -111,7 +112,7 @@ format STDERR =
 Usage:
     @<<<< [-qHbdrtJOmTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
 	$named
-      [ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
+      [ -P <del>][ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
       [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
     ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
             Any ID can be preceded by 'I' or 'Q' in which case
@@ -143,6 +144,10 @@ Usage:
     -n name registration name (default first full ID)
     -i inst instance ID for this @<<<< (1 to 3 numeric digits)
     			    $named
+    -P del  all IXm.n digital inputs are push-buttons which reset after
+            <del> ms (<del> must be >= 50)
+    -P -1   all IXm.n digital inputs are press-on/release-off buttons
+            all input buttons follow the left mouse button
     -q      quiet - do not report clients connecting and disconnecting
     -c col  maximum number of columns in a row (default 12)
     -C col  absolute maximum number of columns in a row (default 18)
@@ -169,7 +174,7 @@ Usage:
         Q   from keyboard or shift+(X) button: quit without stopping iCserver
 Copyright (C) 2000-2024  John E. Wulff          <immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.70 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.71 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -191,7 +196,7 @@ my ($id, $ini, $from, $to, $res, $onoff, $argNameRef);
 ########################################################################
 
 use vars qw($opt_ $opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_J $opt_O $opt_T);
-use vars qw($opt_q $opt_z $opt_s $opt_p $opt_n $opt_i $opt_c $opt_C $opt_S $opt_l $opt_h);
+use vars qw($opt_q $opt_z $opt_s $opt_p $opt_n $opt_i $opt_P $opt_c $opt_C $opt_S $opt_l $opt_h);
 use Getopt::Long qw(:config no_ignore_case bundling);
 GetOptions (
     ''    => \$opt_,			# lone - (not used)
@@ -212,6 +217,7 @@ GetOptions (
     'p=s' => \$opt_p,
     'n=s' => \$opt_n,
     'i=i' => \$opt_i,
+    'P=i' => \$opt_P,
     'c=i' => \$opt_c,
     'C=i' => \$opt_C,
     'S=i' => \$opt_S,
@@ -241,7 +247,7 @@ $opt_C = 18	unless $opt_C;	# absolute maximum number of columns
 $opt_c = $opt_C	if $opt_c > $opt_C;
 $opt_S = 3	unless $opt_S;	# absolute maximum number of rows
 $opt_l = 170	unless $opt_l;	# default length of analog scale
-print "c = $opt_c C = $opt_C S = $opt_S l = $opt_l\n" if $opt_t;
+print "P = $opt_P c = $opt_c C = $opt_C S = $opt_S l = $opt_l\n" if $opt_t;
 
 if ($opt_b) {
     $indicatoron = 0;		# 0 button    1 checkbox
@@ -266,6 +272,7 @@ if (defined $opt_i and $opt_i ne '') {
 	warn "$named: badly formed option -i $opt_i - ignored\n";
     }
 }
+$opt_P = -1 if $opt_P == 1;		# GetOptions -ve numbers are without '-'
 
 ########################################################################
 #
@@ -379,8 +386,8 @@ while ($argv = shift @argv) {
 	unless ($si) {
 	    $si = $instance;
 	}
-	$fr_to_re = defined $15 ? $15 : '';
-	if ($fr_to_re) {			# [, from[, to[, resolution]]]
+	$fr_to_re = defined $15 ? $15 : '';	# [, from[, to[, resolution]]]
+	if ($fr_to_re or defined $opt_P) {
 	    my $dummy;
 	    print "fr_to_re = '$fr_to_re'\n" if $opt_t;
 	    ($dummy, $from, $to, $res) = split /\s*,\s*/, $fr_to_re;
@@ -394,6 +401,9 @@ while ($argv = shift @argv) {
 	    ##   if $from == 0 it becomes a dummy frame with no buttons
 	    ## $to is the pushbutton delay in ms (default '' or 0 is normal press-on/press-off button)
 	    ## $to == -1 the button becomes a press-on/release-off button (button follows mouse-button)
+	    ## If -P <del> option is defined it provides a delay value in ms for pushbuttons which reset
+	    ## after <del> ms or -P -1 for press-on/release-off - both  for all digital inputs IXm.n.
+	    ## Any IXm.n,,<del> will override the -P <del> value.
 	    ## $res contains the bit mask defining which bits are push buttons if $to != 0
 	    ########################################################################
 	    if ($start_xbwl eq 'X') {
@@ -403,7 +413,11 @@ while ($argv = shift @argv) {
 		    warn "$named: $argv: digital output argument cannot have a time delay - used 0\n";
 		    $to = 0;
 		} else {
-		    $to = convert_nr($to, 0, $argv);	# default 0 is normal Input press-on/press-off button
+		    if (not defined $to and defined $opt_P) {
+			$to = $opt_P;			# take $to pushbutton delay for all inputs from -P option
+		    } else {
+			$to = convert_nr($to, 0, $argv);	# default 0 is normal Input press-on/press-off button
+		    }
 		}
 		$onoff = 0;
 		if ($to == -1) {
@@ -1342,7 +1356,7 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
 =head1 SYNOPSIS
 
  iCbox [-qHbdrtJOmTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
-      [ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
+      [ -P <del>][ -c <col>][ -C <col>][ -S <rows>][ -l <len>][ -f <file>]
       [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
     ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
             Any ID can be preceded by 'I' or 'Q' in which case
@@ -1373,6 +1387,10 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     -p port service port of server (default '8778')
     -n name registration name (default first full ID)
     -i inst instance ID for this iCbox (1 to 3 numeric digits)
+    -P del  all IXm.n digital inputs are push-buttons which reset after
+            <del> ms (<del> must be >= 50)
+    -P -1   all IXm.n digital inputs are press-on/release-off buttons
+            all input buttons follow the left mouse button
     -q      quiet - do not report clients connecting and disconnecting
     -c col  maximum number of columns in a row (default 12)
     -C col  absolute maximum number of columns in a row (default 18)

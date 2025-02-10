@@ -10,7 +10,7 @@
 #
 #  Call: iCserver -f jwLift.is
 #
-#  $Id: jwLift.is 1.5 $
+#  $Id: jwLift.is 1.6 $
 #
 ########################################################################
 
@@ -30,7 +30,7 @@
 -R iCbox -d -nkbLift-IO QX40,31 IX40 IX41 QX42 IX42,3 QX43,15 IX43 IB43
 
 # iClift app
--R iClift -S -L 1 -F B0,1,4	# American floor numbering 1 - 4 like Keith Burstons lift
+-R iClift -t -S -L 1 -F B0,1,4	# American floor numbering 1 - 4 like Keith Burstons lift
 
 # monitor inputs and outputs to iClift
 -R iClift -S -L 1 -F B0,1,4 -B iClift.box

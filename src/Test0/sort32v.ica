@@ -70,7 +70,7 @@ imm bit segment(		/* returns gate control output */
 
 imm int belt(
     	assign	imm bit lock,	/* lock indicator */
-  FOR (int I = 0; I < GATES; I++) {{
+  FOR (I = 0; I < GATES; I++) {{
 	assign  imm bit gate[I],
   }}
 		imm int code,	/* gate code 0 .. [GATES-1]  - for parcel destination */
@@ -78,14 +78,14 @@ imm int belt(
 		imm bit strobe,	/* strobe pulse from belt movement */
     )
 {
-  FOR (int I = 0; I < GATES+1; I++) {{	/* 1 extra carry bit */
+  FOR (I = 0; I < GATES+1; I++) {{	/* 1 extra carry bit */
     imm int car[I];		/* carry bit: [I] */
   }}				// for overflow
 
     imm clock clk = CLOCK(strobe);
 
     lock   = feeder(p_cell, car[0], code, 12, 11, clk);
-  FOR (int I = 0; I < GATES; I++) {{
+  FOR (I = 0; I < GATES; I++) {{
     gate[I] = segment(car[I], car[I+1],    [I], 12,  7, clk);
   }}
     this = car[GATES];		/* allows concatenation of "belts" */
@@ -115,11 +115,11 @@ imm bit tick(bit manual, bit fast1, bit fast2) {
  *******************************************************************/
 
 imm bit reset = IX0.7;		/* general re-initialisation */
-  FOR (int I = 0; I < BELTS; I++) {{
+  FOR (I = 0; I < BELTS; I++) {{
 
     QX[LAST].[I] = belt(
 	QX[LAST].[I+BELTS],		/* lock indicator */
-      FOR (int J = I*BELTS*8; J < I*BELTS*8+GATES; J++) {{
+      FOR (J = I*BELTS*8; J < I*BELTS*8+GATES; J++) {{
 	QX[J/8].[J%8],
       }}
 	IB[I*BELTS+BELTS-1],		/* gate code 0 .. [GATES-1]  - for parcel destination */
