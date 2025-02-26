@@ -148,6 +148,11 @@ Usage:
             <del> ms (<del> must be >= 50)
     -P -1   all IXm.n digital inputs are press-on/release-off buttons
             all input buttons follow the left mouse button
+          Either -P option can be overridden with ID,,<n> where <n> may
+          be a positive delay or -1 different from the -P option or <n>
+          may even be 0 to restore push on/push off action for that Id.
+          NOTE: if this is followed by ,<seset-select-mask> the inputs
+          not selected will be push on/push off and not the -P selection.
     -q      quiet - do not report clients connecting and disconnecting
     -c col  maximum number of columns in a row (default 12)
     -C col  absolute maximum number of columns in a row (default 18)
@@ -174,7 +179,7 @@ Usage:
         Q   from keyboard or shift+(X) button: quit without stopping iCserver
 Copyright (C) 2000-2024  John E. Wulff          <immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.71 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.72 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -247,6 +252,8 @@ $opt_C = 18	unless $opt_C;	# absolute maximum number of columns
 $opt_c = $opt_C	if $opt_c > $opt_C;
 $opt_S = 3	unless $opt_S;	# absolute maximum number of rows
 $opt_l = 170	unless $opt_l;	# default length of analog scale
+$opt_P = 0	unless $opt_P;
+$opt_P = -1 if $opt_P == 1;	# GetOptions -ve numbers are without '-'
 print "P = $opt_P c = $opt_c C = $opt_C S = $opt_S l = $opt_l\n" if $opt_t;
 
 if ($opt_b) {
@@ -272,7 +279,6 @@ if (defined $opt_i and $opt_i ne '') {
 	warn "$named: badly formed option -i $opt_i - ignored\n";
     }
 }
-$opt_P = -1 if $opt_P == 1;		# GetOptions -ve numbers are without '-'
 
 ########################################################################
 #
@@ -387,7 +393,8 @@ while ($argv = shift @argv) {
 	    $si = $instance;
 	}
 	$fr_to_re = defined $15 ? $15 : '';	# [, from[, to[, resolution]]]
-	if ($fr_to_re or defined $opt_P) {
+	$onoff = 0;
+	if ($fr_to_re or $opt_P) {
 	    my $dummy;
 	    print "fr_to_re = '$fr_to_re'\n" if $opt_t;
 	    ($dummy, $from, $to, $res) = split /\s*,\s*/, $fr_to_re;
@@ -413,13 +420,12 @@ while ($argv = shift @argv) {
 		    warn "$named: $argv: digital output argument cannot have a time delay - used 0\n";
 		    $to = 0;
 		} else {
-		    if (not defined $to and defined $opt_P) {
+		    if (not defined $to and $opt_P) {
 			$to = $opt_P;			# take $to pushbutton delay for all inputs from -P option
 		    } else {
 			$to = convert_nr($to, 0, $argv);	# default 0 is normal Input press-on/press-off button
 		    }
 		}
-		$onoff = 0;
 		if ($to == -1) {
 		    $to = 0;
 		    $onoff = 1;
@@ -474,7 +480,7 @@ while ($argv = shift @argv) {
 @ArgNames or die "$named: no valid arguments - cannot make any boxes\n";
 
 if ($opt_t) {
-    print "LIST:	ID	ini	from	to	resolution\n";
+    print "LIST:	ID	ini	from	to	res	onoff\n";
     foreach $argNameRef (@ArgNames) {
 	my $argLine = join "\t", @$argNameRef;
 	print "\t$argLine\n";
@@ -1391,6 +1397,11 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
             <del> ms (<del> must be >= 50)
     -P -1   all IXm.n digital inputs are press-on/release-off buttons
             all input buttons follow the left mouse button
+          Either -P option can be overridden with ID,,<n> where <n> may
+          be a positive delay or -1 different from the -P option or <n>
+          may even be 0 to restore push on/push off action for that Id.
+          NOTE: if this is followed by ,<seset-select-mask> the inputs
+          not selected will be push on/push off and not the -P selection.
     -q      quiet - do not report clients connecting and disconnecting
     -c col  maximum number of columns in a row (default 12)
     -C col  absolute maximum number of columns in a row (default 18)

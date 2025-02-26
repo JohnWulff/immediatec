@@ -4,9 +4,8 @@ usage()
 {
     echo "Make various iC components for DEBUGGING and optionally install them" >&2
     echo "Usage $name[ -aclSGPVXrtNmgpuedsyzIih][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
-    echo '		with no option flags make immcc, libict.a and install them' >&2
-    echo '	-a	make all - immcc, libict.a, libict.so and install' >&2
-    echo '		also make goserver and immag (replacements for iCserver andd immac) if golang' >&2
+    echo '		with no option flags make immcc, libict.a with -q option and install' >&2
+    echo '	-a	make all - immcc, libict.a, libict.so with -q option and install' >&2
     echo '		as well as iCpiFace, iCpiPUD, iCpiPWM, and iCpiI2C if on a Raspberry Pi' >&2
     echo '	-c	make immediate C compiler immcc with YYDEBUG' >&2
     echo '	-l	make immediate C static library libict.a with YYDEBUG' >&2
@@ -20,7 +19,8 @@ usage()
     echo '	-N	make const test internal constant expression compiler only' >&2
     echo '	-m	make standalone internal C compiler lmain for test' >&2
     echo '    Extra options' >&2
-    echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
+    echo '	-q	output only headings and error messages' >&2
+    echo '	-g	compile for debugging C code and no C optimisation (default -O2)' >&2
     echo '	-p	compile and link for profiling with gprof (-pg)' >&2
     echo '	-u	make any compiler targets with Symbol SYUNION option' >&2
     echo '	-e	make all targets with EFENCE option and link with -lefence' >&2
@@ -32,7 +32,7 @@ usage()
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-D<OPT>	make all targets with <OPT> defined' >&2
     echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
-    echo '	-z	echo compiler calls with all options for debugging' >&2
+    echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo "	-I	execute chmod ugo+s /usr/bin/install /usr/bin/ranlib as su once" >&2
     echo "		this is required to run make install as an ordinary user" >&2
     echo '	-i	make install after programs have been updated' >&2
@@ -40,7 +40,7 @@ usage()
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m 1.29 $' >&2
+    echo '$Id: m 1.30 $' >&2
 }
 
 name=${0##*/}
@@ -54,6 +54,7 @@ G=''
 V=''
 X=''
 I=''
+q=''
 z=0
 o=''
 
@@ -65,9 +66,9 @@ if [ -x /bin/uname ]; then
     fi
 fi
 
-while getopts ":aclSNPGVXrtmgpudsyezD:W:Iih" opt; do
+while getopts ":aclSNPGVXrtmqgpudsyezD:W:Iih" opt; do
     case $opt in
-    a ) clSGrtm="${clSGrtm}clSuG";
+    a ) clSGrtm="${clSGrtm}qclSu";
 	if [ -n "$o" ]; then
 	    clSGrtm="${clSGrtm}PVX";
 	fi
@@ -80,6 +81,7 @@ while getopts ":aclSNPGVXrtmgpudsyezD:W:Iih" opt; do
     r ) clSGrtm="${clSGrtm}r";;
     t ) clSGrtm="${clSGrtm}t";;
     m ) clSGrtm="${clSGrtm}m";;
+    q )	q='q';;		# echo only - dont kill
     g ) gpudsyez="${gpudsyez}g";;
     p ) gpudsyez="${gpudsyez}p";;
     u ) gpudsyez="${gpudsyez}u";;
@@ -87,7 +89,7 @@ while getopts ":aclSNPGVXrtmgpudsyezD:W:Iih" opt; do
     s ) gpudsyez="${gpudsyez}s";;
     y ) gpudsyez="${gpudsyez}y";;
     e ) gpudsyez="${gpudsyez}e";;
-    z )	gpudsyez="${gpudsyez}z";z=1;;
+    z )	gpudsyez="${gpudsyez}z";z=1;q='';;
     D ) dw="$dw -D$OPTARG";;
     W ) dw="$dw -W$OPTARG";;
     N ) N="N";;
@@ -120,13 +122,13 @@ if [ -n "$X" ]; then
 fi
 
 if [ -z "$clSGrtm" -a -z "$i" ]; then
-    clSGrtm="clSu"
+    clSGrtm="qclu"
     i="install"
 fi
 
 if [ -n "$clSGrtm" ]; then
-    echo "### ./makeAll -qg$clSGrtm$gpudsyez$dw"
-    ./makeAll -qg$clSGrtm$gpudsyez$dw
+    echo "### ./makeAll -$q$clSGrtm$gpudsyez$dw"
+    ./makeAll -$q$clSGrtm$gpudsyez$dw
 fi
 
 if [ -n "$i" ]; then

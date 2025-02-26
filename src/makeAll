@@ -27,7 +27,7 @@ usage ()
     echo '    call make for immcc, libict.a, libict.so, icr, ict, const and lmain' >&2
     echo '    with correct options' >&2
     echo '	-q	output only headings and error messages' >&2
-    echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
+    echo '	-g	compile for debugging C code and no C optimisation (default -O2)' >&2
     echo '	-p	compile and link for profiling with gprof (-pg)' >&2
     echo '	-c	make immcc iC compiler with YYDEBUG' >&2
     echo '	-l	make libict.a with YYDEBUG -t trace output possible' >&2
@@ -37,7 +37,7 @@ usage ()
     echo '	-C	make immcc only; generate an empty cexe.c' >&2
     echo '	-L	make libict.a only' >&2
     echo '	-S	make libict.so without YYDEBUG if OSTYPE ~= linux' >&2
-    echo '	-G	make goserver if golang is installed' >&2
+    echo '	-G	make goserver and immag if golang is installed' >&2
     echo '	-P	make iCpiFace real SIO digital I/O for RASPBERRYPI, YYDEBUG only' >&2
     echo '		   + iCgpioPUD for RASPBERRYPI as SUID auxiliary program' >&2
     echo '	-X	make iCpiI2C real I2C digital I/O for RASPBERRYPI, YYDEBUG only' >&2
@@ -63,7 +63,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll 1.50 $' >&2
+    echo '	$Id: makeAll 1.51 $' >&2
 }
 
 makeLib ()
@@ -101,11 +101,13 @@ makeShared ()
 makeGOserver ()
 {
     make goserver
+    make ./goserver.1.gz
 }
 
 makeGOimmag ()
 {
     make immag
+    make ./immag.1.gz
 }
 
 makeIcr ()
@@ -300,12 +302,6 @@ if [ ! -f icg.h ] || ( ( [ -n "$C" ] || [ -n "$L" ] ) && ! perl icg.pl $Y$u$d$e$
     fi
     echo "   remake icg.h"
     perl icg.pl $Y$u$d$e$o$s$y icc.h > icg.h
-    S=1;
-    if [[ -n "$raspberrypi" ]]; then
-	P=1;
-	X=1;
-	V=1;
-    fi
 fi
 
 if [ -n "$C" ]; then
@@ -406,7 +402,7 @@ makeAll - supports Makefile in immediate-C develeopment
  call make for immcc, libict.so, libict.a, icr, ict, const and lmain
  with correct options
     -q      output only headings and error messages
-    -g      compile for debugging and no optimisation (default -O2)
+    -g      compile for debugging C code and no C optimisation (default -O2)
     -p      compile and link for profiling with gprof (-pg)
     -c      make immcc iC compiler with YYDEBUG
     -l      make libict.a with YYDEBUG -t trace output possible
@@ -416,7 +412,7 @@ makeAll - supports Makefile in immediate-C develeopment
     -C      make immcc only; generate an empty cexe.c
     -L      make libict.a only
     -S      make libict.so without YYDEBUG if OSTYPE ~= linux
-    -G      make goserver if golang is installed
+    -G      make goserver and immag if golang is installed
     -P      make iCpiFace real SIO digital I/O for RASPBERRYPI, YYDEBUG only
           + iCgpioPUD for RASPBERRYPI as SUID auxiliary program
     -X      make iCpiI2C real I2C digital I/O for RASPBERRYPI, YYDEBUG only
@@ -446,11 +442,11 @@ makeAll - supports Makefile in immediate-C develeopment
 
 B<makeAll> is a shell script to support the Makefile to build various
 versions of the immcc compiler. Normally only the 'immcc' compiler
-the static library 'libict.so' and the shared library 'libict.a' are
+the static library 'libict.a' and the shared library 'libict.so' are
 required for production systems.  These 3 files are built with a
 simple B<make> call. B<makeAll> called with different options allows
-making versions with debugging output and versions for debugging with
-B<gdb> or better still B<ddd>.
+making versions with C debugging output for debugging with B<gdb> or
+better still B<ddd>.
 
 'icr' is an early version of the compiler which builds its run-time
 structures in memory and interprets these directly after compilation. I/O

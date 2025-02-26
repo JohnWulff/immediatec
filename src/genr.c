@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.103 $";
+"@(#)$Id: genr.c 1.104 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -2557,7 +2557,7 @@ evalConstExpr(Lis * lv)
     int		inv;
     int		mal;
     Valp	v;
-    char	buf[TSIZE];
+    char	buf[TSIZE+TSIZE];
     char	temp[TSIZE];
 
     v.lfl = 0;					/* assume an int val return */
@@ -2740,7 +2740,7 @@ evalConstParameter(List_e * lp)
     char *	formalName;
     char *	callName;
     char *	cp;
-    char	buf[TSIZE];
+    char	buf[TSIZE+TSIZE];
     char	temp[TSIZE];
 
     assert(lp && lp->le_sym && lp->le_next == 0 && lp->le_first && lp->le_last && *(lp->le_last) == '\0');

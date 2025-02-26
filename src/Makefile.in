@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.87 $
+# @(#)$Id: Makefile.in 1.88 $
 
 #######################################################################
 #
@@ -28,7 +28,7 @@
 #	to make iCpiI2C, remove all objects and make with OPT='-DRASPBERRYPI -DTCP -DYYDEBUG'
 #	to make iCpiPWM, remove all objects and make with OPT='-DRASPBERRYPI -DPWM -DTCP -DYYDEBUG'
 #
-#	  makeAll       # makes 'immcc' 'libict.a' and 'libict.so' without YYDEBUG support
+#	  makeAll -CLS; # makes 'immcc' 'libict.a' and 'libict.so' without YYDEBUG support
 #	  makeAll -rtm; # makes the auxiliary compilers with YYDEBUG support
 #	  makeAll -P;   # make iCpiFace SIO digital I/O program with YYDEBUG support
 #	  makeAll -X;   # make iCpiI2C I2C digital I/O program with YYDEBUG support
@@ -142,6 +142,7 @@ nothing:
 	@echo "    'm'    without flags - update compilers and libraries - install"
 	@echo "    'm -a' make compilers, libraries and drivers and install them"
 	@echo "           use after 'make clean'"
+	@echo "    'm -G' make goserver and immag (replacements for iCserver andd immac) if golang"
 	@echo "    'm -h' help list of possible calls"
 
 immcc:	$(srcdir)/Makefile icc.$(O) misc.$(O) scid.$(O) $(COBJ) pplstfix
@@ -154,18 +155,27 @@ ict:	$(srcdir)/Makefile icc.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O
 	$(CC) $(LDFLAGS) -o ict icc.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(LOBJ) icbegin.a $(EL)
 
 goserver:	$(srcdir)/Makefile $(srcdir)/../pkg/*/tcpcomm.a $(srcdir)/goserver.go
-ifneq ($(GO),)
-	$(GO) build $(srcdir)/goserver.go
-endif
+    ifneq ($(GO),)
+	@echo "build goserver"
+	@$(GO) build $(srcdir)/goserver.go
+    else
+	@echo "cannot make goserver - no golang available"
+    endif
 
 ../pkg/*/tcpcomm.a:	$(srcdir)/Makefile $(srcdir)/tcpcomm/tcpcomm.go
-ifneq ($(GO),)
-	$(GO) install $(srcdir)/tcpcomm
-endif
+    ifneq ($(GO),)
+	@echo "install tcpcomm.a"
+	@$(GO) install $(srcdir)/tcpcomm
+    else
+	@echo "cannot make $(srcdir)/tcpcomm - no golang available"
+    endif
 
 immag:	$(srcdir)/Makefile $(srcdir)/immag.go
     ifneq ($(GO),)
-	$(GO) build $(srcdir)/immag.go
+	@echo "build immag"
+	@$(GO) build $(srcdir)/immag.go
+    else
+	@echo "cannot make immag - no golang available"
     endif
 
 #### Aux library for icr and ict ######################################
@@ -269,20 +279,34 @@ $(srcdir)/immcc.1.gz:	$(srcdir)/icc.c $(srcdir)/scid.c
 	@gzip -f $(srcdir)/immcc.1
 
 $(srcdir)/goserver.1.gz:	$(srcdir)/goserver.go $(srcdir)/scid.c
+  ifneq ($(GO),)
     ifeq ($(TKGE803),true)
 	@pod2man -u -n iCserver -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/goserver.1
     else
 	@pod2man -n iCserver -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/goserver.1
     endif
 	@gzip -f $(srcdir)/goserver.1
+  else
+	@echo "cannot make goserver.1.gz - no golang available"
+	@touch goserver.1.gz
+  endif
 
 $(srcdir)/immag.1.gz:	$(srcdir)/immag.go $(srcdir)/scid.c
+  ifneq ($(GO),)
     ifeq ($(TKGE803),true)
-	@pod2man -u -n iCserver -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immag.1
+	@pod2man -u -n immac -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immag.1
     else
-	@pod2man -n iCserver -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immag.1
+	@pod2man -n immac -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immag.1
     endif
 	@gzip -f $(srcdir)/immag.1
+  else
+	@echo "cannot make immag.1.gz - no golang available"
+	@touch immag.1.gz
+  endif
+
+$(srcdir)/iCserver.1.gz:	$(srcdir)/iCserver $(srcdir)/scid.c
+
+$(srcdir)/immac.1.gz:	$(srcdir)/immac $(srcdir)/scid.c
 
 $(srcdir)/iCbox.1.gz:	$(srcdir)/iCbox $(srcdir)/scid.c
 
@@ -294,13 +318,9 @@ $(srcdir)/iCmake.1.gz:	$(srcdir)/iCmake $(srcdir)/scid.c
 
 $(srcdir)/iCman.1.gz:	$(srcdir)/iCman $(srcdir)/scid.c
 
-$(srcdir)/iCserver.1.gz:	$(srcdir)/iCserver $(srcdir)/scid.c
-
 $(srcdir)/iCmqtt.1.gz:	$(srcdir)/iCmqtt $(srcdir)/scid.c
 
 $(srcdir)/iCtherm.1.gz:	$(srcdir)/iCtherm $(srcdir)/scid.c
-
-$(srcdir)/immac.1.gz:	$(srcdir)/immac $(srcdir)/scid.c
 
 $(srcdir)/immax.1.gz:	$(srcdir)/immax $(srcdir)/scid.c
 
@@ -368,7 +388,7 @@ strict:
 # Since this Makefile.in is provided to only make and install the various parts of the
 # iC system it is sufficient to modify the calls of perlinstall here. JW 2023.02.10
 ########################################################################
-install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/goserver.1.gz $(srcdir)/immag.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCmqtt.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiI2C.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
+install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCmqtt.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiI2C.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
 	@${INSTALL} -d ${bindir} ${libdir} ${includedir} ${mandir}/man1 ${mandir}/man3
 	@${INSTALL_PROGRAM} $(srcdir)/iCmsg.pm  `$(srcdir)/perlinstall`/iCmsg.pm
 	@$(srcdir)/perlinstall -t $(srcdir) $(libdir)
@@ -407,8 +427,8 @@ endif
 	@${INSTALL_DATA} $(srcdir)/iClive.1.gz   ${mandir}/man1/${manprefix}iClive.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCmake.1.gz   ${mandir}/man1/${manprefix}iCmake.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCman.1.gz    ${mandir}/man1/${manprefix}iCman.1.gz
-	@if [ -f $(srcdir)/goserver.1.gz ]; then ${INSTALL_DATA} $(srcdir)/goserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz; else ${INSTALL_DATA} $(srcdir)/iCserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz; fi
-	@if [ -f $(srcdir)/immag.1.gz ]; then ${INSTALL_DATA} $(srcdir)/immag.1.gz ${mandir}/man1/${manprefix}immac.1.gz; else ${INSTALL_DATA} $(srcdir)/immac.1.gz ${mandir}/man1/${manprefix}immac.1.gz; fi
+	@if [ -s $(srcdir)/goserver.1.gz ]; then ${INSTALL_DATA} $(srcdir)/goserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz; else ${INSTALL_DATA} $(srcdir)/iCserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz; fi
+	@if [ -s $(srcdir)/immag.1.gz ]; then ${INSTALL_DATA} $(srcdir)/immag.1.gz ${mandir}/man1/${manprefix}immac.1.gz; else ${INSTALL_DATA} $(srcdir)/immac.1.gz ${mandir}/man1/${manprefix}immac.1.gz; fi
 	@${INSTALL_DATA} $(srcdir)/iCmqtt.1.gz   ${mandir}/man1/${manprefix}iCmqtt.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCpiFace.1.gz ${mandir}/man1/${manprefix}iCpiFace.1.gz
 	@${INSTALL_DATA} $(srcdir)/iCpiPWM.1.gz  ${mandir}/man1/${manprefix}iCpiPWM.1.gz
