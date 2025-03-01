@@ -40,7 +40,7 @@ usage()
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m 1.30 $' >&2
+    echo '$Id: m 1.31 $' >&2
 }
 
 name=${0##*/}
@@ -60,10 +60,17 @@ o=''
 
 if [ -x /bin/uname ]; then
     cpu=`/bin/uname -m`
-    tail=${cpu#"armv"}
-    if [[ "$cpu" != "$tail" ]]; then
-	o=" OPT=\"-DRASPBERRYPI\""
-    fi
+    ########################################################################
+    #  cpu = armv6 or amv7	RPi1 ro Rpi3
+    #  cpu = aarch64		RPi4 and LibreComputer Potato
+    ########################################################################
+    for computer in armv aarch; do
+	tail=${cpu#"$computer"}
+	if [[ "$cpu" != "$tail" ]]; then
+	    o=" OPT=\"-DRASPBERRYPI\""
+	    break
+	fi
+    done
 fi
 
 while getopts ":aclSNPGVXrtmqgpudsyezD:W:Iih" opt; do

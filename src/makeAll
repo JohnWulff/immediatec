@@ -63,7 +63,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll 1.51 $' >&2
+    echo '	$Id: makeAll 1.52 $' >&2
 }
 
 makeLib ()
@@ -285,12 +285,20 @@ test -d Make_tmp || mkdir Make_tmp;
 os="$o"
 if [ -x /bin/uname ]; then
     cpu=`/bin/uname -m`
-    tail=${cpu#"armv"}
-    if [[ "$cpu" != "$tail" ]]; then
-	o="$o -DRASPBERRYPI"
-	raspberrypi="$cpu"
-    fi
+    ########################################################################
+    #  cpu = armv6 or amv7	RPi1 ro Rpi3
+    #  cpu = aarch64		RPi4 and LibreComputer Potato
+    ########################################################################
+    for computer in armv aarch; do
+	tail=${cpu#"$computer"}
+	if [[ "$cpu" != "$tail" ]]; then
+	    o="$o -DRASPBERRYPI"
+	    raspberrypi="$cpu"
+	    break
+	fi
+    done
 fi
+
 if [ $YN -ne 0 ]; then
     Y=" -DYYDEBUG=$YN"
 fi

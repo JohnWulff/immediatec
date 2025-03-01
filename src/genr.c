@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.104 $";
+"@(#)$Id: genr.c 1.105 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -55,8 +55,10 @@ static char *	eEnd = 0;		/* end of temporary C expression buffer */
 static char *	cPtr = 0;		/* temporary clone expression out buffer input pointer */
 static char *	cEnd = 0;		/* end of temporary clone expression out buffer */
 static char *	gPtr = 0;		/* temporary clone expression in buffer input pointer */
+static char *	gEnd = 0;		/* end of temporary clone expression out buffer */
 static char *	tPtr = 0;		/* temporary text expression buffer input pointer */
 static char *	tOut = 0;		/* temporary text expression buffer output pointer */
+static char *	tEnd = 0;		/* end of text expression buffer */
 static char *	t_first = 0;
 static char *	t_last = 0;
 static Symbol *	iCallHead = 0;		/* function head seen at start of imm call */
@@ -837,10 +839,10 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 				pushMessage(debugTemp);
 			    }
 #endif
-			    tPtr = strncpy(tPtr, cp, len+1) + len;
+			    tPtr = strncpy(tPtr, cp, tEnd-tPtr) + len;
 			    if (sp1->type == NCONST) {
-				ePtr = strncpy(ePtr, cp, len+1) + len;
-				gPtr = strncpy(gPtr, cp, len+1) + len;
+				ePtr = strncpy(ePtr, cp, eEnd-ePtr) + len;
+				gPtr = strncpy(gPtr, cp, gEnd-gPtr) + len;
 			    } else {
 				for (y = 1; y < caSize; y++) {
 				    if (sp1 == caList[y].s) break;
@@ -871,11 +873,11 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 	    *tPtr = '\0';
 	    cp = gp->name;				/* this variable to tBuf including NCONST */
 	    len = strlen(cp);
-	    tPtr = strncpy(tPtr, cp, len+1) + len;	/* variable name */
+	    tPtr = strncpy(tPtr, cp, tEnd-tPtr) + len;	/* variable name */
 	    if (sflag == 04) {
 		assert(gp->type == NCONST);		/* auxiliary storage of NCONST text */
-		ePtr = strncpy(ePtr, cp, len+1) + len;
-		gPtr = strncpy(gPtr, cp, len+1) + len;
+		ePtr = strncpy(ePtr, cp, eEnd-ePtr) + len;
+		gPtr = strncpy(gPtr, cp, gEnd-gPtr) + len;
 	    } else {
 		if (iC_debug & 04) {
 		    /* only logic gate or SH can be aux expression */
@@ -929,20 +931,20 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 	    *cPtr = '\0';				/* modify \xff to \0 */
 	    cPtr = ep;
 	    len = strlen(cp);
-	    tPtr = strncpy(tPtr, cp, len+1) + len;	/* code from cloning expression */
-	    ePtr = strncpy(ePtr, cp, len+1) + len;
-	    gPtr = strncpy(gPtr, cp, len+1) + len;
+	    tPtr = strncpy(tPtr, cp, tEnd-tPtr) + len;	/* code from cloning expression */
+	    ePtr = strncpy(ePtr, cp, eEnd-ePtr) + len;
+	    gPtr = strncpy(gPtr, cp, gEnd-gPtr) + len;
 	    if (y != x) {
 		caList[y].x = x;			/* in case also duplicate in template */
 		x = y;				/* look for duplicates up to and including y */
 	    }
 	    cp = gp->name;				/* this variable to tBuf including NCONST */
 	    len = strlen(cp);
-	    tPtr = strncpy(tPtr, cp, len+1) + len;	/* variable name */
+	    tPtr = strncpy(tPtr, cp, tEnd-tPtr) + len;	/* variable name */
 	    if (sflag == 04) {
 		assert(gp->type == NCONST);		/* auxiliary storage of NCONST text */
-		ePtr = strncpy(ePtr, cp, len+1) + len;
-		gPtr = strncpy(gPtr, cp, len+1) + len;
+		ePtr = strncpy(ePtr, cp, eEnd-ePtr) + len;
+		gPtr = strncpy(gPtr, cp, gEnd-gPtr) + len;
 	    } else {
 		x1 = caList[y].x;			/* real index */
 		if (iC_debug & 04) {
@@ -1366,7 +1368,9 @@ op_asgn(				/* assign List_e stack to links */
 	cPtr = 0;			/* temporary clone expression out buffer pointer (set later) */
 	cEnd = &cBuf[EBSIZE];		/* end of temporary expression buffer */
 	gPtr = gBuf;			/* temporary clone expression in buffer pointer */
+	gEnd = &gBuf[EBSIZE];		/* end of clone expression buffer */
 	tOut = tPtr = tBuf;		/* temporary text expression buffer pointers */
+	tEnd = &tBuf[EBSIZE];		/* end of temporary text buffer */
 	memset(eBuf, '\0', EBSIZE);
 	memset(cBuf, '\0', EBSIZE);
 	memset(gBuf, '\0', EBSIZE);
@@ -1489,7 +1493,7 @@ op_asgn(				/* assign List_e stack to links */
 			cp = functionUse[cFn].c.expr;	/* C expression prepared for cloning */
 			len = strlen(cp);
 			assert(cBuf + len < cEnd);
-			strncpy(cBuf, cp, len+1);	/* copy cloning expression + terminator */
+			strncpy(cBuf, cp, EBSIZE);	/* copy cloning expression + terminator */
 			cPtr = cBuf;		/* temporary cloned out expression buffer pointer */
 		    } else {
 			assert(cFn == val);	/* other members must be the same */
@@ -1601,7 +1605,7 @@ op_asgn(				/* assign List_e stack to links */
 			    cp = functionUse[cFn].c.expr;	/* C expression prepared for cloning */
 			    len = strlen(cp);
 			    assert(cBuf + len < cEnd);
-			    strncpy(cBuf, cp, len+1);	/* copy cloning expression + terminator */
+			    strncpy(cBuf, cp, EBSIZE);	/* copy cloning expression + terminator */
 			    cPtr = cBuf;			/* temporary cloned out expression buffer pointer */
 			} else {
 			    assert(cFn == val);		/* other members must be the same */
@@ -1877,10 +1881,10 @@ op_asgn(				/* assign List_e stack to links */
 				    fflush(iC_outFP);
 				}
 #endif
-				tPtr = strncpy(tPtr, cp, len+1) + len;
+				tPtr = strncpy(tPtr, cp, tEnd-tPtr) + len;
 				if (sp1->type == NCONST) {
-				    ePtr = strncpy(ePtr, cp, len+1) + len;
-				    gPtr = strncpy(gPtr, cp, len+1) + len;
+				    ePtr = strncpy(ePtr, cp, eEnd-ePtr) + len;
+				    gPtr = strncpy(gPtr, cp, gEnd-gPtr) + len;
 				} else {
 				    for (y = 1; y < caSize; y++) {
 					if (sp1 == caList[y].s) break;
@@ -1910,9 +1914,9 @@ op_asgn(				/* assign List_e stack to links */
 		*tPtr = *gPtr = *ePtr = '\0';		/* terminate expression strings */
 	    } else {				/* CLONED TAIL */
 		len = strlen(cPtr);			/* code tail from cloning expression */
-		tPtr = strncpy(tPtr, cPtr, len+1) + len;
-		ePtr = strncpy(ePtr, cPtr, len+1) + len;
-		gPtr = strncpy(gPtr, cPtr, len+1) + len;
+		tPtr = strncpy(tPtr, cPtr, tEnd-tPtr) + len;
+		ePtr = strncpy(ePtr, cPtr, eEnd-ePtr) + len;
+		gPtr = strncpy(gPtr, cPtr, gEnd-gPtr) + len;
 		cPtr += len;
 	    }					/* END TAIL */
 	    if (sp->u_blist == 0 && gp->ftype < MIN_ACT && gt_count == 0) {
@@ -5418,13 +5422,13 @@ cloneFunction(Sym * fhs, Sym * hsym, Val * par)
 	lp = rll.v;
 	assert(lp && lp->le_first >= iCbuf && lp->le_first <= lp->le_last && lp->le_last < &iCbuf[IMMBUFSIZE]);
 	len = lp->le_last - lp->le_first;
-	strncpy(temp, lp->le_first, len);
+	strncpy(temp, lp->le_first, TSIZE);
 	temp[len] = '\0';
 	if ((lp1 = constExpr_push(temp, 1)) != NULL) {
 	    cp = lp1->le_sym->name;
 	    len1 = strlen(cp);
 	    assert(len1 <= len);		/* TODO this may not be true if division is used */
-	    cp = strncpy(lp->le_first, cp, len1) + len1;	/* replace expression by numeric value */
+	    cp = strncpy(lp->le_first, cp, TSIZE-(lp->le_first-temp)) + len1;	/* replace expression by numeric value */
 	    ep = cp + len;
 	    while (cp < ep) {
 		*cp++ = '#';
