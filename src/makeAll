@@ -2,13 +2,15 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2012  John E. Wulff
+#	Copyright (C) 2000-2025  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file
+#
+#	makeAll - helper script for the immediate C make system
 #
 #	make immcc and libict.a by default
 #
@@ -40,6 +42,8 @@ usage ()
     echo '	-G	make goserver and immag if golang is installed' >&2
     echo '	-P	make iCpiFace real SIO digital I/O for RASPBERRYPI, YYDEBUG only' >&2
     echo '		   + iCgpioPUD for RASPBERRYPI as SUID auxiliary program' >&2
+    echo '	-Y	make iCpiGPIO real GPIO digital I/O for RASPBERRYPI, YYDEBUG only' >&2
+    echo '		   + iCgpioPUD for RASPBERRYPI as SUID auxiliary program' >&2
     echo '	-X	make iCpiI2C real I2C digital I/O for RASPBERRYPI, YYDEBUG only' >&2
     echo '		   + iCgpioPUD for RASPBERRYPI as SUID auxiliary program' >&2
     echo '	-V	make iCpiPWM real analog I/O for RASPBERRYPI, PWM, serVo and ADC' >&2
@@ -63,7 +67,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll 1.52 $' >&2
+    echo '	$Id: makeAll 1.53 $' >&2
 }
 
 makeLib ()
@@ -175,6 +179,19 @@ makePiFace ()
     mv Make_tmp/* . 2> /dev/null
 }
 
+makePiGPIO ()
+{
+    mv misc.$O icend.$O tcpc.$O rpi_gpio.$O mcp23s17.$O pifacecad.$O Make_tmp 2> /dev/null
+    if [ -d PiGPIOObjs ]; then
+	mv PiGPIOObjs/* .
+    else
+	mkdir PiGPIOObjs
+    fi
+    make OPT="-DTCP -DYYDEBUG$o" CFLAGS="$cflags" LDFLAGS="$ldflags" iCpiGPIO
+    mv misc.$O icend.$O tcpc.$O rpi_gpio.$O PiGPIOObjs
+    mv Make_tmp/* . 2> /dev/null
+}
+
 makePiI2C ()
 {
     mv misc.$O icend.$O tcpc.$O rpi_gpio.$O Make_tmp 2> /dev/null
@@ -222,6 +239,7 @@ L=""
 S=""
 G=""
 P=""
+Y=""
 X=""
 V=""
 R=""
@@ -235,11 +253,11 @@ o=""
 w=""
 z=0
 YN=0
-Y=""
+Z=""
 cpu=""
 raspberrypi=""
 
-while getopts ":qgpclrtmCLSPXGVRTNMuedsyzhD:W:o:" opt; do
+while getopts ":qgpclrtmCLSPYXGVRTNMuedsyzhD:W:o:" opt; do
     case $opt in
     q )	q="q";;		# echo only - dont kill
     g )	cflags="-g";;	# debugging, no optimisation
@@ -254,6 +272,7 @@ while getopts ":qgpclrtmCLSPXGVRTNMuedsyzhD:W:o:" opt; do
     S )	S=1;;
     G )	G=1;;
     P )	P=1;;
+    Y )	Y=1;;
     X )	X=1;;
     V )	V=1;;
     R )	R=1;;
@@ -286,13 +305,23 @@ os="$o"
 if [ -x /bin/uname ]; then
     cpu=`/bin/uname -m`
     ########################################################################
-    #  cpu = armv6 or amv7	RPi1 ro Rpi3
+    #  cpu = armv6 or amv7	RPi1 to Rpi3
     #  cpu = aarch64		RPi4 and LibreComputer Potato
+    #  kernel < 6.6...		use sysfs
+    #  kernel >= 6.6...		use GPIO Character Device Userspace API (V2)
     ########################################################################
     for computer in armv aarch; do
 	tail=${cpu#"$computer"}
 	if [[ "$cpu" != "$tail" ]]; then
-	    o="$o -DRASPBERRYPI"
+	    kernel=`/bin/uname -r`
+	    if [[ $kernel =~ ^([0-9]+)\.([0-9]+) ]]; then
+		kmajor=${BASH_REMATCH[1]}
+		kminor=${BASH_REMATCH[2]}
+		kversion=`perl -e "printf \"%d%03d\\n\", $kmajor, $kminor;"`
+		o="$o -DRASPBERRYPI=$kversion"
+	    else
+		o="$o -DRASPBERRYPI"
+	    fi
 	    raspberrypi="$cpu"
 	    break
 	fi
@@ -300,16 +329,16 @@ if [ -x /bin/uname ]; then
 fi
 
 if [ $YN -ne 0 ]; then
-    Y=" -DYYDEBUG=$YN"
+    Z=" -DYYDEBUG=$YN"
 fi
-if [ ! -f icg.h ] || ( ( [ -n "$C" ] || [ -n "$L" ] ) && ! perl icg.pl $Y$u$d$e$o$s$y icc.h | cmp -s - icg.h ); then
-    echo "Options changed to '$Y$u$d$e$o$s$y'"
+if [ ! -f icg.h ] || ( ( [ -n "$C" ] || [ -n "$L" ] ) && ! perl icg.pl $Z$u$d$e$o$s$y icc.h | cmp -s - icg.h ); then
+    echo "Options changed to '$Z$u$d$e$o$s$y'"
     if [ -z "$R" ] && [ -z "$T" ]; then
 	echo "   make clean"
 	make clean 2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
     fi
     echo "   remake icg.h"
-    perl icg.pl $Y$u$d$e$o$s$y icc.h > icg.h
+    perl icg.pl $Z$u$d$e$o$s$y icc.h > icg.h
 fi
 
 if [ -n "$C" ]; then
@@ -371,6 +400,19 @@ if [ -n "$P" ]; then
     fi
 fi
 
+if [ -n "$Y" ]; then
+    if [[ -n "$raspberrypi" ]]; then
+	echo "make OPT=\"-DTCP -DYYDEBUG$o\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCpiGPIO"
+	makePiGPIO  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+	if [[ iCgpioPUD -ot iCgpioPUD.c ]]; then
+	    echo "make OPT=\"$o\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCgpioPUD"
+	    makeGpioPUD  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+	fi
+    else
+	echo "Error makeAll -Y: cannot make iCpiGPIO for a '$cpu' cpu - only for an 'armv*' on a Raspberry Pi"
+    fi
+fi
+
 if [ -n "$V" ]; then
     if [[ -n "$raspberrypi" ]]; then
 	echo "make OPT=\"-DPWM -DTCP -DYYDEBUG$o\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCpiPWM"
@@ -422,6 +464,8 @@ makeAll - supports Makefile in immediate-C develeopment
     -S      make libict.so without YYDEBUG if OSTYPE ~= linux
     -G      make goserver and immag if golang is installed
     -P      make iCpiFace real SIO digital I/O for RASPBERRYPI, YYDEBUG only
+          + iCgpioPUD for RASPBERRYPI as SUID auxiliary program
+    -Y      make iCpiGPIO real GPIO digital I/O for RASPBERRYPI, YYDEBUG only
           + iCgpioPUD for RASPBERRYPI as SUID auxiliary program
     -X      make iCpiI2C real I2C digital I/O for RASPBERRYPI, YYDEBUG only
     -V      make iCpiPWM real analog I/O for RASPBERRYPI, PWM, serVo and ADC

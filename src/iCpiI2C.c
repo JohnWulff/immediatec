@@ -346,7 +346,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2023 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiI2C.c 1.9 $\n"
+"Version	$Id: iCpiI2C.c 1.10 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -2985,7 +2985,7 @@ subject field.
 
 =head1 SEE ALSO
 
-L<iCpiPiFace(1)>, L<iCpiPWM(1)>, L<iCtherm(1)>, L<iCserver(1)>, L<iCbox(1)>,
+L<iCpiFace(1)>, L<iCpiPWM(1)>, L<iCtherm(1)>, L<iCserver(1)>, L<iCbox(1)>,
 L<makeAll(1)>, L<select(2)>
 
 =head1 COPYRIGHT

@@ -243,7 +243,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.18 $\n"
+"Version	$Id: iCpiFace.c 1.19 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -409,7 +409,6 @@ main(
 	iC_opt_G = 1;			/* block PiFace I/O - same as -G flag */
     }
     iC_iccNM = iC_progname;		/* generate our own name - not 'stdin' from tcpc.c */
-    if (iC_debug & 0200)  fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n", iC_fullProgname, iC_path, iC_progname);
 
     /********************************************************************
      *
@@ -540,6 +539,17 @@ main(
 	}
     }
   break3:
+    if (iC_debug & 0200) {
+#if RASPBERRYPI < 6006
+	fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n"
+			  "kernel = %d.%d ( < 6.6... )		use sysfs\n",
+			  iC_fullProgname, iC_path, iC_progname, RASPBERRYPI/1000, RASPBERRYPI%1000);
+#else
+	fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n"
+			  "kernel = %d.%d ( >= 6.6...	)	use GPIO Character Device Userspace API (V2)\n",
+			  iC_fullProgname, iC_path, iC_progname, RASPBERRYPI/1000, RASPBERRYPI%1000);
+#endif /* RASPBERRYPI < 6006 */
+    }
     /********************************************************************
      *  if argc != 0 then -R and argv points to auxialliary app + arguments
      *               do not fork and execute aux app until this app has
