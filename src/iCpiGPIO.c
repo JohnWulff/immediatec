@@ -29,7 +29,7 @@
  *	Linux kernel. This allows the use of older Raspberry PI OS's.
  *
  *	Since version 6.6 of the Linux kernel 'sysfs' is no longer available
- *	and a new interface called 'GPIO Character Device Userspace API'
+ *	and a new interface called 'GPIO Character Device Userspace API V2'
  *	has been added.
  *
  i	This interface has been under development over recent years. It
@@ -37,12 +37,12 @@
  *	IOCTL calls and data structures. 'ABI V1' is now deprecated.
  *
  *	Both versions are published with a wrapper called 'libgpiopd'.
- *	I could never get 'libgpiopd V1' working properly. 'libgpiopd V2'
+ *	I could never get 'libgpiod V1' working properly. 'libgpiod V2'
  *	is still in development and is not avialable in the latest RPi OS
  *	labelled 'bookworm'.
  *
  *	This driver uses direct IOCTL calls to 'ABI V2' for RPi OS's with
- *	Linux kernels >= 6.6, which works well.
+ *	Linux kernels >= 5.10, which works well.
  *
  *******************************************************************/
 
@@ -50,10 +50,11 @@
 #error - must be compiled with RASPBERRYPI and TCP defined and not _WINDOWS
 #else	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */
 
-#if RASPBERRYPI >= 6006	/* GPIO V2 ABI for icoctl */
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
 #include	<linux/gpio.h>
 #include	<sys/ioctl.h>
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#include	<stdlib.h>
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 #include	<signal.h>
 #include	<ctype.h>
 #include	<assert.h>
@@ -64,15 +65,18 @@
 #include	"tcpc.h"
 #include	"icc.h"			/* declares iC_emalloc() in misc.c */
 #include	"rpi_rev.h"		/* Determine Raspberry Pi Board Rev */
-#if RASPBERRYPI < 6006	/* sysfs */
+#if RASPBERRYPI < 5010	/* sysfs */
 #include	"rpi_gpio.h"
 #include	"bcm2835.h"		/* iCgpioPUD parameters */
-#endif	/* RASPBERRYPI < 6006 - sysfs */
+#endif	/* RASPBERRYPI < 5010 - sysfs */
 
 static const char *	usage =
 "Usage:\n"
 " %s [-BIftmqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]\n"
-"          [ -d <deb>]\n"
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+"           [ -D <db>]"
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+"          [ -W <GPIO_number>][ -d <deb>]\n"
 "          [ [~]IXn,<gpio>[,<gpio>,...][-<inst>] ...]\n"
 "          [ [~]QXn,<gpio>[,<gpio>,...][-<inst>] ...]\n"
 "          [ [~]IXn.<bit>,<gpio>[-<inst>] ...]\n"
@@ -88,6 +92,9 @@ static const char *	usage =
 "            invert inputs and outputs. When inverted a switch pressed on an\n"
 "            input generates a 1 for the IEC inputs and a 1 on an IEC output\n"
 "            turns a LED and relay on, which is natural.\n"
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+"    -D db   microsecend debounce for GPIO inputs (default 0 - no debounce)\n"
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 "    -W GPIO number used by the w1-gpio kernel module (default 4, maximum 31).\n"
 "            When the GPIO with this number is used in this app, iCtherm is\n"
 "            permanently blocked to avoid Oops errors in module w1-gpio.\n"
@@ -157,7 +164,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2025 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiGPIO.c 1.1 $\n"
+"Version	$Id: iCpiGPIO.c 1.2 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -188,7 +195,7 @@ static void	writeGPIO(gpioIO * gep, unsigned short channel, int val);
 
 FILE *		iC_outFP;		/* listing file pointer */
 FILE *		iC_errFP;		/* error file pointer */
-#if RASPBERRYPI >= 6006	/* GPIO V2 ABI for icoctl */
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
 
 #define GPIOCHIP "/dev/gpiochip0"	/* gpiochipX (0-4) depending on Pi model */
 int		chipFN;
@@ -331,6 +338,12 @@ struct gpio_v2_line_attribute		ri_attr = {
 struct gpio_v2_line_config_attribute	ri_cfg_attr = {
     .attr = {0}
 };
+struct gpio_v2_line_attribute		rb_attr = {
+    .id = GPIO_V2_LINE_ATTR_ID_DEBOUNCE
+};
+struct gpio_v2_line_config_attribute	rb_cfg_attr = {
+    .attr = {0}
+};
 /********************************************************************
  * gpio_v2 line event struct as storage for data read from pin
  *
@@ -359,7 +372,7 @@ static gpio_T			gpioArray[GPIO_LIMIT];
 static gpio_T			gepArray[LINEEVENT_BUFFERS];
 static int	gpio_line_cfg_ioctl (gpio_v2_t * gpio);
 static int	gpio_line_set_values (gpio_v2_t * gpio, __u64 bits,  __u64 mask);
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
 /********************************************************************
  *
@@ -419,12 +432,14 @@ main(
     int			argic;
     long long		gpioMask;
     ProcValidUsed *	gpiosp;
-#if RASPBERRYPI < 6006	/* sysfs */
+#if RASPBERRYPI < 5010	/* sysfs */
     int			sig;
-#else	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    char *		endptr;
+    long		opt_D = 0;	/* debounce microseconds if > 0 */
     int			i;
     int			j;
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */
@@ -507,6 +522,16 @@ main(
 		case 'I':
 		    invMask = 0xff;	/* invert GPIO inputs as well as GPIO outputs with -I */
 		    break;
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+		case 'D':
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+		    opt_D = strtol(*argv, &endptr, 10);	/* convert decimal */
+		    if (*endptr != '\0' || opt_D < 0) {
+			fprintf(iC_errFP, "ERROR: %s: -D %s microsecond debounce is not numeric or negative\n", iC_progname, *argv);
+			goto error;
+		    }
+		    goto break2;
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 		case 'W':
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    gpioTherm = atoi(*argv);
@@ -551,7 +576,7 @@ main(
 		     *******************************************************************/
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    *(argv-1) = *argv;	/* move app string to previous argv array member */
-		    *argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */
+		    *argv = iC_debug & DQ ?  mqz : mz;	/* point to "-qz"  or "-z" in current argv */
 		    argv--;			/* start call with app string */
 		    goto break3;
 		missing:
@@ -589,15 +614,15 @@ main(
     }
   break3:
     if (iC_debug & 0200) {
-#if RASPBERRYPI < 6006	/* sysfs */
+#if RASPBERRYPI < 5010	/* sysfs */
 	fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n"
 			  "kernel = %d.%d ( < 6.6... )		use sysfs\n",
 			  iC_fullProgname, iC_path, iC_progname, RASPBERRYPI/1000, RASPBERRYPI%1000);
-#else	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n"
 			  "kernel = %d.%d ( >= 6.6...	)	use GPIO Character Device Userspace API (V2)\n",
 			  iC_fullProgname, iC_path, iC_progname, RASPBERRYPI/1000, RASPBERRYPI%1000);
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     }
     /********************************************************************
      *  if argc != 0 then -R and argv points to auxialliary app + arguments
@@ -901,7 +926,7 @@ main(
 	    gep->Gchannel = 0;
 	}
     }
-#if RASPBERRYPI >= 6006	/* GPIO V2 ABI for icoctl */
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
     /********************************************************************
      *  open /dev/gpiochipX device for control of gpio pins via ioctl().
      *******************************************************************/
@@ -919,7 +944,7 @@ main(
      *  Provide separate attributes for write invertedpins as well as
      * read normal and inverted pins to catch both edges
      *******************************************************************/
-    wi_attr.id = GPIO_V2_LINE_ATTR_ID_FLAGS;
+    wi_attr.id =	GPIO_V2_LINE_ATTR_ID_FLAGS;
     wi_attr.flags =	GPIO_V2_LINE_FLAG_OUTPUT        |
 			GPIO_V2_LINE_FLAG_ACTIVE_LOW    |
 			GPIO_V2_LINE_FLAG_BIAS_PULL_UP;
@@ -936,6 +961,11 @@ main(
 			GPIO_V2_LINE_FLAG_EDGE_RISING   |
 			GPIO_V2_LINE_FLAG_EDGE_FALLING  |
 			GPIO_V2_LINE_FLAG_BIAS_PULL_UP;
+
+    if (opt_D) {
+	rb_attr.id =	GPIO_V2_LINE_ATTR_ID_DEBOUNCE;
+	rb_attr.debounce_period_us = opt_D;		/* microseonds debounce */
+    }
     /********************************************************************
      *  gpio_v2 attribute config for write inverted pins as well as
      *  read normal and inverted pins
@@ -943,7 +973,10 @@ main(
     wi_cfg_attr.attr = wi_attr;
     rd_cfg_attr.attr = rd_attr;
     ri_cfg_attr.attr = ri_attr;
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+    if (opt_D) {
+	rb_cfg_attr.attr = rb_attr;
+    }
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     /********************************************************************
      *  Export and open all gpio files for all GPIO arguments
      *  open /sys/class/gpio/gpioN/value permanently for obtaining
@@ -953,7 +986,7 @@ main(
 	for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
 	    for (bit = 0; bit <= 7; bit++) {
 		if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-#if RASPBERRYPI < 6006	/* sysfs */
+#if RASPBERRYPI < 5010	/* sysfs */
 		    if (iq == 0) {
 			/********************************************************************
 			 *  QXn gpio N export with direction out and no interrupts
@@ -993,7 +1026,7 @@ main(
 		    if (gep->gpioFN[bit] > iC_maxFN) {
 			iC_maxFN = gep->gpioFN[bit];
 		    }
-#else	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 		    /********************************************************************
 		     *  Configure gpio line request and line configurations
 		     *  for all GPIO arguments
@@ -1020,26 +1053,33 @@ main(
 			} else {
 			    rd_cfg_attr.mask |= maskBit;	/* normal input */
 			}
+			if (opt_D) {
+			    rb_cfg_attr.mask |= maskBit;	/* both with debounce */
+			}
 		    }
 		    if (iC_debug & 0200) fprintf(iC_outFP, "configure %c%s.%hu,%hu, offsets[%d] maskBit = 0x%llx\n",
 			gep->Ginv & iC_bitMask[bit] ? '~' : ' ', gep->Gname, bit, gpio, idx, maskBit);
 		    idx++;
 		    maskBit <<= 1;
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 		} else if (iq == 1) {
 		    gep->Ginv &= ~iC_bitMask[bit];	/* blank out missing GPIO input bits IXx.y */
 		}
 	    }
 	}
     }
-#if RASPBERRYPI >= 6006	/* GPIO V2 ABI for icoctl */
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
     /********************************************************************
      *  gpio_v2 line lines (pins) configuration
      *******************************************************************/
-    pins.linecfg->attrs[0] = wi_cfg_attr;   /* assign write inverted attr to linecfg array */
-    pins.linecfg->attrs[1] = rd_cfg_attr;   /* assign read attr to linecfg array */
-    pins.linecfg->attrs[2] = ri_cfg_attr;   /* assign read inverted attr to linecfg array */
-    pins.linecfg->num_attrs = 3;            /* for write and read pin attributes */
+    i = 0;
+    pins.linecfg->attrs[i++] = wi_cfg_attr;	/* assign write inverted attr to linecfg array */
+    pins.linecfg->attrs[i++] = rd_cfg_attr;	/* assign read attr to linecfg array */
+    pins.linecfg->attrs[i++] = ri_cfg_attr;	/* assign read inverted attr to linecfg array */
+    if (opt_D) {
+	pins.linecfg->attrs[i++] = rb_cfg_attr;	/* assign read de-bounce attr to linecfg array */
+    }
+    pins.linecfg->num_attrs = i;		/* for write and read pin and debounce attributes */
     pins.linereq->num_lines = idx;
     /********************************************************************
      *  Set line (pin) configuration
@@ -1051,7 +1091,7 @@ main(
     if (pins.linereq->fd > iC_maxFN) {
 	iC_maxFN = pins.linereq->fd;
     }
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     /********************************************************************
      *  Generate a meaningful name for network registration
      *******************************************************************/
@@ -1241,15 +1281,14 @@ main(
 	val = 0;
 	for (bit = 0; bit <= 7; bit++) {
 	    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-#if RASPBERRYPI < 6006	/* sysfs */
+#if RASPBERRYPI < 5010	/* sysfs */
 		if ((n = gpio_read(gep->gpioFN[bit])) != -1) {
 		    if (n) val |= iC_bitMask[bit];
 		} else {
 		    fprintf(iC_errFP, "WARNING: %s: GPIO %hu returns invalid value -1 (not 0 or 1 !!)\n",
 			iC_progname, gpio);		/* should not happen */
 		}
-#else	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI < 5010 - sysfs */
 	    }
 	}
 	assert(gep->Gname);
@@ -1294,7 +1333,7 @@ main(
     FD_ZERO(&infds);				/* should be done centrally if more than 1 connect */
     FD_ZERO(&ixfds);
     FD_SET(iC_sockFN, &infds);			/* watch TCP/IP socket for inputs */
-#if RASPBERRYPI < 6006	/* sysfs */
+#if RASPBERRYPI < 5010	/* sysfs */
     /********************************************************************
      *  Set all GPIO IXn input bits for interrupts
      *******************************************************************/
@@ -1306,9 +1345,9 @@ main(
 	    }
 	}
     }
-#else	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     FD_SET(pins.linereq->fd, &infds);				/* watch all GPIO's for interrupts */
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     if ((iC_debug & DZ) == 0) FD_SET(0, &infds);	/* watch stdin for inputs unless - FD_CLR on EOF */
     if (iC_debug & 0200) fprintf(iC_outFP, "iC_sockFN = %d\n", iC_sockFN);
     /********************************************************************
@@ -1369,7 +1408,7 @@ main(
 		op = buffer;
 		ol = BS;
 	    }
-#if RASPBERRYPI < 6006	/* sysfs */
+#if RASPBERRYPI < 5010	/* sysfs */
 	    for (gep = iC_gpL[1]; gep; gep = gep->nextIO) {	/* IXn inputs only */
 		assert(regBufLen > 11);		/* fits largest data telegram */
 		val = gep->Gval;
@@ -1397,17 +1436,17 @@ main(
 		    gep->Gval = val;		/* store change for comparison */
 		    /* by default do not invert GPIO inputs - they are inverted with -I */
 		    val ^= gep->Ginv;
-		    len = snprintf(cp, regBufLen, ",%hu:%d", gep->Gchannel, val); /* data telegram */
+		    len = snprintf(cp, regBufLen, ",%hu:%d", gep->Gchannel, val);	/* data telegram */
 		    cp += len;
 		    regBufLen -= len;
 		    if (iC_debug & 0100) {
-			len = snprintf(op, ol, " %s", gep->Gname); /* source name */
+			len = snprintf(op, ol, " %s", gep->Gname);	/* source name */
 			op += len;
 			ol -= len;
 		    }
 		}
 	    }	/*  end of GPIO N interrupt */
-#else	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	    if (! (FD_ISSET(pins.linereq->fd, &iC_rdfds))) goto END_GPIO_INTERRUPT;
 	    if ((m = read (pins.linereq->fd, lineevent, sizeof lineevent[0]*LINEEVENT_BUFFERS)) == -1) {
 		perror ("read - lineevent");
@@ -1458,17 +1497,17 @@ main(
 		val = gepArray[i].val;
 		if (val != gep->Gval) {		/* bit in val may have been set and cleared by different interrupts */
 		    gep->Gval = val;		/* ready for next interrupts */
-		    len = snprintf(cp, regBufLen, ",%hu:%d", gep->Gchannel, val); /* data telegram */
+		    len = snprintf(cp, regBufLen, ",%hu:%d", gep->Gchannel, val);	/* data telegram */
 		    cp += len;
 		    regBufLen -= len;
 		    if (iC_debug & 0100) {
-			len = snprintf(op, ol, " %s", gep->Gname); /* source name */
+			len = snprintf(op, ol, " %s", gep->Gname);	/* source name */
 			op += len;
 			ol -= len;
 		    }
 		}
 	    }
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	    if (cp > regBuf) {
 		iC_send_msg_to_server(iC_sockFN, regBuf+1);	/* send data telegram(s) to iCserver */
 		if (iC_debug & 0100) fprintf(iC_outFP, "G: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
@@ -1538,38 +1577,38 @@ writeGPIO(gpioIO * gep, unsigned short channel, int val)
     int			fd;
     int			mask;
     unsigned short	bit;
-#if RASPBERRYPI >= 6006	/* GPIO V2 ABI for icoctl */
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
     __u64		om;
     __u64		outMask = 0;
     __u64		outBit = 0;
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
     assert(gep && gep->Gname && *gep->Gname == 'Q');	/* make sure this is really a GPIO output */
     if (iC_debug & 0100) fprintf(iC_outFP, "G: %s:	%hu:%d	> %s\n",
 	iC_iccNM, channel, (int)val, gep->Gname);
-#if RASPBERRYPI < 6006	/* sysfs */
+#if RASPBERRYPI < 5010	/* sysfs */
     val ^= gep->Ginv;			/* normally write non-inverted data to GPIO output */
-#endif	/* RASPBERRYPI < 6006 - sysfs */
+#endif	/* RASPBERRYPI < 5010 - sysfs */
     diff = val ^ gep->Gval;		/* bits which are going to change */
     assert ((diff & ~0xff) == 0);	/* may receive a message which involves no change */
     while (diff) {
 	bit = iC_bitIndex[diff];	/* returns 0 - 7 for values 1 - 255 (avoid 0) */
 	mask  = iC_bitMask[bit];	/* returns hex 01 02 04 08 10 20 40 80 */
 	if ((fd = gep->gpioFN[bit]) != -1) {	/* is GPIO pin open ? */
-#if RASPBERRYPI < 6006	/* sysfs */
+#if RASPBERRYPI < 5010	/* sysfs */
 	    gpio_write(fd, val & mask);	/* yes - write to GPIO (does not need to be a bit in pos 0) */
-#else	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	    om = 1LL << fd;			/* fd = index into offsets array */
 	    outMask |= om;			/* bit to be written in this call (may be more than one) */
 	    outBit |= (val & mask) ?  om : 0;	/* write GPIO bit active or non-active */
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	} else if ((iC_debug & 0300) == 0300) {
 		fprintf(iC_errFP, "WARNING: %s: no GPIO associated with %s.%hu\n",
 		iC_progname, gep->Gname, bit);
 	}
 	diff &= ~mask;			/* clear the bit just processed */
     }
-#if RASPBERRYPI >= 6006	/* GPIO V2 ABI for icoctl */
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
     if (outMask) {
 	if (iC_debug & 0200) fprintf(iC_outFP, "writeGPIO: output %s outBit = %llu outMask = %llu\n",
 	    gep->Gname, outBit, outMask);
@@ -1578,10 +1617,10 @@ writeGPIO(gpioIO * gep, unsigned short channel, int val)
 		iC_progname, gep->Gname, outBit, outMask);
 	}
     }
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     gep->Gval = val;			/* ready for next output */
 } /* writeGPIO */
-#if RASPBERRYPI >= 6006	/* GPIO V2 ABI for icoctl */
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
 
 /********************************************************************
  *  Configure ioctl for gpio control using ABI V2 access.
@@ -1681,7 +1720,7 @@ gpio_dev_close (int gpiofd)
   }
   return 0;
 }
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
 /********************************************************************
  *
@@ -1693,11 +1732,11 @@ gpio_dev_close (int gpiofd)
 static int
 termQuit(int sig)
 {
+    gpioIO *		gep;
     ProcValidUsed *	gpiosp;
-#if RASPBERRYPI < 6006	/* sysfs */
+#if RASPBERRYPI < 5010	/* sysfs */
     if (iC_debug & 0200) fprintf(iC_outFP, "=== Unexport GPIOs =======\n");
-    int		iq;
-    gpioIO *	gep;
+    int			iq;
     unsigned short	bit;
     unsigned short	gpio;
     int		fn;
@@ -1735,7 +1774,13 @@ termQuit(int sig)
 	    }
 	}
     }
-#else	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    /********************************************************************
+     *  Write GPIO QXn termination outputs
+     *******************************************************************/
+    for (gep = iC_gpL[0]; gep; gep = gep->nextIO) {	/* QXn outputs only */
+	writeGPIO(gep, gep->Gchannel, 0);	/* some bits may not have a GPIO pin */
+    }
     /********************************************************************
      *  Close gpio file descriptor associated with anonymous llinereq->fd
      *  and "/dev/gpiochipX"
@@ -1743,7 +1788,7 @@ termQuit(int sig)
     if (iC_debug & 0200) fprintf(iC_outFP, "=== Close chip and GPIOs =======\n");
     gpio_line_close_fd (&pins);
     gpio_dev_close (chipFN);
-#endif	/* RASPBERRYPI >= 6006 - GPIO V2 ABI for icoctl */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     /********************************************************************
      *  Open and lock the auxiliary file ~/.iC/gpios.used again
      *  Other apps may have set used bits since this app was started
@@ -1775,7 +1820,8 @@ iCpiGPIO - real digital I/O on a Raspberry Pi for the iC environment
 =head1 SYNOPSIS
 
  iCpiGPIO [-BIftmqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
-          [ -d <deb>]
+          [ -D <db>]
+          [ -W <GPIO_number>][ -d <deb>]
           [ [~]IXn,<gpio>[,<gpio>,...][-<inst>] ...]
           [ [~]QXn,<gpio>[,<gpio>,...][-<inst>] ...]
           [ [~]IXn.<bit>,<gpio>[-<inst>] ...]
@@ -1791,6 +1837,8 @@ iCpiGPIO - real digital I/O on a Raspberry Pi for the iC environment
             invert inputs and outputs. When inverted a switch pressed on an
             input generates a 1 for the IEC inputs and a 1 on an IEC output
             turns a LED and relay on, which is natural.
+          Debounce is only available for Raspberry Pi OS 'bullseye' and above.
+    -D db   microsecend debounce for GPIO inputs (default 0 - no debounce)
     -W GPIO number used by the w1-gpio kernel module (default 4, maximum 31).
             When the GPIO with this number is used in this app, iCtherm is
             permanently blocked to avoid Oops errors in module w1-gpio.
