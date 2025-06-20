@@ -1,6 +1,6 @@
 /********************************************************************
  *
- *	Copyright (C) 2023  John E. Wulff
+ *	Copyright (C) 2014 - 2025  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -13,8 +13,7 @@
  *	I/O driver for iCserver in the immediate C environment of a
  *	Raspberry Pi handling real 16 bit inputs and/or 16 bit outputs
  *	for each MCP23017 controller attached to a Raspberry Pi via 8
- *	multiplexed I2C busses of a PCA9548A I2C Switch, or from a number
- *	of direct GPIO pins on the Raspberry Pi or both.
+ *	multiplexed I2C busses of a PCA9548A I2C Switch.
  *
  *	To enable the PCA9548A I2C Mux/Switch in the Linux kernel, enable
  *	I2C in "Interface Options" in "raspi-config" and also add the
@@ -33,21 +32,13 @@
  *
  *	If no PCA9548A I2C Mux/Switch is used, a maximum of 7 MCP23017
  *	controllers can be handled on /dev/i2c-1 for a newer Raspberry Pi
- *	or on /dev/i2c-0 for a very old Raspberry Pi. 
+ *	or on /dev/i2c-0 for a very old Raspberry Pi.
  *
  *	To concentrate the interrupts from INTA and INTB of all 8 groups
  *	of MCP23017 controllers an extra MCP23017 is used at address 0x27
  *	of /dev/i2c-18 (or /dev/i2c-1 or /dev/i2c-0 without mux).
  *	The INTA and INTB output of this MCP are mirrored and are connected
  *	to GPIO 27 for interrupt handling.
- *
- *	All GPIO pins on a Raspberry Pi A, B, B+, 3B+ or 4 may be selected
- *	as either input bits or output bits independent of whether MCP23017s
- *	are present or not, except GPIO 2, 3 and 27 if MCP23017s are also
- *	processed. All MCP23017 and GPIO inputs are handled by interrupts.
- *
- *	If no MCP23017 controllers are found or if the program is called
- *	with the -G option, only Raspberry Pi GPIO pins will be handled.
  *
  *	This program was forked from the immediate C driver iCpiFace.c
  *	which uses the SPI interface, which can control up to 8 MCP23S17
@@ -63,6 +54,15 @@
  *
  *******************************************************************/
 
+#if !defined(RASPBERRYPI) || !defined(TCP) || defined(_WINDOWS)
+#error - must be compiled with RASPBERRYPI and TCP defined and not _WINDOWS
+#else	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */
+
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+#include	<linux/gpio.h>
+#include	<sys/ioctl.h>
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+
 #include	<signal.h>
 #include	<ctype.h>
 #include	<assert.h>
@@ -72,17 +72,12 @@
 #include	<string.h>
 #include	<limits.h>
 
-#if !defined(RASPBERRYPI) || !defined(TCP) || defined(_WINDOWS)
-#error - must be compiled with RASPBERRYPI and TCP defined and not _WINDOWS
-#else	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */
-
 #include	"tcpc.h"
 #include	"comp.h"		/* defines TSIZE 256 */
 #include	"icc.h"			/* declares iC_emalloc() in misc.c */
 #include	"rpi_rev.h"		/* Determine Raspberry Pi Board Rev */
 #include	"rpi_gpio.h"
 #include	"mcp23017.h"
-#include	"bcm2835.h"
 
 /********************************************************************
  *  Bit-field to select the IEC associated with a particular register
@@ -132,7 +127,6 @@ typedef struct	iecS {
     int			use;
     union {
 	mcpDetails *	mdp;		/* use = 0 for MCP output */
-	gpioIO *	gep;		/* use = 1 for RPi GPIO */
 	iec		cngqi;		/* use = 2 for save of argument lists during command line analysis */
     };
 } iecS;
@@ -183,7 +177,9 @@ static  char **	argp;
 static  int	ofs     = 0;
 static  int	invFlag = 0;
 static fd_set	infds;			/* initialised file descriptor set for normal iC_wait_for_next_event() */
+#if RASPBERRYPI < 5010	/* sysfs */
 static fd_set	ixfds;			/* initialised extra descriptor set for normal iC_wait_for_next_event() */
+#endif	/* RASPBERRYPI < 5010 - sysfs */
 
 static int	scanIEC(const char * format, int * ieStartP, int * ieEndP, char * tail, unsigned short * channelP);
 static char *	bufAppend(Buf * bufp, char separator, char * src);
@@ -192,16 +188,12 @@ static void	printAllocTables(void);
 
 static const char *	usage =
 "Usage:\n"
-" iCpiI2C  [-GBIftmqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]\n"
+" iCpiI2C  [-BIftmqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]\n"
 "          [ -o <offs>][ -e <equiv>][ -d <deb>]\n"
 "          [ [~]IXcng[,IXcng,...][,<mask>][-<inst>] ...]\n"
 "          [ [~]QXcng[,QXcng,...][,<mask>][-<inst>] ...]\n"
 "          [ [~]IXcng-IXcng[,<mask>][-<inst>] ...]\n"
 "          [ [~]QXcng-QXcng[,<mask>][-<inst>] ...]\n"
-"          [ [~]IXn,<gpio>[,<gpio>,...][-<inst>] ...]\n"
-"          [ [~]QXn,<gpio>[,<gpio>,...][-<inst>] ...]\n"
-"          [ [~]IXn.<bit>,<gpio>[-<inst>] ...]\n"
-"          [ [~]QXn.<bit>,<gpio>[-<inst>] ...]      # at least 1 IEC argument\n"
 "          [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments\n"
 "    -s host IP address of server    (default '%s')\n"
 "    -p port service port of server  (default '%s')\n"
@@ -213,35 +205,33 @@ static const char *	usage =
 "            both can be used more than once with different variables.\n"
 "            IEC variables declared by this driver must be before the '='.\n"
 "            They will be extended with the global instance from -i <inst> if\n"
-"             declared unless they have a local instance -0 etc.\n"
-"    -G      service GPIO I/O only - block MCP23017s and MCP23017 arguments\n"
-"    -B      start iCbox -d to monitor active MCP23017 and/or GPIO I/O\n"
-"    -I      invert all MCP23017 and GPIO inputs and outputs\n"
-"            MCP23017 and GPIO input circuits are normally hi - 1 and\n"
-"            when a switch on the input is pressed it goes lo - 0. Therefore\n"
+"             declared unless they have a local instance -0 -1 etc.\n"
+"    -B      start iCbox -d to monitor active MCP23017 I/O\n"
+"    -I      invert all MCP23017 inputs and outputs\n"
+"            MCP23017 and GPIO input circuits are normally hi (1) and\n"
+"            when a switch on the input is pressed it goes lo (0). Therefore\n"
 "            it is appropriate to invert inputs and outputs. When inverted\n"
 "            a switch pressed on an input generates a 1 for the IEC inputs and\n"
 "            a 1 on an IEC output turns a LED and relay on, which is natural.\n"
 "            An exception is a relay with an inverting driver, in which case\n"
 "            that output must be non-inverting.\n"
-"    -W GPIO number used by the w1-gpio kernel module (default 4, maximum 31).\n"
-"            When the GPIO with this number is used in this app, iCtherm is\n"
-"            permanently blocked to avoid Oops errors in module w1-gpio.\n"
-"    -f      force use of all interrupting gpio inputs - in particular\n"
-"            force use of gpio 27 - some programs do not unexport correctly.\n"
+"    -f      force use of gpio 27 - some programs do not unexport correctly.\n"
 "\n"
 "                      MCP23017 arguments\n"
 "          For each MCP23017 connected to a Raspberry Pi two 8 bit registers\n"
-"          GPIOA and GPIOB must be configured as either IEC inputs (IXcng) or\n"
-"          IEC outputs (IXcng) or both, where cng is a three digit number.\n"
-"          For MCP23017 IEC base identifiers the number cng defines the\n"
-"          complete address of a particular MCP23017 GPIO register:\n"
+"          GPIOA and GPIOB can be configured as either IEC bit inputs or\n"
+"          IEC bit outputs. All IEC identifiers IXcng or QXcng defined for\n"
+"          this driver must have exactly 3 numerical digits 'cng'.\n"
+"    IXcng[,<mask>]     Single IEC input variable with optional mask\n"
+"    QXcng[,<mask>]     Single IEC output variable with optional mask\n"
+"          For MCP23017 IEC base identifiers, the number 'cng' defines the\n"
+"          complete I2C  address of a particular MCP23017 GPIO register:\n"
 "           c  is the I2C channel 1 to 8 for /dev/i2c-11 to /dev/i2c-18\n"
-"              I2C channel 9 or 0 for /dev/i2c-1 or /dev/i2c-0 must be\n"
+"              I2C channel. 9 or 0 for /dev/i2c-1 or /dev/i2c-0 must be\n"
 "              used for I2C electronics without a PCA9548a Mux\n"
 "           n  is the I2C address 0 to 7 of a particular MCP23017 for the\n"
 "              address range 0x20 to 0x27 selected with pin A0 to A2\n"
-"           g  selects the GPIO register\n"
+"           g  selects the I2C GPIO register\n"
 "              g = 0 2 4 6 or 8 selects GPIOA\n"
 "              g = 1 3 5 7 or 9 selects GPIOB\n"
 "              normally only g = 0 and 1 is used for GPIOA and GPIOB,\n"
@@ -254,9 +244,9 @@ static const char *	usage =
 "          Both registers GPIOA and GPIOB can have input bits and\n"
 "          output bits, but any input bit cannot also be an output bit\n"
 "          or vice versa.  Each input or output IEC variable (or list\n"
-"          of variables) may be followed by a comma separated number,\n"
-"          interpreted as a mask, declaring which bits in the base IEC\n"
-"          variable byte are inputs for an input variable or outputs\n"
+"          or range of variables) may be followed by a comma separated\n"
+"          number, interpreted as a mask, declaring which bits in the base\n"
+"          IEC variable byte are inputs for an input variable or outputs\n"
 "          for an output variable. The mask is best written as a binary\n"
 "          number eg 0b10001111 for bits 0, 1, 2, 3 and 7.  If no mask\n"
 "          is supplied the default mask is 0b11111111 - all 8 bits set.\n"
@@ -265,61 +255,29 @@ static const char *	usage =
 "    IXcng-IXcng[,<mask>]         range of input variables with the same mask\n"
 "    QXcng-QXcng[,<mask>]         range of output variables with the same mask\n"
 "         IEC lists and ranges must contain either all inputs or all outputs.\n"
-"         The only sensible range is in the digit n for the MCP23017 address.\n"
-"\n"
-"                      GPIO arguments\n"
-"	  Any IEC I/Os IXn.y and QXn.y which are to be linked to GPIO\n"
-"	  inputs or outputs must be named in the argument list. The\n"
-"	  number n in the IEC must be one or at most two digits to\n"
-"	  differentiate GPIO IEC's from three digit MCP23017 IEC's.\n"
-"    IXn,<gpio>[,<gpio>,...]\n"
-"    QXn,<gpio>[,<gpio>,...]\n"
-"          Associate the bits of a particular input or output IEC\n"
-"          with a list of gpio numbers.  Up to 8 gpio numbers can\n"
-"          be given in a comma separated list. The first gpio number\n"
-"          will be associated with bit 0, the second with bit 1 etc\n"
-"          and the eighth with bit 7. If the list is shorter than\n"
-"          8 the trailing bits are not used. The letter 'd' can be\n"
-"          used in the list instead of a gpio number to mark that bit\n"
-"          as unused.  eg. IX3,17,18,19,20,d,d,21 associates IX3.0 to\n"
-"          IX3.3 with GPIO 17 to GPIO 20 and IX3.6 with GPIO 21.\n"
-"          Alternatively:\n"
-"    IXn.<bit>,<gpio>\n"
-"    QXn.<bit>,<gpio>\n"
-"          Each input or output <bit> 0 to 7 is associated with one\n"
-"          gpio nunber eg. IX3.0,17 QX3.7,18\n"
-"\n"
-"                      COMMON extensions\n"
-"    ~IEC  Each leading IEC of a list or range may be preceded by a\n"
-"          tilde '~', which inverts all IEC inputs or outputs of a\n"
-"          list or range.  If all IEC inputs and outputs are already\n"
+"         The only allowd range is in the digit 'n' for the MCP23017 address.\n"
+"    ~IEC  Each single IEC or leading IEC of a list or range may be preceded by\n"
+"          a tilde '~', which inverts all IEC inputs or outputs of the single\n"
+"          IEC, list or range.  If all IEC inputs and outputs are already\n"
 "          inverted with -I, then ~ inverts them again, which makes them\n"
-"          non-inverted. Individual bits for one IEC can be inverted\n"
-"          or left normal for GPIO IEC's by declaring the IEC more than\n"
-"          once with non-overlapping gpio bit lists or single bits. Also\n"
-"          possible for MCP23017 I/O with two non overlapping masks -\n"
-"          one inverting, the other non-inverting.\n"
-"    IEC-inst Each individual IEC or range can be followed by -<inst>,\n"
-"          where <inst> consists of 1 to %d numeric digits.\n"
+"          non-inverted. Individual bits for a single IEC, list or range can\n"
+"          be inverted or left normal for MCP IEC's by declaring the IEC more\n"
+"          than once with non-overlapping gpio bit lists or single bits\n"
+"          defined by appropriate masks.\n"
+"    IEC-inst Each single IEC, list or or range can be followed by\n"
+"          -<inst>, where <inst> consists of 1 to %d numeric digits.\n"
 "          Such an appended instance code takes precedence over the\n"
 "          general instance specified with the -i <inst> option above.\n"
 "    For a full Description and Technical Background of the MCP23017 I2C\n"
 "    and GPIO driver software see the iCpiI2C man page\n"
 "\n"
 "                      CAVEAT\n"
-"    There must be at least 1 MCP23017 or GPIO IEC argument. No IEC\n"
-"    arguments are generated automatically for iC[iI2C.\n"
-"    Only one instance of iCpiI2C or an app with real IEC parameters\n"
-"    like iCpiFace may be run on one RPi and all GPIOs and MCP23017s\n"
-"    must be controlled by this one instance. If two instances were\n"
-"    running, the common interrupts would clash. Also no other program\n"
-"    controlling GPIOs and MCP23017s like 'MCP23017 Digital Emulator'\n"
-"    may be run at the same time as this application.  An exception\n"
-"    is iCpiPWM which controls GPIOs by DMA and not by interrupts.\n"
-"    Another exception is iCtherm which controls GPIO 4 by the 1Wire\n"
-"    interface.  Care is taken that any GPIOs or MCP23017s used in one\n"
-"    app, iCpiI2C, iCpiPWM or even iCtherm do not clash with another\n"
-"    app (using ~/.iC/gpios.used).\n"
+"    There must be at least 1 MCP23017 IEC argument. No IEC arguments are\n"
+"    generated automatically for iCpiI2C.\n"
+"   Care is taken that any GPIOs, MCP23S17's or MCP23017s used in one\n"
+"    app, iCpiGPIO, iCpiFace, iCpiI2C, iCpiPWM or even iCtherm do not\n"
+"    clash with another app (using ~/.iC/gpios.used). iCpiI2C uses\n"
+"    GPIO 2 (SDA) GPIO 3 (SCL) and GPIO 27.\n"
 "\n"
 "                      DEBUG options\n"
 #if YYDEBUG && !defined(_WINDOWS)
@@ -345,8 +303,8 @@ static const char *	usage =
 "    -R <app ...> run auxiliary app followed by -z and its arguments\n"
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
-"Copyright (C) 2023 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiI2C.c 1.10 $\n"
+"Copyright (C) 2023-2025 John E. Wulff     <immediateC@gmail.com>\n"
+"Version       $Id: iCpiI2C.c 1.11 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -371,7 +329,6 @@ static int	ioChannels = 0;		/* dynamically allocated size of Channels[] */
 static long long ownUsed = 0LL;
 char		iC_stdinBuf[REPLY];	/* store a line of STDIN - used by MCP23017CAD input */
 static int	mcpCnt;
-static int	gpioCnt;
 static int	concCh;
 static int	concFd;
 static long	convert_nr(const char * str, char ** endptr);
@@ -379,7 +336,6 @@ static int	termQuit(int sig);		/* clear and unexport RASPBERRYPI stuff */
 int		(*iC_term)(int) = &termQuit;	/* function pointer to clear and unexport RASPBERRYPI stuff */
 
 static void	storeIEC(unsigned short channel, iecS s);
-static void	writeGPIO(gpioIO * gep, unsigned short channel, int val);
 
 FILE *		iC_outFP;		/* listing file pointer */
 FILE *		iC_errFP;		/* error file pointer */
@@ -388,9 +344,58 @@ static Buf	tmpBuf = { .n="tmpBuf" };	/* Buffer in which equivalences and ACKs ar
 static Buf	cmdBuf = { .n="cmdBuf" };	/* Buffer in which iCbox command string is  collected */
 
 #define		MC	1
-#define		GP	2
-#define		DR	4
 #define		CONCDEV	0x27
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+
+typedef struct {
+    struct gpio_v2_line_config *	linecfg;
+    struct gpio_v2_line_request *	linereq;
+    struct gpio_v2_line_values *	linevals;
+    int					fd;
+} gpio_v2_t;
+/********************************************************************
+ * gpio_v2 line config, line request and line values,
+ *******************************************************************/
+static struct gpio_v2_line_config linecfg = {		/* default line is not available for request */
+		GPIO_V2_LINE_FLAG_USED
+};
+static struct gpio_v2_line_request linereq = {
+    .offsets = {0}
+};
+static struct gpio_v2_line_values linevals = {
+    .bits = 0,
+    .mask = 0
+};
+static int		idx;
+static __u64		maskBit;
+#define GPIOCHIP "/dev/gpiochip0"	/* gpiochipX (0-4) depending on Pi model */
+/********************************************************************
+ * pins is a convenience struct of gpio_v2 config structs to which
+* a pointer can be provided as the parameter for the various functions.
+ *******************************************************************/
+static gpio_v2_t pins =  {
+    .linecfg = &linecfg,
+    .linereq = &linereq,
+    .linevals = &linevals
+};
+/********************************************************************
+ * gpio_v2 attribute and attribute config for flags for out and in pins
+ * active lo (inverted - rising interrupt) read pins will use r27_attr and r27_cfg_attr
+ *******************************************************************/
+struct gpio_v2_line_attribute		r27_attr = {
+    .id = GPIO_V2_LINE_ATTR_ID_FLAGS
+};
+struct gpio_v2_line_config_attribute	r27_cfg_attr = {
+    .attr = {0}
+};
+
+#define LINEEVENT_BUFFERS	 4	/* kernel buffers 16 line events */
+#define GPIO_LIMIT		 64	/* GPIO numbers are limited 0 - 63 */
+struct gpio_v2_line_event	lineevent[LINEEVENT_BUFFERS];
+static int	gpio_line_cfg_ioctl (gpio_v2_t * gpio);
+static int	gpio_line_get_values (gpio_v2_t * gpio, __u64 mask);
+int		chipFN;
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
 /********************************************************************
  *
@@ -404,8 +409,6 @@ main( int argc, char ** argv)
     int			fd;
     int			len;
     int			value;
-    int			sig;
-    int			i;
     unsigned int	c;
     unsigned int	n;
     int			m;
@@ -423,7 +426,7 @@ main( int argc, char ** argv)
     int			m1;
     int			val;
     unsigned short	iid;
-    char		iids[6];
+    char		iids[8];
     int			regBufRem;
     unsigned short	iidN = USHRT_MAX;	/* internal instance "" initially */
     int			forceFlag = 0;
@@ -438,16 +441,9 @@ main( int argc, char ** argv)
     char *		mqz = "-qz";
     char *		mz  = "-z";
     char		dum[2] = { '\0', '\0' };
-    int			iqStart;
     int			ieStart = 0;
     int			ieEnd   = 0;
-    unsigned short	bit, bitStart, bitEnd;
-    unsigned short	gpio;
-    unsigned short	directFlag;		/* or MC for MCP23017, GP for GPIO, DR direct for both */
-    gpioIO *		gep;
-    gpioIO **		gpioLast;
-    unsigned short	gpioSav[8];
-    unsigned short	u;
+    unsigned short	directFlag = 0;		/* MC for MCP23017 */
     int			mask;
     int			b;
     int			ch;
@@ -458,25 +454,31 @@ main( int argc, char ** argv)
     int			devId;
     int			nse;
     int			invMask;
-    int			gpioTherm;
     char **		argip;
     int			argic;
     long long		gpioMask;
     ProcValidUsed *	gpiosp;
     char		temp[TSIZE];
+#if RASPBERRYPI < 5010	/* sysfs */
+    int			i;
+    int			sig;
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    unsigned short	gpio;
+    __u64		maskBit27;
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
     iC_outFP = stdout;				/* listing file pointer */
     iC_errFP = stderr;				/* error file pointer */
+    iC_maxFN = 0;
 
-
-/**************
+/************** for testing ****
 #undef REQUEST
 #define REQUEST 40
 #undef REPLY
 #define REPLY 40
 #undef BS
 #define BS 40*3
- **************/
+ *******************************/
 #ifdef	EFENCE
     regBuf = iC_emalloc(REQUEST);
     rpyBuf = iC_emalloc(REPLY);
@@ -486,15 +488,74 @@ main( int argc, char ** argv)
     cmdBuf.b = iC_emalloc(REPLY);
     cmdBuf.l = REPLY;
     signal(SIGSEGV, iC_quit);			/* catch memory access signal */
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+
+    chipFN = open(GPIOCHIP, O_RDONLY);		/* Open GPIO chip */
+    if (chipFN < 0) {
+	perror ("Failed to open GPIO chip device");
+        return 1;
+    }
+    pins.fd = chipFN;
+    if ((iC_maxFN = chipFN)) {
+	iC_maxFN = chipFN;
+    }
+    idx = 0;				/* index into linereq offsets array */
+    maskBit = 1LL;			/* bit in 64 bit masks displaced by idx */
+    /********************************************************************
+     *  Provide separate attributes for read with fallin interrupt
+     *  for read inverted pin GPIO 27
+     *******************************************************************/
+
+    r27_attr.id =	GPIO_V2_LINE_ATTR_ID_FLAGS;
+    r27_attr.flags =    GPIO_V2_LINE_FLAG_INPUT         |
+			GPIO_V2_LINE_FLAG_ACTIVE_LOW    |
+			GPIO_V2_LINE_FLAG_EDGE_RISING;	/* no pull up required */
+
+    /********************************************************************
+     *  gpio_v2 attribute config for read inverted pins
+     *******************************************************************/
+    r27_cfg_attr.attr = r27_attr;
+    /********************************************************************
+     *  gpio 27 configure with direction in and interrupts on rising edge
+     *******************************************************************/
+    gpio = 27;
+    maskBit27 = maskBit;
+    pins.linereq->offsets[idx] = gpio;
+    r27_cfg_attr.mask |= maskBit;		/* inverted input with rising interrupt */
+	if (iC_debug & 0200) fprintf(iC_outFP, "=== End Unexport GPIOs and close PiFaces ===\n");
+    if (iC_debug & 0200) fprintf(iC_outFP,
+	"configure gpio 27 offsets[%d] maskBit = 0x%llx inverted input with rising interrupt\n",
+	idx, maskBit);
+    idx++;
+    maskBit <<= 1;
+    /********************************************************************
+     *  gpio_v2 line lines (pins) configuration
+     *******************************************************************/
+    int i = 0;
+    pins.linecfg->attrs[i++] = r27_cfg_attr;	/* assign read gpio 27 attr to linecfg array */
+    pins.linecfg->num_attrs = i;		/* for write and read pin and debounce attributes */
+    pins.linereq->num_lines = idx;
+    /********************************************************************
+     *  Set line (pin) configuration
+     *  Generate anonymous file descriptor
+     *******************************************************************/
+    if (gpio_line_cfg_ioctl (&pins) == -1) {
+	return 1;
+    }
+    if (pins.linereq->fd > iC_maxFN) {
+	iC_maxFN = pins.linereq->fd;
+    }
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
     /********************************************************************
      *  By default do not invert MCP23017 and GPIO inputs and outputs.
      *  Both are inverted with -I for all inputs and outputs and '~' for
      *  individual inputs or outputs.
+     *  NOTE: v2 ioctl terminology is ACTIVE LOW, which is the same as
+     *  INVERTED in this program.
      *******************************************************************/
 
     invMask = 0x00;
-    gpioTherm = 4;				/* default GPIO number used by kernel module w1-gpio */
     argip = iC_emalloc(argc * sizeof(char *));	/* temporary array to hold IEC arguments */
     argic = 0;
 
@@ -569,24 +630,12 @@ main( int argc, char ** argv)
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    bufAppend(&tmpBuf, ',', *argv);	/* append equivalence directly to tmpBuf */
 		    goto break2;
-		case 'G':
-		    iC_opt_G = 1;	/* GPIO direct action only - block MCP23017 IO, even if MCP23017s present */
-		    break;
 		case 'B':
 		    iC_opt_B = 1;	/* start iCbox -d to monitor active MCP23017 and/or GPIO I/O */
 		    break;
 		case 'I':
 		    invMask = 0xff;	/* invert MCP23017 and GPIO inputs and outputs with -I */
-		    iC_opt_P = 1;
 		    break;
-		case 'W':
-		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
-		    gpioTherm = atoi(*argv);
-		    if (gpioTherm > 31) {
-			fprintf(iC_errFP, "ERROR: %s: -W %hu value > 31\n", iC_progname, gpioTherm);
-			goto error;
-		    }
-		    goto break2;
 		case 'f':
 		    forceFlag = 1;	/* force use of GPIO interrupts - in particular GPIO 27 */
 		    break;
@@ -630,7 +679,6 @@ main( int argc, char ** argv)
 		    fprintf(iC_errFP, "ERROR: %s: missing value after '%s'\n", iC_progname, ((*--argv)-=2, *argv));
 		case 'h':
 		case '?':
-	      error:
 		    fprintf(iC_errFP, usage, iC_hostNM, iC_portNM, INSTSIZE, INSTSIZE);
 		    exit(-1);
 		default:
@@ -642,13 +690,12 @@ main( int argc, char ** argv)
 	} else {
 	    /********************************************************************
 	     *  Save IEC arguments for later analysis after all options have
-	     *  been determined, in particlar -G, and after MCP23017s have
-	     *  been counted. IEC arguments and options may be mixed (except -R).
+	     *  been determined, and after MCP23017s have been counted.
+	     *  IEC arguments and options may be mixed (except -R).
 	     *  IEC arguments must start with I ~I Q or ~Q.
 	     *  A special case is a lone argument ~, which is converted to the HOME
 	     *  environment variable by the Linux shell. It is converted back to ~ here.
 	     *******************************************************************/
-	    iC_opt_P = 1;	/* using an IEC argument is equivalent to -P option */
 	    if (strspn(*argv, "~QI") == 0) {
 		if (strcmp(*argv, getenv("HOME")) == 0) {
 		    argip[argic++] = "~";	/* transmogrify shell translation of HOME to "~" */
@@ -661,12 +708,23 @@ main( int argc, char ** argv)
 	}
     }
   break3:
+    if (iC_debug & 0200) {
+#if RASPBERRYPI < 5010	/* sysfs */
+	fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n"
+			  "kernel = %d.%d ( < 5.10... )		use sysfs\n",
+			  iC_fullProgname, iC_path, iC_progname, RASPBERRYPI/1000, RASPBERRYPI%1000);
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n"
+			  "kernel = %d.%d ( >= 5.10...	)	use GPIO Character Device Userspace API (V2)\n",
+			  iC_fullProgname, iC_path, iC_progname, RASPBERRYPI/1000, RASPBERRYPI%1000);
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    }
     /********************************************************************
      *  if argc != 0 then -R and argv points to auxialliary app + arguments
      *               do not fork and execute aux app until this app has
      *               connected to iCserver and registered all its I/Os
      *******************************************************************/
-    if (! errorFlag && iC_opt_P) {
+    if (! errorFlag) {
 	/********************************************************************
 	 *  Open or create and lock the auxiliary file ~/.iC/gpios.used,
 	 *  which contains one binary struct ProcValidUsed gpios.
@@ -715,13 +773,9 @@ main( int argc, char ** argv)
 	 *
 	 *  Do this before checking whether GPIO 27 is not used by other apps.
 	 *  GPIO 27 is used during I2C and MCP23017  setup, but is left unchanged
-	 * if no MCP23017s are found.
-	 *
-	 *  If no MCP23017s are found proceed with opt -G set. An error will then occur
-	 *  only if an argument requesting MCP23017 IO (IXcng or QXcng) is found.
-	 *
+	 * if no MCP23017s are found, which is an error and the program terminates.
 	 *******************************************************************/
-	mcpCnt = gpioCnt = 0;
+	mcpCnt = 0;
 	for (ch = 0; ch < 10; ch++) {		/* scan /dev/i2c-0, i2c-11 - i2c-18, i2c-1 */
 	    if (ch == 9 && mcpCnt) {
 		break;				/* no need to scan /dev/i2c-1 */
@@ -754,11 +808,10 @@ main( int argc, char ** argv)
 	    }
 	    i2cFdA[ch] = fd;			/* save the file descriptor for this I2C channel */
 	}
-	if (mcpCnt && !iC_opt_G) {
+	if (mcpCnt > 1) {			/* allow for 1 MCP as concentrator */
 	    /********************************************************************
 	     *  Configure last MCP23017 in one of the channels /dev/i2c-18 /dev/i2c-1
 	     *  or /dev/i2c-0 in that order for input interrupt concentration
-	     *  unless -G option for RPi GPIO only
 	     *******************************************************************/
 	    for (i = 0; i < 3; i++) {
 		ch = chList[i];
@@ -780,15 +833,14 @@ main( int argc, char ** argv)
 	    fprintf(iC_errFP, "ERROR: %s: no concentrator MCP23017 found at dev 0x%02x in any I2C channel - cannot process I2C\n",
 		iC_progname, CONCDEV);
 	    if (writeUnlockCloseGpios() < 0) {
-		fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
-		    iC_progname);
-		errorFlag++;
+		fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
 	    }
 	    iC_quit(SIGUSR1);		/* error quit */
 	  concentratorFound:
 	    /********************************************************************
 	     *  MCP23017s found and concntrator configured.
-	     *  Check if GPIO 27 required by MCP23017 has been used in another app
+	     *  Check if GPIO 2 (SDA) 3 (SCL) and 27 (INTA)  required by MCP23017s
+	     *  has not been used in another app
 	     *******************************************************************/
 	    gpioMask = 0x0800000cLL;		/* gpio 2,3,27 */
 	    assert((gpiosp->valid & gpioMask) == gpioMask);	/* assume these are valid for all RPi's */
@@ -818,6 +870,7 @@ main( int argc, char ** argv)
 	     *******************************************************************/
 	    gpiosp->u.used |= gpioMask;		/* mark gpio used for ~/.iC/gpios.used */
 	    ownUsed        |= gpioMask;		/* mark gpio in ownUsed for termination */
+#if RASPBERRYPI < 5010	/* sysfs */
 	    /********************************************************************
 	     *  Initialisation using the /sys/class/gpio interface to the GPIO
 	     *  systems - slightly slower, but always usable as a non-root user
@@ -832,12 +885,9 @@ main( int argc, char ** argv)
 	     *
 	     *  Set the gpio27/INTA for falling edge interrupts
 	     *******************************************************************/
-	    if (iC_debug & 0200) fprintf(iC_outFP, "### test gpio_export 27\n");
 	    if ((sig = gpio_export(27, "in", "falling", forceFlag, iC_fullProgname)) != 0) {
 		if (writeUnlockCloseGpios() < 0) {
-		    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
-			iC_progname);
-		    errorFlag++;
+		    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
 		}
 		iC_quit(sig);			/* another program is using gpio 27 */
 	    }
@@ -857,16 +907,26 @@ main( int argc, char ** argv)
 	    if ((value = gpio_read(gpio27FN)) == -1) {
 		fprintf(iC_errFP, "ERROR: %s: MCP23017 read gpio 27: %s\n", iC_progname, strerror(errno));
 	    }
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	    /********************************************************************
+	     *  read the initial v2 ioctl ABI gpio 27 value
+	     *******************************************************************/
+	    value = gpio_line_get_values (&pins, maskBit27);
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	    if (iC_debug & 0200) fprintf(iC_outFP, "Initial read 27 = %d\n", value);
 	    /********************************************************************
 	     *  The INTA output of the interrupt concntrator MCP23017 is configured
 	     *  as active LOW output and does not need a pullup resistor at gpio 27.
 	     *******************************************************************/
 	} else {
-	    iC_opt_G = 1;		/* no MCP23017s - block all MCP23017 command line arguments */
+	    fprintf(iC_errFP, "ERROR: %s: not enough MCPs - cannot execute\n", iC_progname);
+	    if (writeUnlockCloseGpios() < 0) {
+		fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
+	    }
+	    iC_quit(SIGUSR1);		/* error quit */
 	}
 	/********************************************************************
-	 *  Match MCP23017s and GPIOs to IEC arguments in the command line.
+	 *  Match MCP23017s to IEC arguments in the command line.
 	 *  invMask = 0x00 initially; invMask = 0xff with option -I
 	 *  invFlag = invMask for every new IEC argument, but it is inverted
 	 *            locally for every '~' preceding a new IEC argument.
@@ -874,18 +934,20 @@ main( int argc, char ** argv)
 	invFlag = invMask;				/* start every IEC argument with correct inversion */
 	directFlag = 0;
 	for (argp = argip; argp < &argip[argic]; argp++) {
-	    directFlag &= DR;				/* clear all bits except DR for each new argument */
 	    if (strlen(*argp) >= 128) {
 		fprintf(iC_errFP, "ERROR: %s: command line argument too long: '%s'\n", iC_progname, *argp);
-		exit(1);
+		if (writeUnlockCloseGpios() < 0) {
+		    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
+		}
+		iC_quit(SIGUSR1);		/* error quit */
 	    }
 	    iid = iidN;					/* global instance either 0xffff for "" or 0 - 999 */
 	    if (iid == USHRT_MAX) {
 		*iids = '\0';	/* track argument instance for error messages */
 	    } else {
-		snprintf(iids, 6, "-%hu", iid);		/* global instance "-0" to "-999" */
+		snprintf(iids, 7, "-%hu", iid);		/* global instance "-0" to "-999" */
 	    }
-	    strncpy(tail, *argp, 128);			/* start scans with current argument */
+	    strncpy(tail, *argp, 127);			/* start scans with current argument */
 	    /********************************************************************
 	     *  Scan for an optional tilde ~ before any IEC argument, which inverts
 	     *  the input or output sense of the following IEC argument.
@@ -906,10 +968,9 @@ main( int argc, char ** argv)
 	    mask = 0xff;				/* default is all bits of input or output active */
 	    /********************************************************************
 	     *  Scan for a mandatory first IXn or QXn starting IEC argument,
-	     *  where n is either 1 or 2 numerical digits for RPi GPIOs or
-	     *  3 numerical digits for MCP I/O. IECs with more than 3 digits
-	     *  are not accepted by this program (they may be used in other
-	     *  iC applications).
+	     *  where n is 3 numerical digits for MCP I/O.
+	     * IECs with more than 3 digits are not accepted by this program
+	     *  (they may be used in other iC applications).
 	     *******************************************************************/
 	    switch (scanIEC("%1[QI]X%5[0-9]%127s", &ieStart, &ieEnd, tail, &channel)) {
 		case 1:
@@ -932,70 +993,9 @@ main( int argc, char ** argv)
 		    }
 		    /* fall through */
 		case 2:
-		    /********************************************************************
-		     *  check option -G is not used when MCP23017 IECs have been seen
-		     *******************************************************************/
-		  checkOptionG:
-		    if (ieStart && iC_opt_G) {
-			fprintf(iC_errFP, "WARNING: %s: '%s' no MCP23017 IEC arguments allowed with option -G\n", iC_progname, *argp);
-			goto endOneArg;
-		    }
-		    directFlag |= MC | DR;
+		  endMCP:
+		    directFlag |= MC;
 		    break;
-		case 3:
-		    /********************************************************************
-		     *  GPIO IEC arguments with ,gpio,gpio,... or .<bit>,gpio
-		     *******************************************************************/
-		// processGPIO:
-		    assert(channel == 0);
-		    iqStart = Channels[0].cngqi.qi;	/* 1 for 'IX', 0 for 'QX' */
-		    switch (tail[0]) {			/* test for mask or instance */
-			case '.':
-			    if (sscanf(tail, ".%hu%127s", &bit, tail) != 2 || bit >= 8 || tail[0] == '-') {
-				goto illFormed;	/* must have tail for gpio number */
-			    }
-			    bitStart = bitEnd = bit;	/* only 1 bit processed */
-			    break;
-			case ',':
-			    bitStart = 0;
-			    bitEnd   = 7;		/* process all 8 bits */
-			    break;
-			default:
-			    fprintf(iC_errFP, "ERROR: %s: '%s' GPIO IEC variable without gpio number\n", iC_progname, *argp);
-			    errorFlag++;
-			    goto endOneArg;
-		    }
-		    for (bit = 0; bit <= 7; bit++) {
-			gpioSav[bit] = 0xffff;	/* initialise empty Save list */
-		    }
-		    for (bit = bitStart, n = 2; bit <= bitEnd && n == 2; bit++) {
-			if (tail[0] == '-') goto checkInst;
-			*dum = '\0';
-			gpio = 0;
-			if (((n = sscanf(tail, ",%hu%127s", &gpio, tail)) < 1 &&
-			    (n = sscanf(tail, ",%1[d]%127s", dum, tail)) < 1) ||
-			    gpio > 55) {
-			    goto illFormed;
-			}
-			if (n == 1) tail[0] = '\0';
-			directFlag |= GP | DR;
-			if (*dum == '\0') {
-			    /********************************************************************
-			     *  TODO Check later that a GPIO is not used twice for different IEC's.
-			     *  Also check later that a bit in an IEC of a particular instance
-			     *  is not linked with a GPIO more than once.
-			     *******************************************************************/
-			    gpioSav[bit] = gpio;	/*  Save list of GPIO numbers for later building */
-			    if (iC_debug & 0200) fprintf(iC_outFP, "%s%cX%d.%hu	gpio = %hu\n",
-				invFlag ? "~" : "", QI[iqStart], ieEnd, bit, gpio);
-			}
-		    }
-		    if (n == 2 && tail[0] == ',') {
-			fprintf(iC_errFP, "ERROR: %s: '%s' gpio list limited to 8 comma separated numbers or 1 if .bit\n", iC_progname, *argp);
-			errorFlag++;
-			goto endOneArg;
-		    }
-		    /* fall through */
 		case 4:
 		    /********************************************************************
 		     *  check instance -0 to -999
@@ -1003,7 +1003,7 @@ main( int argc, char ** argv)
 		  checkInst:
 		    if (tail[0] == '-') {
 			if (n != 1 && (n = sscanf(tail, "-%3hu%127s", &iid, tail)) == 1) {	/* individual instance has precedence */
-			    snprintf(iids, 6, "-%hu", iid);	/* instance "-0" to "-999" */
+			    snprintf(iids, 7, "-%hu", iid);	/* instance "-0" to "-999" */
 			} else {
 			    goto illFormed;
 			}
@@ -1012,7 +1012,7 @@ main( int argc, char ** argv)
 		    }
 		    if (iC_debug & 0200) fprintf(iC_outFP, "### iids = '%s'\n", iids);
 		    if (ieEnd > 99) {
-			goto checkOptionG;		/* MCP23017 IEC variable */
+			goto endMCP;		/* MCP23017 IEC variable */
 		    }
 		    break;
 		case 5:
@@ -1030,11 +1030,10 @@ main( int argc, char ** argv)
 		    goto endOneArg;
 	    }
 	    /********************************************************************
-	     *  Use the IEC argument to extend MCP23017 or GPIO control structures
+	     *  Use the IEC argument to extend MCP23017 control structures
 	     *  Check IEC argument was not used before
 	     *******************************************************************/
 	    if (directFlag & MC) {
-		assert((directFlag & GP) == 0);		/* should not have both */
 		if (iC_debug & 0200) fprintf(iC_outFP, "MCP23017 IEC found; channel = %hu\n", channel);
 		/********************************************************************
 		 *  Process MCP23017 IEC arguments
@@ -1126,83 +1125,6 @@ main( int argc, char ** argv)
 			if (iC_debug & 0200) fprintf(iC_outFP, "%s%s, bmask = 0x%02x inv = 0x%02x\n", invFlag ? "~" : "", temp, mdp->bmask, mdp->inv);
 		    }
 		}
-	    } else if (directFlag & GP) {
-		/********************************************************************
-		 *  Build or extend a new gpioIO structure and store in iC_gpL[iqStart]
-		 *      iqStart 0 = 'Q', 1 = 'I'
-		 *  temporarily store ieEnd (IEC number) in val of iqDetails
-		 *  temporarily store iid (instance) in channel of iqDetails
-		 *  Check that the GPIO for the IEC argument is valid for this RPi
-		 *  and was not used before in this or another app.
-		 *******************************************************************/
-		gpioLast = &iC_gpL[iqStart];	/* scan previous gpio list */
-		for (gep = iC_gpL[iqStart]; gep; gep = gep->nextIO) {
-		    if (gep->Gval == ieEnd &&
-			gep->Gchannel == iid) {
-			goto previousElement;	/* already partially filled */
-		    }
-		    gpioLast = &gep->nextIO;
-		}
-		*gpioLast = gep = iC_emalloc(sizeof(gpioIO));	/* new gpioIO element */
-		gep->Gname = NULL;		/* GPIO IEC in or output not active */
-		gep->Gval = ieEnd;
-		gep->Gchannel = iid;		/* temporary IEC details in new element */
-		for (bit = 0; bit <= 7; bit++) {
-		    gep->gpioNr[bit] = 0xffff;	/* mark gpio number unused */
-		    gep->gpioFN[bit] = -1;	/* mark file number unused */
-		}
-		gpioCnt++;
-	      previousElement:
-		for (bit = 0; bit <= 7; bit++) {
-		    if((gpio = gpioSav[bit]) != 0xffff) {
-			mask = iC_bitMask[bit];
-			assert(gpio <= 55);
-			gpioMask = 1LL << gpio;		/* gpio is 0 - 55 max */
-			if (iC_debug & 0200) fprintf(iC_outFP,
-			    "gpio     = %hu\n"
-			    "used     = 0x%016llx\n"
-			    "gpioMask = 0x%016llx\n",
-			    gpio, gpiosp->u.used, gpioMask);
-			if ((u = gep->gpioNr[bit]) != 0xffff &&
-			    ((mask & gep->Ginv) != (mask & invFlag) ||
-			    (u != gpio))) {		/* ignore 2nd identical definition */
-			    fprintf(iC_errFP, "ERROR: %s: %c%cX%d.%hu,%hu%s cannot override %c%cX%d.%hu,%hu%s\n",
-				iC_progname,
-				invFlag & mask ? '~' : ' ', QI[iqStart], ieEnd, bit, gpio, iids,
-				gep->Ginv & mask ? '~' : ' ', QI[iqStart], ieEnd, bit, gep->gpioNr[bit], iids);
-			    errorFlag++;
-			} else if (!(gpiosp->valid & gpioMask)) {
-			    fprintf(iC_errFP, "ERROR: %s: trying to use invalid gpio %hu on %cX%d.%hu%s on RPi board rev %d\n",
-				iC_progname, gpio, QI[iqStart], ieEnd, bit, iids, gpiosp->proc);
-			    errorFlag++;
-			} else if (gpiosp->u.used & gpioMask) {
-			    fprintf(iC_errFP, "ERROR: %s: trying to use gpio %hu a 2nd time on %c%cX%d.%hu%s\n",
-				iC_progname, gpio, invFlag & mask ? '~' : ' ', QI[iqStart], ieEnd, bit, iids);
-			    errorFlag++;
-			} else {
-			    gep->Ginv |= mask & invFlag;/* by default do not invert GPIO in or outputs - inverted with -I or '~' */
-			    gpiosp->u.used |= gpioMask;	/* mark gpio used for ~/.iC/gpios.used */
-			    ownUsed        |= gpioMask;	/* mark gpio in ownUsed for termination */
-			    gep->gpioNr[bit] = gpio;	/* save gpio number for this bit */
-			    gep->Gbmask |= iC_bitMask[bit];	/* OR hex 01 02 04 08 10 20 40 80 */
-			    /********************************************************************
-			     *  Check if GPIO number is used by w1-gpio kernel module to drive iCtherm
-			     *  If yes and bit 0 (OopsMask) has not been set in gpios->u.oops before
-			     *  remove w1-therm and w1-gpio and set bit 0 to block iCtherm
-			     *******************************************************************/
-			    if (gpio == gpioTherm) {
-				strncpy(buffer, "sudo modprobe -r w1-therm w1-gpio", BS);	/* remove kernel modules */
-				if (iC_debug & 0200) fprintf(iC_outFP, "%s\n", buffer);
-				if ((b = system(buffer)) != 0) {
-				    perror("sudo modprobe");
-				    fprintf(iC_errFP, "WARNING: %s: system(\"%s\") could not be executed $? = %d - ignore\n",
-					iC_progname, buffer, b);
-				}
-				gpiosp->u.oops |= OopsMask;	/* block iCtherm permanently */
-			    }
-			}
-		    }
-		}
 	    }
 	  endOneArg:
 	    invFlag = invMask;				/* start new tilde '~' analysis for next argument */
@@ -1212,8 +1134,7 @@ main( int argc, char ** argv)
 	if (iC_debug & 0200) fprintf(iC_outFP, "used     = 0x%016llx\n"
 					       "oops     = 0x%016llx\n", gpiosp->u.used, gpiosp->u.oops);
 	if (writeUnlockCloseGpios() < 0) {
-	    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
-		iC_progname);
+	    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
 	    errorFlag++;
 	}
     }
@@ -1223,33 +1144,8 @@ main( int argc, char ** argv)
 	iC_quit(-3);					/* after all the command line has been analyzed */
     }
     if (directFlag == 0) {
-	fprintf(iC_errFP, "ERROR: %s: no IEC arguments? there must be at least 1 MCP23017 or GPIO argument\n", iC_progname);
+	fprintf(iC_errFP, "ERROR: %s: no IEC arguments? there must be at least 1 MCP23017 argument\n", iC_progname);
 	iC_quit(-4);					/* call termQuit() to terminate I/O */
-    }
-    if (iC_opt_G) mcpCnt = 0;				/* ignore all MCP23017s and their IECs */
-    /********************************************************************
-     *  Generate IEC names for all GPIO output and input arguments
-     *  Do the same for iC_gpL[0] and iC_gpL[1]
-     *******************************************************************/
-    for (qi = 0; qi < 2; qi++) {
-	for (gep = iC_gpL[qi]; gep; gep = gep->nextIO) {
-	    len = snprintf(buffer, BS, "%cX%d", QI[qi], gep->Gval);	/* IEC name without instance */
-	    if ((iid = gep->Gchannel) != 0xffff) {			/* append possible instance */
-		len += snprintf(buffer + len, BS, "-%hu", iid);
-	    }
-	    gep->Gname = iC_emalloc(++len);
-	    strcpy(gep->Gname, buffer);		/* store name */
-	}
-    }
-    /********************************************************************
-     *  Do the same for iC_gpL[0] and iC_gpL[1]
-     *******************************************************************/
-    for (qi = 0; qi < 2; qi++) {
-	for (gep = iC_gpL[qi]; gep; gep = gep->nextIO) {
-	    assert(gep->Gname);		/* later scans rely on a name */
-	    gep->Gval = 0;		/* restore values */
-	    gep->Gchannel = 0;
-	}
     }
     /********************************************************************
      *  End of MCP23017 detection
@@ -1291,66 +1187,9 @@ main( int argc, char ** argv)
 	}
     }
     /********************************************************************
-     *  Export and open all gpio files for all GPIO arguments
-     *  open /sys/class/gpio/gpioN/value permanently for obtaining
-     *  out-of-band interrupts and to allow read and write operations
-     *******************************************************************/
-    for (qi = 0; qi < 2; qi++) {
-	for (gep = iC_gpL[qi]; gep; gep = gep->nextIO) {
-	    for (bit = 0; bit <= 7; bit++) {
-		if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-		    if (qi == 0) {
-			/********************************************************************
-			 *  QXn gpio N export with direction out and no interrupts
-			 *******************************************************************/
-			if ((sig = gpio_export(gpio, "out", "none", forceFlag, iC_fullProgname)) != 0) {
-			    iC_quit(sig);		/* another program is using gpio N */
-			}
-			if ((gep->gpioFN[bit] = gpio_fd_open(gpio, O_RDWR)) < 0) {
-			    fprintf(iC_errFP, "ERROR: %s: Cannot open GPIO %d for output: %s\n", iC_progname, gpio, strerror(errno));
-			} else {
-			    gpio_write(gep->gpioFN[bit], 0);	/* write 0 to GPIO to initialise it */
-			}
-		    } else {
-			/********************************************************************
-			 *  IXn gpio N export with direction in and interrupts on both edges
-			 *******************************************************************/
-			if ((sig = gpio_export(gpio, "in", "both", forceFlag, iC_fullProgname)) != 0) {
-			    iC_quit(sig);		/* another program is using gpio N */
-			}
-			if ((gep->gpioFN[bit] = gpio_fd_open(gpio, O_RDONLY)) < 0) {
-			    fprintf(iC_errFP, "ERROR: %s: Cannot open GPIO %d for input: %s\n", iC_progname, gpio, strerror(errno));
-			}
-			/********************************************************************
-			 *  Execute the SUID root progran iCgpioPUD(gpio, pud) to set pull-up
-			 *  to 3.3 volt. It is not recommended to connect a GPIO input to 5 volt,
-			 *  although I have never had a problem doing so. JW 2023-07-04
-			 *  Previously (before version 1.2) the following was done:
-			 *    for normal   input (logic 0 = low)  set pull down pud = 1
-			 *    for inverted input (logic 0 = high) set pull up   pud = 2
-			 *  That required pulling the input high for normal input, which is
-			 *  awkward, especially if you should only use 3.3 volt, not 5 volt.
-			 *  Now it is always pull up  pud = 2. GPIO inputs are activated by
-			 *  pulling them down to 0 volts, which is the same as MCP23017 inputs.
-			 *******************************************************************/
-			iC_gpio_pud(gpio, BCM2835_GPIO_PUD_UP);
-		    }
-		    if (gep->gpioFN[bit] > iC_maxFN) {
-			iC_maxFN = gep->gpioFN[bit];
-		    }
-		} else if (qi == 1) {
-		    gep->Ginv &= ~iC_bitMask[bit];	/* blank out missing GPIO input bits IXx.y */
-		}
-	    }
-	}
-    }
-    /********************************************************************
      *  Generate a meaningful name for network registration
      *******************************************************************/
     len = snprintf(buffer, BS, "%s", iC_iccNM);
-    if (mcpCnt == 0) {
-	len += snprintf(buffer+len, BS-len, "_G");		/* name GPIO marker */
-    }
     if (ofs != 0) {
 	len += snprintf(buffer+len, BS-len, "-o%d", ofs);	/* alternate offset */
     }
@@ -1406,61 +1245,42 @@ main( int argc, char ** argv)
     cp = regBuf + len;
     regBufRem -= len;
     m = 0;
-    if (mcpCnt) {
-	/********************************************************************
-	 *  Generate registration string made up of all active MCP23017 I/O names
-	 *  There are either 2 input or 2 output names or both per active MCP23017
-	 *******************************************************************/
-	for (ch = 0; ch < 10; ch++) {		/* scan all I2C channels */
-	    if (i2cFdA[ch] == -1) {
-		continue;			/* no MCP23017s on this I2C channel */
+    /********************************************************************
+     *  Generate registration string made up of all active MCP23017 I/O names
+     *  There are either 2 input or 2 output names or both per active MCP23017
+     *******************************************************************/
+    for (ch = 0; ch < 10; ch++) {		/* scan all I2C channels */
+	if (i2cFdA[ch] == -1) {
+	    continue;			/* no MCP23017s on this I2C channel */
+	}
+	for (ns = 0; ns < 8; ns++) {
+	    /********************************************************************
+	     *  Scan MCP23017's mcpDetails for names
+	     *******************************************************************/
+	    mcp = mcpL[ch][ns];
+	    if (mcp == (void *) -1 || mcp == NULL) {
+		continue;			/* no MCP23017 at this address or not matched by an IEC */
 	    }
-	    for (ns = 0; ns < 8; ns++) {
-		/********************************************************************
-		 *  Scan MCP23017's mcpDetails for names
-		 *******************************************************************/
-		mcp = mcpL[ch][ns];
-		if (mcp == (void *) -1 || mcp == NULL) {
-		    continue;			/* no MCP23017 at this address or not matched by an IEC */
-		}
-		for (gs = 0; gs < 2; gs++) {
-		    for (qi = 0; qi < 2; qi++) {
-			if ((np = mcp->s[gs][qi].name) != NULL) {
-			    assert(*np == QI[qi]);
-			    if (strlen(np) + 5 > regBufRem) {	/* room for ",R,Z\0" */
-				regAck();	/* send partial registration */
-				regBufRem = REQUEST;
-				cp = regBuf;
-			    }
-			    len = snprintf(cp, regBufRem, ",%c%s", RS[qi], np);
-			    cp += len;		/* input send name or output receive name */
-			    regBufRem -= len;
-			    m++;
+	    for (gs = 0; gs < 2; gs++) {
+		for (qi = 0; qi < 2; qi++) {
+		    if ((np = mcp->s[gs][qi].name) != NULL) {
+			assert(*np == QI[qi]);
+			if (strlen(np) + 5 > regBufRem) {	/* room for ",R,Z\0" */
+			    regAck();	/* send partial registration */
+			    regBufRem = REQUEST;
+			    cp = regBuf;
 			}
+			len = snprintf(cp, regBufRem, ",%c%s", RS[qi], np);
+			cp += len;		/* input send name or output receive name */
+			regBufRem -= len;
+			m++;
 		    }
 		}
 	    }
 	}
     }
-    /********************************************************************
-     *  Extend registration string with all active GPIO I/O names
-     *******************************************************************/
-    for (qi = 0; qi < 2; qi++) {
-	for (gep = iC_gpL[qi]; gep; gep = gep->nextIO) {
-	    np = gep->Gname;
-	    if (strlen(np) + 5 > regBufRem) {	/* room for ",R,Z\0" */
-		regAck();			/* send partial registration */
-		regBufRem = REQUEST;
-		cp = regBuf;
-	    }
-	    len = snprintf(cp, regBufRem, ",%c%s", RS[qi], np);
-	    cp += len;				/* input send name or output receive name */
-	    regBufRem -= len;
-	    m++;
-	}
-    }
     if (m == 0) {
-	fprintf(iC_errFP, "ERROR: %s: No MCP or GPIO IEC arguments were found - nothing to do\n", iC_progname);
+	fprintf(iC_errFP, "ERROR: %s: No MCP arguments were found - nothing to do\n", iC_progname);
 	iC_quit(QUIT_TERMINAL);		/* quit normally */
     }
     /********************************************************************
@@ -1529,44 +1349,6 @@ main( int argc, char ** argv)
 	    }
 	}
     }
-    /********************************************************************
-     *  iC channels for GPIO acknowledgments
-     *******************************************************************/
-    for (qi = 0; qi < 2; qi++) {
-	for (gep = iC_gpL[qi]; gep; gep = gep->nextIO) {
-	    np = gep->Gname;		/* not NULL assert previously */
-	    assert(cp);			/* not enough channels in ACK string */
-	    channel = atoi(++cp);		/* read channel from ACK string */
-	    assert(channel > 0);
-	    if (channel > topChannel) {
-		topChannel = channel;
-	    }
-	    if (iC_debug & 0200) {
-		fprintf(iC_outFP, "GPIO");
-		for (bit = 0; bit <= 7; bit++) {
-		    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-			fprintf(iC_outFP, ",%hu", gpio);
-		    } else {
-			fprintf(iC_outFP, ",d");
-		    }
-		}
-		fprintf(iC_outFP, "	%s  on channel %hu\n", np, channel);
-	    }
-	    gep->Gchannel = channel;	/* link send channel to GPIO (ignore receive channel) */
-	    sel.use = 1;
-	    sel.gep = gep;			/* identifies GPIO */
-	    storeIEC(channel, sel);		/* link GPIO element pointer to send channel */
-	    if (iC_opt_B) {
-		len = snprintf(buffer, BS, "%s", np);
-		if ((mask = gep->Gbmask) != 0xff) {	/* mask out any MCP23017 bits not used */
-		    snprintf(buffer+len, BS-len, ",0x%02x", mask);
-		}
-		bufAppend(&cmdBuf, ' ', buffer);	/* add I/O name to execute iCbox -d */
-		b++;				/* count tokens in cmdBuf */
-	    }
-	    cp = strchr(cp, ',');
-	}
-    }
     assert(cp == NULL);			/* Ack string matches Registration */
     /********************************************************************
      *  ACK string complete
@@ -1593,114 +1375,76 @@ main( int argc, char ** argv)
      *  Generate MCP23017 initialisation inputs and outputs for active MCP23017s
      *  Send possible TCP/IP after GPIO done
      *******************************************************************/
-    if (!iC_opt_G) {
-	assert(gpio27FN > 0);
-	if (iC_debug & 0200) fprintf(iC_outFP, "### Initialise %d unit(s)\n", mcpCnt);
-	gpio_read(gpio27FN);			/* dummy read to clear interrupt on /dev/class/gpio27/value */
+#if RASPBERRYPI < 5010	/* sysfs */
+    assert(gpio27FN > 0);
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    assert(pins.linereq->fd > 0);
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    if (iC_debug & 0200) fprintf(iC_outFP, "### Initialise %d unit(s)\n", mcpCnt);
+    gpio_read(gpio27FN);			/* dummy read to clear interrupt on /dev/class/gpio27/value */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_micro) iC_microPrint("I2C initialise", 0);
+    if (iC_micro) iC_microPrint("I2C initialise", 0);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-	for (ch = 0; ch < 10; ch++) {		/* scan all I2C channels */
-	    if (i2cFdA[ch] == -1) {
-		continue;			/* no MCP23017s on this I2C channel */
+    for (ch = 0; ch < 10; ch++) {		/* scan all I2C channels */
+	if (i2cFdA[ch] == -1) {
+	    continue;				/* no MCP23017s on this I2C channel */
+	}
+	for (ns = 0; ns < 8; ns++) {
+	    mcp = mcpL[ch][ns];
+	    if (mcp == (void *) -1 || mcp == NULL) {
+		continue;			/* no MCP23017 at this address or not matched by an IEC */
 	    }
-	    for (ns = 0; ns < 8; ns++) {
-		mcp = mcpL[ch][ns];
-		if (mcp == (void *) -1 || mcp == NULL) {
-		    continue;			/* no MCP23017 at this address or not matched by an IEC */
-		}
-		for (gs = 0; gs < 2; gs++) {
-		    for (qi = 0; qi < 2; qi++) {
-			mdp = &mcp->s[gs][qi];
-			if (mdp->name) {
-			    if (qi == 0) {
-				if (mdp->inv) {
-				    writeByte(mcp->i2cFd, mcp->mcpAdr, OLAT[gs], mdp->inv);
-				    if (iC_debug & 020) {
-					fprintf(iC_outFP, "M: %s:	%hu:%d	> MCP %s:%x%c %02x %s\n",
-						iC_iccNM, mdp->channel, 0,
-						strrchr(getI2cDevice(mdp->name[2]-'0'), '-')+1,
-						mdp->mcpAdr, AB[mdp->g], mdp->inv, mdp->name);
-				    }
-				}
-			    } else {
-				if(regBufRem < 12) {		/* fits largest data telegram */
-				    /* partial ini data telegram(s) to iCserver (skip initial ',') */
-				    iC_send_msg_to_server(iC_sockFN, regBuf+1);
-				    if (iC_debug & 010) fprintf(iC_outFP, "M: %s:	%s	<%s\n",
-					iC_iccNM, regBuf+1, buffer+1);
-				    cp = regBuf;
-				    regBufRem = REPLY;
-				    if (iC_debug & 010) {
-					op = buffer;
-					ol = BS;
-				    }
-				}
-				val = readByte(mcp->i2cFd, mcp->mcpAdr, GPIO[gs]) & mdp->bmask;	/* read registered MCP23017 A/B */
-				if (val != mdp->val) {
-				    len = snprintf(cp, regBufRem, ",%hu:%d",	/* data telegram */
-						    mdp->channel,
-						    val
-						  );
-				    assert(len < regBufRem);	/* output was truncated */
-				    cp += len;
-				    regBufRem -= len;
-				    if (iC_debug & 010) {
-					len = snprintf(op, ol, ", MCP %s:%x%c %02x %s",
+	    for (gs = 0; gs < 2; gs++) {
+		for (qi = 0; qi < 2; qi++) {
+		    mdp = &mcp->s[gs][qi];
+		    if (mdp->name) {
+			if (qi == 0) {
+			    if (mdp->inv) {
+				writeByte(mcp->i2cFd, mcp->mcpAdr, OLAT[gs], mdp->inv);
+				if (iC_debug & 020) {
+				    fprintf(iC_outFP, "M: %s:	%hu:%d	> MCP %s:%x%c %02x %s\n",
+					    iC_iccNM, mdp->channel, 0,
 					    strrchr(getI2cDevice(mdp->name[2]-'0'), '-')+1,
-					    mdp->mcpAdr, AB[mdp->g], val ^ mdp->inv, mdp->name);	/* source name */
-					op += len;
-					ol -= len;
-				    }
-				    mdp->val = val;		/* initialise input for comparison */
+					    mdp->mcpAdr, AB[mdp->g], mdp->inv, mdp->name);
 				}
+			    }
+			} else {
+			    if(regBufRem < 12) {		/* fits largest data telegram */
+				/* partial ini data telegram(s) to iCserver (skip initial ',') */
+				iC_send_msg_to_server(iC_sockFN, regBuf+1);
+				if (iC_debug & 010) fprintf(iC_outFP, "M: %s:	%s	<%s\n",
+				    iC_iccNM, regBuf+1, buffer+1);
+				cp = regBuf;
+				regBufRem = REPLY;
+				if (iC_debug & 010) {
+				    op = buffer;
+				    ol = BS;
+				}
+			    }
+			    val = readByte(mcp->i2cFd, mcp->mcpAdr, GPIO[gs]) & mdp->bmask;	/* read registered MCP23017 A/B */
+			    if (val != mdp->val) {
+				len = snprintf(cp, regBufRem, ",%hu:%d",	/* data telegram */
+						mdp->channel,
+						val
+					      );
+				assert(len < regBufRem);	/* output was truncated */
+				cp += len;
+				regBufRem -= len;
+				if (iC_debug & 010) {
+				    len = snprintf(op, ol, ", MCP %s:%x%c %02x %s",
+					strrchr(getI2cDevice(mdp->name[2]-'0'), '-')+1,
+					mdp->mcpAdr, AB[mdp->g], val ^ mdp->inv, mdp->name);	/* source name */
+				    op += len;
+				    ol -= len;
+				}
+				mdp->val = val;		/* initialise input for comparison */
 			    }
 			}
 		    }
-		    readByte(concFd, CONCDEV, GPIO[gs]);	/* clears interrupt if it occured in this port */
 		}
+		readByte(concFd, CONCDEV, GPIO[gs]);	/* clears interrupt if it occured in this port */
 	    }
 	}
-    }
-    /********************************************************************
-     *  Extend with GPIO IXn initialisation inputs
-     *  There may be no GPIOs or only GPIO outputs - nothing to initialise
-     *******************************************************************/
-    for (gep = iC_gpL[1]; gep; gep = gep->nextIO) {	/* IXn inputs only */
-	val = 0;
-	for (bit = 0; bit <= 7; bit++) {
-	    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-		if ((n = gpio_read(gep->gpioFN[bit])) != -1) {
-		    if (n) val |= iC_bitMask[bit];
-		} else {
-		    fprintf(iC_errFP, "WARNING: %s: GPIO %hu returns invalid value -1 (not 0 or 1 !!)\n",
-			iC_progname, gpio);		/* should not happen */
-		}
-	    }
-	}
-	assert(gep->Gname);
-	if(regBufRem < 12) {		/* fits largest data telegram */
-	    /* partial ini data telegram(s) to iCserver (skip initial ',') */
-	    iC_send_msg_to_server(iC_sockFN, regBuf+1);
-	    if (iC_debug & 010) fprintf(iC_outFP, "M: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer+1);
-	    cp = regBuf;
-	    regBufRem = REPLY;
-	    if (iC_debug & 010) {
-		op = buffer;
-		ol = BS;
-	    }
-	}
-	/* by default do not invert GPIO inputs - they are inverted with -I */
-	len = snprintf(cp, regBufRem, ",%hu:%d", gep->Gchannel, val ^ gep->Ginv);	/* data telegram */
-	assert(len < regBufRem);		/* output was truncated */
-	cp += len;
-	regBufRem -= len;
-	if (iC_debug & 010) {
-	    len = snprintf(op, ol, ", G %02x %s", val, gep->Gname);	/* source name */
-	    op += len;
-	    ol -= len;
-	}
-	gep->Gval = val;			/* initialise input for comparison */
     }
     /********************************************************************
      *  Send IXn inputs if any - to iCserver to initialise receivers
@@ -1708,14 +1452,6 @@ main( int argc, char ** argv)
     if (cp > regBuf) {
 	iC_send_msg_to_server(iC_sockFN, regBuf+1);	/* final ini data telegram(s) to iCserver (skip initial ',') */
 	if (iC_debug & 010) fprintf(iC_outFP, "M: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer+1);
-    }
-    /********************************************************************
-     *  Write GPIO QXn initialisation outputs
-     *******************************************************************/
-    for (gep = iC_gpL[0]; gep; gep = gep->nextIO) {	/* QXn outputs only */
-	val = 0;				/* initialise with logical 0 */
-	gep->Gval = gep->Ginv ^ 0xff;		/* force all output bits */
-	writeGPIO(gep, gep->Gchannel, val);
     }
     if (iC_debug & 0x30) fprintf(iC_outFP, "M: %s: End of initialisation\n", iC_iccNM);
     if (argc != 0) {
@@ -1728,38 +1464,35 @@ main( int argc, char ** argv)
     }
     /********************************************************************
      *  Clear and then set all bits to wait for interrupts
-     *  do after iC_connect_to_server() 
+     *  do after iC_connect_to_server()
      *******************************************************************/
     FD_ZERO(&infds);				/* should be done centrally if more than 1 connect */
-    FD_ZERO(&ixfds);				/* should be done centrally if more than 1 connect */
     FD_SET(iC_sockFN, &infds);			/* watch sock for inputs in normal wait */
+#if RASPBERRYPI < 5010	/* sysfs */
+    FD_ZERO(&ixfds);				/* should be done centrally if more than 1 connect */
+    FD_SET(gpio27FN, &ixfds);			/* watch GPIO27 for out-of-band input - do after iC_connect_to_server() */
+    if (iC_debug & 0200) fprintf(iC_outFP, "FD_SET GPIO 27 MCP INT	Fd %d === mcpCnt = %d\n", gpio27FN, mcpCnt);
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    FD_SET(pins.linereq->fd, &infds);		/* watch GPIO 27 for interrupts with v2 ioctl ABI */
+    if (iC_debug & 0200) fprintf(iC_outFP, "FD_SET GPIO 27 MCP INT	Fd %d === mcpCnt = %d\n", pins.linereq->fd, mcpCnt);
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     if (iC_debug & 0200) fprintf(iC_outFP, "FD_SET TCP/IP socket  	FN %d\n", iC_sockFN);
-    if (mcpCnt) {
-	FD_SET(gpio27FN, &ixfds);		/* watch GPIO 27 for out-of-band input */
-	if (iC_debug & 0200) fprintf(iC_outFP, "FD_SET GPIO 27 MCP INT	Fd %d === mcpCnt = %d\n", gpio27FN, mcpCnt);
-    }
-    /********************************************************************
-     *  Set all GPIO IXn input bits for interrupts
-     *******************************************************************/
-    for (gep = iC_gpL[1]; gep; gep = gep->nextIO) {	/* IXn inputs only */
-	for (bit = 0; bit <= 7; bit++) {
-	    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-		assert(gep->gpioFN[bit] > 0);		/* make sure it has been opened */
-		FD_SET(gep->gpioFN[bit], &ixfds);	/* watch GPIO N for out-of-band input */
-		if (iC_debug & 0200) fprintf(iC_outFP, "FD_SET GPIO %-2d %s.%d	FN %d\n", gpio, gep->Gname, bit, gep->gpioFN[bit]);
-	    }
-	}
-    }
     if ((iC_debug & DZ) == 0) {
 	FD_SET(0, &infds);			/* watch stdin for inputs unless - FD_CLR on EOF */
 	if (iC_debug & 0200) fprintf(iC_outFP, "FD_SET STDIN INT    	FN 0\n");
     }
+    if (iC_debug & 0200) fprintf(iC_outFP, "MAX FN = %d\n", iC_maxFN);
     /********************************************************************
      *  External input (TCP/IP via socket, I2C from MCP23017, GPIO and STDIN)
      *  Wait for input in a select statement most of the time
      *******************************************************************/
     for (;;) {
-	if ((retval = iC_wait_for_next_event(&infds, &ixfds, NULL)) > 0) {
+#if RASPBERRYPI < 5010	/* sysfs */
+	if ((retval = iC_wait_for_next_event(&infds, &ixfds, NULL)) > 0)
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	if ((retval = iC_wait_for_next_event(&infds, NULL, NULL)) > 0)
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	{
 	    if (FD_ISSET(iC_sockFN, &iC_rdfds)) {
 		/********************************************************************
 		 *  TCP/IP input from iCserver
@@ -1802,11 +1535,6 @@ main( int argc, char ** argv)
 					fprintf(iC_errFP, "WARNING: %s: %hu:%d no output registered for MCP???\n",
 					    iC_iccNM, channel, val);	/* should not happen */
 				    }
-				} else if (sel.use == 1) {
-				    /********************************************************************
-				     *  TCP/IP output for a GPIO
-				     *******************************************************************/
-				    writeGPIO(sel.gep, channel, val);
 				} else {
 				    assert(0);				/* error in storeIEC() */
 				}
@@ -1824,10 +1552,29 @@ main( int argc, char ** argv)
 		    iC_quit(QUIT_SERVER);	/* quit normally with 0 length message from iCserver */
 		}
 	    }	/* end of TCP/IP input */
-	    if (gpio27FN > 0 && FD_ISSET(gpio27FN, &iC_exfds)) {	/* watch for out-of-band GPIO 27 input */
-		/********************************************************************
-		 *  GPIO 27 interrupt means I2C input from a MCP23017
-		 *******************************************************************/
+	    /********************************************************************
+	     *  GPIO 27 interrupt means I2C input from a MCP23017
+	     *******************************************************************/
+#if RASPBERRYPI < 5010	/* sysfs */
+	    if (gpio27FN > 0 && FD_ISSET(gpio27FN, &iC_exfds))	/* watch for out-of-band GPIO 27 input */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	    if (FD_ISSET(pins.linereq->fd, &iC_rdfds))		/* watch for iGPIO 27 interrup with v2 ioctl ABI */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	    {
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+		if ((m = read(pins.linereq->fd, lineevent, sizeof lineevent[0]*LINEEVENT_BUFFERS)) == -1) {
+		    perror ("ERROR: read - lineevent");
+		    iC_quit(SIGUSR1);		/* error quit */
+		}
+		m /= sizeof lineevent[0];		/* number of lineevent buffers read */
+		if (iC_debug & 0200) fprintf(iC_outFP, "ioctl m = %d GPIO 27 interrupts:", m);
+		for (n = 0; n < m; n++) {
+		    gpio = lineevent[n].offset;	/* GPIO number from offset */
+		    assert(gpio < GPIO_LIMIT && lineevent[n].id == GPIO_V2_LINE_EVENT_RISING_EDGE);
+		if (iC_debug & 0200) fprintf(iC_outFP, " [%d] gpio= %d:", n, gpio);
+		}
+		if (iC_debug & 0200) fprintf(iC_outFP, "\n");
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 		m1 = m = 0;
 #if YYDEBUG && !defined(_WINDOWS)
 		if (iC_micro) iC_microPrint("I2C input received", 0);
@@ -1894,11 +1641,19 @@ main( int argc, char ** argv)
 			}
 		    }
 		    m1++;
-		    if ((val = gpio_read(gpio27FN)) == -1) {
-			perror("GPIO 27 read");
-			fprintf(iC_errFP, "ERROR: %s: GPIO 27 read failed\n", iC_progname);
+#if RASPBERRYPI < 5010	/* sysfs */
+		    if ((val = gpio_read(gpio27FN)) == -1)
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+		    if ((val = gpio_line_get_values (&pins, maskBit27)) == -1)
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+		    {
+			perror("ERROR: GPIO 27 read");
+			fprintf(iC_errFP, "ERROR: %s: GPIO27 read failed\n", iC_progname);
 			break;
 		    }
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+		    val = !val;				/* v2 ioctl ABI returns 0 for inactive - change to 1 for while test */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 		} while (val != 1);		/* catch interrupts which came in during for loop */
 		/********************************************************************
 		 *  Send data telegrams collected from MCP inputs
@@ -1916,59 +1671,6 @@ main( int argc, char ** argv)
 		    *(regBuf+1) = '\0';			/* clean debug output next time */
 		}
 	    }	/*  end of GPIO 27 interrupt */
-	    /********************************************************************
-	     *  GPIO N interrupt means GPIO n input
-	     *******************************************************************/
-	    m1 = 0;
-	    cp = regBuf;
-	    regBufRem = REPLY;
-	    if (iC_debug & 010) {
-		op = buffer;
-		ol = BS;
-	    }
-	    for (gep = iC_gpL[1]; gep; gep = gep->nextIO) {	/* IXn inputs only */
-		assert(regBufRem > 11);		/* fits largest data telegram */
-		m = 0;
-		val = gep->Gval;
-		for (bit = 0; bit <= 7; bit++) {
-		    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-			assert(gep->gpioFN[bit] > 0);
-			if (FD_ISSET(gep->gpioFN[bit], &iC_exfds)) {	/* any out-of-band GPIO N input */
-			    if ((n = gpio_read(gep->gpioFN[bit])) == 0) {
-				val &= ~(1 << bit);
-			    } else if (n == 1) {
-				val |= 1 << bit;
-			    } else {
-				fprintf(iC_errFP, "WARNING: %s: GPIO %hu returns invalid value %d (not 0 or 1 !!)\n",
-				    iC_progname, gpio, n);		/* should not happen */
-			    }
-			    m++;
-#if YYDEBUG && !defined(_WINDOWS)
-			    if (m1++ == 0 && iC_micro) iC_microPrint("GPIO input received", 0);
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
-			}
-		    }
-		}
-		if (m && val != gep->Gval) {
-		    /* by default do not invert GPIO inputs - they are inverted with -I */
-		    len = snprintf(cp, regBufRem, ",%hu:%d", gep->Gchannel, val ^ gep->Ginv); /* data telegram */
-		    cp += len;
-		    regBufRem -= len;
-		    if (iC_debug & 010) {
-			len = snprintf(op, ol, ", G %02x %s", val, gep->Gname); /* source name */
-			op += len;
-			ol -= len;
-		    }
-		    gep->Gval = val;		/* store change for comparison */
-		}
-	    }	/*  end of GPIO N interrupt */
-	    /********************************************************************
-	     *  Send data telegrams collected from GPIO N inputs
-	     *******************************************************************/
-	    if (cp > regBuf) {
-		iC_send_msg_to_server(iC_sockFN, regBuf+1);	/* send data telegram(s) to iCserver */
-		if (iC_debug & 010) fprintf(iC_outFP, "M: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer+1);
-	    }
 	    if (FD_ISSET(0, &iC_rdfds)) {
 		/********************************************************************
 		 *  STDIN interrupt
@@ -2000,28 +1702,33 @@ main( int argc, char ** argv)
 			readByte(concFd, CONCDEV, GPIOA),	/* clears interrupt if it occured in this port */
 			readByte(concFd, CONCDEV, INTFB),
 			readByte(concFd, CONCDEV, GPIOB),	/* clears interrupt if it occured in this port */
-			gpio_read(gpio27FN));			/* read to clear interrupt on /dev/class/gpio27/value */
-			for (ch = 0; ch < 10; ch++) {		/* scan all I2C channels */
-			    if (i2cFdA[ch] == -1) {
-				continue;			/* no MCP23017s on this I2C channel */
-			    }
-			    for (ns = 0; ns < 8; ns++) {
-				mcp = mcpL[ch][ns];
-				if (mcp == (void *) -1) {
-				    continue;			/* no MCP23017 at this address */
-				}
-				fprintf(iC_outFP, "data         MCP %s 0x%02x GPIOA = 0x%02x GPIOB = 0x%02x\n",
-				    getI2cDevice(ch), ns+0x20,
-				    readByte(i2cFdA[ch], ns+0x20, GPIOA),	/* clears interrupt on MCP port A */
-				    readByte(i2cFdA[ch], ns+0x20, GPIOB));	/* clears interrupt on MCP port B */
-			    }
+#if RASPBERRYPI < 5010	/* sysfs */
+			gpio_read(gpio27FN)			/* read to clear interrupt on /dev/class/gpio27/value */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+			gpio_line_get_values (&pins, maskBit27)
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+		    );
+		    for (ch = 0; ch < 10; ch++) {		/* scan all I2C channels */
+			if (i2cFdA[ch] == -1) {
+			    continue;				/* no MCP23017s on this I2C channel */
 			}
+			for (ns = 0; ns < 8; ns++) {
+			    mcp = mcpL[ch][ns];
+			    if (mcp == (void *) -1) {
+				continue;			/* no MCP23017 at this address */
+			    }
+			    fprintf(iC_outFP, "data         MCP %s 0x%02x GPIOA = 0x%02x GPIOB = 0x%02x\n",
+				getI2cDevice(ch), ns+0x20,
+				readByte(i2cFdA[ch], ns+0x20, GPIOA),	/* clears interrupt on MCP port A */
+				readByte(i2cFdA[ch], ns+0x20, GPIOB));	/* clears interrupt on MCP port B */
+			}
+		    }
 		} else if (c != '\n') {
-		    fprintf(iC_errFP, "no action coded for '%c' - try t, m, T, i, I, or q followed by ENTER\n", c);
+		    fprintf(iC_errFP, "no action coded for '%c' - try t, m, T, or q followed by ENTER\n", c);
 		}
 	    }	/*  end of STDIN interrupt */
 	} else {
-	    perror("ERROR: select failed");				/* retval -1 */
+	    perror("ERROR: select failed");			/* retval -1 or 0 */
 	    iC_quit(SIGUSR1);		/* error quit */
 	}
     }
@@ -2091,31 +1798,19 @@ scanIEC(const char * format, int * ieStartP, int * ieEndP, char * tail, unsigned
 	sel.cngqi.n = ns = cng[1] - '0';
 	sel.cngqi.g = gs = cng[2] - '0' - ofs;
 	assert(*iqe == 'I' || *iqe == 'Q');
-	sel.cngqi.qi = *iqe == 'I' ? 1 : 0;	/* that completes IEC selection */ 
+	sel.cngqi.qi = *iqe == 'I' ? 1 : 0;	/* that completes IEC selection */
 	*ieEndP = atoi(cng);			/* assume a single IXn or QXn */
 	sl = strlen(&cng[0]);
-	if (sl < 3) {
-	    // IEC is GPIO variable
-	    if (*format == '%') {
-		sel.use = 3;
-		storeIEC(*channelP, sel);	/* save IEC details in temporary storage - qi used by GPIO */
-		return 3;			/* goto processGPIO */
-	    } else {
-		fprintf(iC_errFP, "ERROR: %s: '%s' GPIO IEC variable in an MCP23017 list or range\n", iC_progname, *argp);
-		errorFlag++;
-		return 6;			/* goto endOneArg */
-	    }
-	}
 	if (*format != '%' && *iqs != *iqe) {
 	    fprintf(iC_errFP, "ERROR: %s: '%s' mixed input and output in an MCP23017 list or range\n", iC_progname, *argp);
 	    errorFlag++;
 	    return 6;				/* goto endOneArg */
 	}
-	if (sl > 3 ||
+	if (sl != 3 ||
 	    ch < 0 || ch > 9 ||
 	    ns < 0 || ns > 7 ||
 	    gs < 0 || gs > 1) {
-	    fprintf(iC_errFP, "ERROR: %s: '%s' with offset %d does not address a data MCP23017 register\n", iC_progname, *argp, ofs);
+	    fprintf(iC_errFP, "ERROR: %s: '%s' with offset %d does not address a MCP23017 data register\n", iC_progname, *argp, ofs);
 	    errorFlag++;
 	    return 6;				/* goto endOneArg */
 	}
@@ -2137,7 +1832,7 @@ scanIEC(const char * format, int * ieStartP, int * ieEndP, char * tail, unsigned
 	if (iC_debug & 0200) fprintf(iC_outFP, "	MCP23017 %s%cX%d\n", invFlag ? "~" : "", *iqe, *ieEndP);
 	if (n == 2) {
 	    tail[0] = '\0';			/* single IEC argument without ,<mask> or -<inst> */
-	    return 2;				/* goto checkOptionG */
+	    return 2;				/* goto endMCP */
 	}
 	if (*format == '%') {
 	    /********************************************************************
@@ -2181,7 +1876,6 @@ scanIEC(const char * format, int * ieStartP, int * ieEndP, char * tail, unsigned
  *
  *	Initalise and expand dynamic array Channels[] as necessary
  *	Store MCP23017 address cngqi in Channels[] indexed by channel
- *	Alternatively store gpioIO * to current GPIO element
  *
  *******************************************************************/
 
@@ -2200,8 +1894,6 @@ storeIEC(unsigned short channel, iecS sel)
 	switch(sel.use) {
 	    case 0: fprintf(iC_outFP, "storeIEC: Channels[%d] <== %p\n", channel, sel.mdp);
 		break;
-	    case 1: fprintf(iC_outFP, "storeIEC: Channels[%d] <== %p\n", channel, sel.gep);
-		break;
 	    case 2: fprintf(iC_outFP, "storeIEC: Channels[%d] <== %cX%d%d%d\n",
 			channel, QI[sel.cngqi.qi], sel.cngqi.c, sel.cngqi.n, sel.cngqi.g+ofs);
 		break;
@@ -2210,7 +1902,7 @@ storeIEC(unsigned short channel, iecS sel)
 		break;
 	}
     }
-    Channels[channel] = sel;			/* store MCP23017 address cngqi or gpioIO* gep */
+    Channels[channel] = sel;			/* store MCP23017 address cngqi */
 } /* storeIEC */
 
 /********************************************************************
@@ -2260,14 +1952,11 @@ bufAppend(Buf * bufp, char separator, char * src)
 static void
 regAck(void)
 {
-    Gate **		opp;
-    Gate *		gp;
     char *		cp;
     char *		ip;
     char *		p;
     int			len;
     int			bc;
-    unsigned short	channel;
     if (iC_sockFN <= 0) {
 	/********************************************************************
 	 *  Start TCP/IP communication before any inputs are generated => outputs
@@ -2333,37 +2022,9 @@ regAck(void)
 
 /********************************************************************
  *
- *	Write changed GPIO output bits
+ *	Allocation Tables
  *
  *******************************************************************/
-
-static void
-writeGPIO(gpioIO * gep, unsigned short channel, int val)
-{
-    int			diff;
-    int			fd;
-    int			mask;
-    unsigned short	bit;
-
-    assert(gep && gep->Gname && *gep->Gname == 'Q');	/* make sure this is really a GPIO output */
-    if (iC_debug & 020) fprintf(iC_outFP, "M: %s:	%hu:%d	> G %02x %s\n",
-	iC_iccNM, channel, val, val ^ gep->Ginv, gep->Gname);
-    val ^= gep->Ginv;			/* normally write non-inverted data to GPIO output */
-    diff = val ^ gep->Gval;		/* bits which are going to change */
-    assert ((diff & ~0xff) == 0);	/* may receive a message which involves no change */
-    while (diff) {
-	bit = iC_bitIndex[diff];	/* returns 0 - 7 for values 1 - 255 (avoid 0) */
-	mask  = iC_bitMask[bit];	/* returns hex 01 02 04 08 10 20 40 80 */
-	if ((fd = gep->gpioFN[bit]) != -1) {	/* is GPIO pin open ? */
-	    gpio_write(fd, val & mask);	/* yes - write to GPIO (does not need to be a bit in pos 0) */
-	} else if ((iC_debug & 0300) == 0300) {
-	    fprintf(iC_errFP, "WARNING: %s: no GPIO associated with %s.%hu\n",
-		iC_progname, gep->Gname, bit);
-	}
-	diff &= ~mask;			/* clear the bit just processed */
-    }
-    gep->Gval = val;			/* ready for next output */
-} /* writeGPIO */
 
 void
 printAllocTables(void)
@@ -2374,73 +2035,42 @@ printAllocTables(void)
     int			ns;
     int			gs;
     int			qi;
-    gpioIO *		gep;
-    unsigned short	bit;
-    unsigned short	gpio;
     unsigned int	n;
     int			m;
 
     fprintf(iC_outFP, "%s:\n\n", iC_progname);
-    if (mcpCnt) {
-	fprintf(iC_outFP, "Allocation for %d MCP23017%s, global instance = \"%s%s\"\n",
-	    mcpCnt, mcpCnt == 1 ? "" : "s", strlen(iC_iidNM) ? "-" : "", iC_iidNM);
-	fprintf(iC_outFP, "   Port  IEC inst          bits            iC channel\n");
-	for (ch = 0; ch < 10; ch++) {	/* scan all I2C channels */
-	    if (i2cFdA[ch] == -1) {
-		continue;		/* no MCP23017s on this I2C channel */
+    fprintf(iC_outFP, "Allocation for %d MCP23017%s, global instance = \"%s%s\"\n",
+	mcpCnt, mcpCnt == 1 ? "" : "s", strlen(iC_iidNM) ? "-" : "", iC_iidNM);
+    fprintf(iC_outFP, "   Port  IEC inst          bits            iC channel\n");
+    for (ch = 0; ch < 10; ch++) {	/* scan all I2C channels */
+	if (i2cFdA[ch] == -1) {
+	    continue;		/* no MCP23017s on this I2C channel */
+	}
+	for (ns = 0; ns < 8; ns++) {
+	    mcp = mcpL[ch][ns];
+	    if (mcp == (void *) -1 || mcp == NULL) {
+		continue;		/* no MCP23017 at this address or not matched by an IEC */
 	    }
-	    for (ns = 0; ns < 8; ns++) {
-		mcp = mcpL[ch][ns];
-		if (mcp == (void *) -1 || mcp == NULL) {
-		    continue;		/* no MCP23017 at this address or not matched by an IEC */
-		}
-		fprintf(iC_outFP, "MCP %s 0x%02x\n", getI2cDevice(ch), ns+0x20);
-		for (gs = 0; gs < 2; gs++) {
-		    for (qi = 0; qi < 2; qi++) {
-			mdp = &mcp->s[gs][qi];
-			if (mdp->name) {
-			    fprintf(iC_outFP, "     %c  %s	", AB[gs], mdp->name);
-			    for (n = 0, m = 0x01; n < 8; n++, m <<= 1) {
-				if (mdp->bmask & m) {
-				    fprintf(iC_outFP, " %c%d", mdp->inv & m ? '~' : ' ', n);
-				} else {
-				    fprintf(iC_outFP, "   ");
-				}
+	    fprintf(iC_outFP, "MCP %s 0x%02x\n", getI2cDevice(ch), ns+0x20);
+	    for (gs = 0; gs < 2; gs++) {
+		for (qi = 0; qi < 2; qi++) {
+		    mdp = &mcp->s[gs][qi];
+		    if (mdp->name) {
+			fprintf(iC_outFP, "     %c  %s	", AB[gs], mdp->name);
+			for (n = 0, m = 0x01; n < 8; n++, m <<= 1) {
+			    if (mdp->bmask & m) {
+				fprintf(iC_outFP, " %c%d", mdp->inv & m ? '~' : ' ', n);
+			    } else {
+				fprintf(iC_outFP, "   ");
 			    }
-			    fprintf(iC_outFP, "	%d\n", mdp->channel);
 			}
+			fprintf(iC_outFP, "	%d\n", mdp->channel);
 		    }
 		}
 	    }
 	}
-	fprintf(iC_outFP, "\n");
     }
-    if (gpioCnt) {
-	char *	iidPtr;
-	char *	iidSep;
-	fprintf(iC_outFP, "Allocation for %d GPIO group%s, global instance = \"%s\"\n",
-	    gpioCnt, gpioCnt == 1 ? "" : "s", iC_iidNM);
-	fprintf(iC_outFP, "	IEC bit	inst	gpio	iC channel\n\n");
-	for (qi = 0; qi < 2; qi++) {
-	    for (gep = iC_gpL[qi]; gep; gep = gep->nextIO) {
-		strcpy(buffer, gep->Gname);		/* retrieve name[-instance] */
-		if ((iidPtr = strchr(buffer, '-')) != NULL) {
-		    iidSep = "-";
-		    *iidPtr++ = '\0';		/* separate name and instance */
-		} else {
-		    iidSep = iidPtr = "";	/* null or global instance */
-		}
-		for (bit = 0; bit <= 7; bit++) {
-			if ((gpio = gep->gpioNr[bit]) != 0xffff) {	/* saved gpio number for this bit */
-			    fprintf(iC_outFP, "	%c%s.%hu	%s%s	%3hu	%5hu\n",
-				gep->Ginv & iC_bitMask[bit] ? '~' : ' ',
-				buffer, bit, iidSep, iidPtr, gpio, gep->Gchannel);
-			}
-		    }
-		}
-		fprintf(iC_outFP, "\n");
-	    }
-	}
+    fprintf(iC_outFP, "\n");
 } /* printAllocTables */
 
 /********************************************************************
@@ -2473,6 +2103,72 @@ convert_nr(const char * str, char ** endptr)
     }
     return val;
 } /* convert_nr */
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+
+/********************************************************************
+ *  Configure ioctl for gpio control using ABI V2 access.
+ *  @param gpio gpio v2_struct holding pointers to linecfg and linereq
+ *  structs and open file descriptor returned by prior call to
+ *  gpio_dev_open()..
+ *  linecfg - v2 ioctl config struct for gpio pins (lines).
+ *  linereq - v2 ioctl request struct member of linecfg containing
+ *  separate file-descriptor used for read/write access of configured
+ *  gpio pins (lines).
+ *  @return returns 0 on success, -1 otherwise.
+ *******************************************************************/
+
+static int
+gpio_line_cfg_ioctl (gpio_v2_t * gpio)
+{
+    /********************************************************************
+     * get ioctl values for line request
+     *******************************************************************/
+    if (ioctl (gpio->fd, GPIO_V2_GET_LINE_IOCTL, gpio->linereq) < 0) {
+	perror ("ioctl-GPIO_V2_GET_LINE_IOCTL");
+	return -1;
+    }
+    if (iC_debug & 0200) fprintf(iC_outFP, "++++ gpio->fd = %d\n", gpio->fd);
+    /********************************************************************
+     * set the line config for the retured linereq file descriptor
+     *******************************************************************/
+    if (ioctl (gpio->linereq->fd, GPIO_V2_LINE_SET_CONFIG_IOCTL,
+      gpio->linecfg) < 0) {
+	perror ("ioctl-GPIO_V2_LINE_SET_CONFIG_IOCTL");
+	return -1;
+    }
+    if (iC_debug & 0200) fprintf(iC_outFP, "++++ gpio->linereq->fd = %d\n", gpio->linereq->fd);
+    return 0;
+} /* gpio_line_cfg_ioctl */
+
+/********************************************************************
+ *  Read gpio pin (line) values (HI/LO) from bits set or clearned
+ *  in gpio->linevals->bits for pins with bit set high in gpio->linevals->mask
+ *  from mask using gpio_v2 ioct line request.
+ *  @param linereq pointer to gpio_v2_line_request struct holding linereq with
+ *  open linereq file descriptor set by prior call to gpio_line_cfg_ioctl()
+ *  used to read linevals to gpio pin index(s) in linereq->offsets specified
+ *  by bits HI in mask.
+ *  @param mask bitmap with bits 1 (HI) that correspond to index in
+ *  gpio->linereq->offsets pin array that will be set.
+ *  @return returns bit value 0 or 1 on success, -1 otherwise.
+ *******************************************************************/
+
+static int
+gpio_line_get_values (gpio_v2_t * gpio, __u64 mask)
+{
+    /********************************************************************
+     *  get GPIO pin value to bit in lineval->bits (0 or 1) for pins with
+     *  bit == 1 in mask.
+     *******************************************************************/
+    struct gpio_v2_line_values * data = gpio->linevals;
+    data->mask = mask;				/* set linevals mask to mask */
+    if (ioctl(gpio->linereq->fd, GPIO_V2_LINE_GET_VALUES_IOCTL, data) < 0) {
+	perror ("ioctl-GPIO_V2_LINE_GET_VALUES_IOCTL-1");
+	return -1;
+    }
+    return (data->bits & mask) ? 1 : 0;
+} /* gpio_line_get_values */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
 /********************************************************************
  *
@@ -2484,123 +2180,90 @@ convert_nr(const char * str, char ** endptr)
 static int
 termQuit(int sig)
 {
-    if (iC_opt_P) {
-	if (iC_debug & 0200) fprintf(iC_outFP, "=== Unexport GPIOs and close MCP23017s =======\n");
-	mcpIO *		mcp;
-	int		ch;
-	int		ns;
-	int		qi;
-	gpioIO *	gep;
-	unsigned short	bit;
-	unsigned short	gpio;
-	int		fd;
-	ProcValidUsed *	gpiosp;
+    if (iC_debug & 0200) fprintf(iC_outFP, "=== Unexport GPIOs and close MCP23017s =======\n");
+    mcpIO *		mcp;
+    int		ch;
+    int		ns;
+    int		fd;
+    ProcValidUsed *	gpiosp;
 
+    /********************************************************************
+     *  MCP23017s
+     *******************************************************************/
+    if (mcpCnt) {
+	if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### Shutdown active MCP23017s\n");
 	/********************************************************************
-	 *  Unexport and close all gpio files for all GPIO arguments
+	 *  Shutdown all active MCP23017s leaving interrupts off and open drain
+	 *  Clear active MCP23017 outputs
 	 *******************************************************************/
-	for (qi = 0; qi < 2; qi++) {
-	    for (gep = iC_gpL[qi]; gep; gep = gep->nextIO) {
-		for (bit = 0; bit <= 7; bit++) {
-		    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-			/********************************************************************
-			 *  Execute the SUID root progran iCgpioPUD(gpio, pud) to turn off pull-up/down
-			 *******************************************************************/
-			if (qi == 1) iC_gpio_pud(gpio, BCM2835_GPIO_PUD_OFF);	/* inputs only */
-			/********************************************************************
-			 *  Close GPIO N value
-			 *******************************************************************/
-			if ((fd = gep->gpioFN[bit])> 0) {
-			    close(fd);			/* close connection to /sys/class/gpio/gpio_N/value */
-			}
-			/********************************************************************
-			 *  Force all outputs and inputs to direction "in" and "none" interrupts
-			 *******************************************************************/
-			if (sig != SIGUSR2 && gpio_export(gpio, "in", "none", 1, iC_progname) != 0) {
-			    sig = SIGUSR1;		/* unable to export gpio_N */
-			}
-			/********************************************************************
-			 *  free up the sysfs for gpio N unless used by another program (SIGUSR2)
-			 *******************************************************************/
-			if (iC_debug & 0200) fprintf(iC_outFP, "### Unexport GPIO %hu\n", gpio);
-			if (sig != SIGUSR2 && gpio_unexport(gpio) != 0) {
-			    sig = SIGUSR1;		/* unable to unexport gpio_N */
-			}
-		    }
-		}
+	for (ch = 0; ch < 10; ch++) {		/* scan all I2C channels */
+	    if (i2cFdA[ch] == -1) {
+		continue;			/* no MCP23017s on this I2C channel */
 	    }
-	}
-	/********************************************************************
-	 *  MCP23017s
-	 *******************************************************************/
-	if (mcpCnt) {
-	    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### Shutdown active MCP23017s\n");
-	    /********************************************************************
-	     *  Shutdown all active MCP23017s leaving interrupts off and open drain
-	     *  Clear active MCP23017 outputs
-	     *******************************************************************/
-	    for (ch = 0; ch < 10; ch++) {	/* scan all I2C channels */
-		if (i2cFdA[ch] == -1) {
-		    continue;			/* no MCP23017s on this I2C channel */
+	    for (ns = 0; ns < 8; ns++) {
+		mcp = mcpL[ch][ns];
+		if (mcp == (void *) -1) {	/* reset MCPs not used (mcp == NULL) */
+		    continue;			/* no MCP23017 at this address */
 		}
-		for (ns = 0; ns < 8; ns++) {
-		    mcp = mcpL[ch][ns];
-		    if (mcp == (void *) -1) {	/* reset MCPs not used (mcp == NULL) */
-			continue;		/* no MCP23017 at this address */
-		    }
-		    fd = i2cFdA[ch];
-		    assert(fd > 0);
-		    if (iC_debug & 0200) fprintf(iC_outFP, "### Reset              MCP %s 0x%02x\n", getI2cDevice(ch), ns+0x20);
-		    if (setupMCP23017(fd, data, ns+0x20, IOCON_ODR, 0x00, 0x00, 0x00, 0x00) < 0) {
-			assert(0);		/* cannot reset previously detected MCP ?? */
-		    }
-		}
-	    }
-	    if (concFd > 0) {			/* concentrator MCP */
-		if (iC_debug & 0200) fprintf(iC_outFP, "### Reset concentrator MCP %s 0x%02x\n", getI2cDevice(concCh), CONCDEV);
-		if (setupMCP23017(concFd, data, CONCDEV, IOCON_ODR, 0x00, 0x00, 0x00, 0x00) < 0) {
+		fd = i2cFdA[ch];
+		assert(fd > 0);
+		if (iC_debug & 0200) fprintf(iC_outFP, "### Reset              MCP %s 0x%02x\n", getI2cDevice(ch), ns+0x20);
+		if (setupMCP23017(fd, data, ns+0x20, IOCON_ODR, 0x00, 0x00, 0x00, 0x00) < 0) {
 		    assert(0);			/* cannot reset previously detected MCP ?? */
 		}
 	    }
-	    /********************************************************************
-	     *  Close selected i2cdev devices
-	     *******************************************************************/
-	    for (ch = 0; ch < 10; ch++) {	/* scan all I2C channels */
-		if (i2cFdA[ch] > 0) {
-		    close(i2cFdA[ch]);		/* close connection to I2C channels*/
-		}
-	    }
-	    /********************************************************************
-	     *  Close GPIO 27 INTA value
-	     *  free up the sysfs for gpio 27 unless used by another program (SIGUSR2)
-	     *******************************************************************/
-	    if (gpio27FN > 0) {
-		close(gpio27FN);			/* close connection to /sys/class/gpio/gpio27/value */
-		if (iC_debug & 0200) fprintf(iC_outFP, "### Unexport GPIO 27\n");
-		if (sig != SIGUSR2 && gpio_unexport(27) != 0) {
-		    sig = SIGUSR1;			/* unable to unexport gpio 27 */
-		}
+	}
+	if (concFd > 0) {			/* concentrator MCP */
+	    if (iC_debug & 0200) fprintf(iC_outFP, "### Reset concentrator MCP %s 0x%02x\n", getI2cDevice(concCh), CONCDEV);
+	    if (setupMCP23017(concFd, data, CONCDEV, IOCON_ODR, 0x00, 0x00, 0x00, 0x00) < 0) {
+		assert(0);			/* cannot reset previously detected MCP ?? */
 	    }
 	}
-	free(tmpBuf.b);			/* tmpBuf.b may be NULL - OK */
-	free(cmdBuf.b);			/* tmpBuf.b may be NULL - OK */
 	/********************************************************************
-	 *  Open and lock the auxiliary file ~/.iC/gpios.used again
-	 *  Other apps may have set used bits since this app was started
+	 *  Close selected i2cdev devices
 	 *******************************************************************/
-	if ((gpiosp = openLockGpios(0)) == NULL) {
-	    fprintf(iC_errFP, "ERROR: %s: in openLockGpios()\n",
-		iC_progname);
-	    return (SIGUSR1);		/* error quit */
+	for (ch = 0; ch < 10; ch++) {		/* scan all I2C channels */
+	    if (i2cFdA[ch] > 0) {
+		close(i2cFdA[ch]);		/* close connection to I2C channels*/
+	    }
 	}
-	gpiosp->u.used &= ~ownUsed;		/* clear all bits for GPIOs and A/D channels used in this app */
-	if (writeUnlockCloseGpios() < 0) {	/* unlink (remove) ~/.iC/gpios.used if gpios->u.used and oops is 0 */
-	    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
-		iC_progname);
-	    return (SIGUSR1);		/* error quit */
+#if RASPBERRYPI < 5010	/* sysfs */
+	/********************************************************************
+	 *  Close GPIO 27 INTA value
+	 *  free up the sysfs for gpio 27 unless used by another program (SIGUSR2)
+	 *******************************************************************/
+	if (gpio27FN > 0) {
+	    close(gpio27FN);			/* close connection to /sys/class/gpio/gpio27/value */
+	    if (iC_debug & 0200) fprintf(iC_outFP, "### Unexport GPIO 27\n");
+	    if (sig != SIGUSR2 && gpio_unexport(27) != 0) {
+		sig = SIGUSR1;			/* unable to unexport gpio 27 */
+	    }
 	}
-	if (iC_debug & 0200) fprintf(iC_outFP, "=== End Unexport GPIOs and close MCP23017s ===\n");
-    } /* iC_opt_P */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	close(pins.linereq->fd);
+	close(chipFN);
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    }
+    free(tmpBuf.b);			/* tmpBuf.b may be NULL - OK */
+    free(cmdBuf.b);			/* tmpBuf.b may be NULL - OK */
+    /********************************************************************
+     *  Open and lock the auxiliary file ~/.iC/gpios.used again
+     *  Other apps may have set used bits since this app was started
+     *******************************************************************/
+    if ((gpiosp = openLockGpios(0)) == NULL) {
+	fprintf(iC_errFP, "ERROR: %s: in openLockGpios()\n",
+	    iC_progname);
+	return (SIGUSR1);		/* error quit */
+    }
+    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### %s: openLock, used = 0x%016llx, ownUsed = 0x%016llx\n", iC_progname, gpiosp->u.used, ownUsed);
+    gpiosp->u.used &= ~ownUsed;		/* clear all bits for GPIOs and A/D channels used in this app */
+    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### %s: writeUnlockCloseGpios, used = 0x%016llx\n", iC_progname, gpiosp->u.used);
+    if (writeUnlockCloseGpios() < 0) {	/* unlink (remove) ~/.iC/gpios.used if gpios->u.used and oops is 0 */
+	fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
+	    iC_progname);
+	return (SIGUSR1);		/* error quit */
+    }
+    if (iC_debug & 0200) fprintf(iC_outFP, "=== End Unexport GPIOs and close MCP23017s ===\n");
     return (sig);			/* finally quit */
 } /* termQuit */
 #endif	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */
@@ -2615,16 +2278,12 @@ iCpiI2C - real I2C digital I/O on a Raspberry Pi for the iC environment
 
 =head1 SYNOPSIS
 
- iCpiI2C  [-GBIftmqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+ iCpiI2C  [-BIftmqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
           [ -o <offs>][ -e <equiv>][ -d <deb>]
           [ [~]IXcng[,IXcng,...][,<mask>][-<inst>] ...]
           [ [~]QXcng[,QXcng,...][,<mask>][-<inst>] ...]
           [ [~]IXcng-IXcng[,<mask>][-<inst>] ...]
           [ [~]QXcng-QXcng[,<mask>][-<inst>] ...]
-          [ [~]IXn,<gpio>[,<gpio>,...][-<inst>] ...]
-          [ [~]QXn,<gpio>[,<gpio>,...][-<inst>] ...]
-          [ [~]IXn.<bit>,<gpio>[-<inst>] ...]
-          [ [~]QXn.<bit>,<gpio>[-<inst>] ...]      # at least 1 IEC argument
           [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     -s host IP address of server    (default '127.0.0.1')
     -p port service port of server  (default '8778')
@@ -2636,35 +2295,33 @@ iCpiI2C - real I2C digital I/O on a Raspberry Pi for the iC environment
             both can be used more than once with different variables.
             IEC variables declared by this driver must be before the '='.
             They will be extended with the global instance from -i <inst> if
-             declared unless they have a local instance -0 etc.
-    -G      service GPIO I/O only - block MCP23017s and MCP23017 arguments
-    -B      start iCbox -d to monitor active MCP23017 and/or GPIO I/O
-    -I      invert all MCP23017 and GPIO inputs and outputs
-            MCP23017 and GPIO input circuits are normally hi - 1 and
-            when a switch on the input is pressed it goes lo - 0. Therefore
+             declared unless they have a local instance -0 -1 etc.
+    -B      start iCbox -d to monitor active MCP23017 I/O
+    -I      invert all MCP23017 inputs and outputs
+            MCP23017 and GPIO input circuits are normally hi (1) and
+            when a switch on the input is pressed it goes lo (0). Therefore
             it is appropriate to invert inputs and outputs. When inverted
             a switch pressed on an input generates a 1 for the IEC inputs and
             a 1 on an IEC output turns a LED and relay on, which is natural.
-            An exception is a relay with an inverting driver, whose output
-            must be non-inverting (~ operator inverts bit variables).
-    -W GPIO number used by the w1-gpio kernel module (default 4, maximum 31).
-            When the GPIO with this number is used in this app, iCtherm is
-            permanently blocked to avoid Oops errors in module w1-gpio.
-    -f      force use of all interrupting gpio inputs - in particular
-            force use of gpio 27 - some programs do not unexport correctly.
+            An exception is a relay with an inverting driver, in which case
+            that output must be non-inverting.
+    -f      force use of gpio 27 - some programs do not unexport correctly.
 
                       MCP23017 arguments
           For each MCP23017 connected to a Raspberry Pi two 8 bit registers
-          GPIOA and GPIOB must be configured as either IEC inputs (IXcng) or
-          IEC outputs (IXcng) or both, where cng is a three digit number.
-          For MCP23017 IEC base identifiers the number cng defines the
-          complete address of a particular MCP23017 GPIO register:
+          GPIOA and GPIOB can be configured as either IEC bit inputs or
+          IEC bit outputs. All IEC identifiers IXcng or QXcng defined for
+          this driver must have exactly 3 numerical digits 'cng'.
+    IXcng[,<mask>]     Single IEC input variable with optional mask
+    QXcng[,<mask>]     Single IEC output variable with optional mask
+          For MCP23017 IEC base identifiers, the number 'cng' defines the
+          complete I2C  address of a particular MCP23017 GPIO register:
            c  is the I2C channel 1 to 8 for /dev/i2c-11 to /dev/i2c-18
-              I2C channel 9 or 0 for /dev/i2c-1 or /dev/i2c-0 must be
+              I2C channel. 9 or 0 for /dev/i2c-1 or /dev/i2c-0 must be
               used for I2C electronics without a PCA9548a Mux
            n  is the I2C address 0 to 7 of a particular MCP23017 for the
               address range 0x20 to 0x27 selected with pin A0 to A2
-           g  selects the GPIO register
+           g  selects the I2C GPIO register
               g = 0 2 4 6 or 8 selects GPIOA
               g = 1 3 5 7 or 9 selects GPIOB
               normally only g = 0 and 1 is used for GPIOA and GPIOB,
@@ -2677,9 +2334,9 @@ iCpiI2C - real I2C digital I/O on a Raspberry Pi for the iC environment
           Both registers GPIOA and GPIOB can have input bits and
           output bits, but any input bit cannot also be an output bit
           or vice versa.  Each input or output IEC variable (or list
-          of variables) may be followed by a comma separated number,
-          interpreted as a mask, declaring which bits in the base IEC
-          variable byte are inputs for an input variable or outputs
+          or range of variables) may be followed by a comma separated
+          number, interpreted as a mask, declaring which bits in the base
+          IEC variable byte are inputs for an input variable or outputs
           for an output variable. The mask is best written as a binary
           number eg 0b10001111 for bits 0, 1, 2, 3 and 7.  If no mask
           is supplied the default mask is 0b11111111 - all 8 bits set.
@@ -2688,59 +2345,29 @@ iCpiI2C - real I2C digital I/O on a Raspberry Pi for the iC environment
     IXcng-IXcng[,<mask>]         range of input variables with the same mask
     QXcng-QXcng[,<mask>]         range of output variables with the same mask
          IEC lists and ranges must contain either all inputs or all outputs.
-         The only sensible range is in the digit n for the MCP23017 address.
-
-                      GPIO arguments
-          Any IEC I/Os IXn.y and QXn.y which are to be linked to GPIO
-          inputs or outputs must be named in the argument list. The
-          number n in the IEC must be one or at most two digits to
-          differentiate GPIO IEC's from three digit MCP23017 IEC's.
-    IXn,<gpio>[,<gpio>,...]
-    QXn,<gpio>[,<gpio>,...]
-          Associate the bits of a particular input or output IEC
-          with a list of gpio numbers.  Up to 8 gpio numbers can
-          be given in a comma separated list. The first gpio number
-          will be associated with bit 0, the second with bit 1 etc
-          and the eighth with bit 7. If the list is shorter than
-          8 the trailing bits are not used. The letter 'd' can be
-          used in the list instead of a gpio number to mark that bit
-          as unused.  eg. IX3,17,18,19,20,d,d,21 associates IX3.0 to
-          IX3.3 with GPIO 17 to GPIO 20 and IX3.6 with GPIO 21.
-          Alternatively:
-    IXn.<bit>,<gpio>
-    QXn.<bit>,<gpio>
-          Each input or output <bit> 0 to 7 is associated with one
-          gpio nunber eg. IX3.0,17 QX3.7,18
-
-                      COMMON extensions
-    ~IEC  Each leading IEC of a list or range may be preceded by a
-          tilde '~', which inverts all IEC inputs or outputs of a
-          list or range.  If all IEC inputs and outputs are already
+         The only allowd range is in the digit 'n' for the MCP23017 address.
+    ~IEC  Each single IEC or leading IEC of a list or range may be preceded by
+          a tilde '~', which inverts all IEC inputs or outputs of the single
+          IEC, list or range.  If all IEC inputs and outputs are already
           inverted with -I, then ~ inverts them again, which makes them
-          non-inverted. Individual bits for one IEC can be inverted
-          or left normal for GPIO IEC's by declaring the IEC more than
-          once with non-overlapping gpio bit lists or single bits. Also
-          possible for MCP23017 I/O with two non overlapping masks -
-          one inverting, the other non-inverting.
-    IEC-inst Each individual IEC or range can be followed by -<inst>,
-          where <inst> consists of 1 to 3 numeric digits.
+          non-inverted. Individual bits for a single IEC, list or range can
+          be inverted or left normal for MCP IEC's by declaring the IEC more
+          than once with non-overlapping gpio bit lists or single bits
+          defined by appropriate masks.
+    IEC-inst Each single IEC, list or or range can be followed by
+          -<inst>, where <inst> consists of 1 to %d numeric digits.
           Such an appended instance code takes precedence over the
           general instance specified with the -i <inst> option above.
+    For a full Description and Technical Background of the MCP23017 I2C
+    and GPIO driver software see the iCpiI2C man page
 
                       CAVEAT
-    There must be at least 1 MCP23017 or GPIO IEC argument. No IEC
-    arguments are generated automatically for iCpiI2C.
-    Only one instance of iCpiI2C or an app with real IEC parameters
-    like iCpiFace may be run on one RPi and all GPIOs and MCP23017s
-    must be controlled by this one instance. If two instances were
-    running, the common interrupts would clash. Also no other program
-    controlling GPIOs and MCP23017s like 'MCP23017 Digital Emulator'
-    may be run at the same time as this application.  An exception
-    is iCpiPWM which controls GPIOs by DMA and not by interrupts.
-    Another exception is iCtherm which controls GPIO 4 by the 1Wire
-    interface.  Care is taken that any GPIOs or MCP23017s used in one
-    app, iCpiI2C, iCpiPWM or even iCtherm do not clash with another
-    app (using ~/.iC/gpios.used).
+    There must be at least 1 MCP23017 IEC argument. No IEC arguments are
+    generated automatically for iCpiI2C.
+   Care is taken that any GPIOs, MCP23S17's or MCP23017s used in one
+    app, iCpiGPIO, iCpiFace, iCpiI2C, iCpiPWM or even iCtherm do not
+    clash with another app (using ~/.iC/gpios.used). iCpiI2C uses
+    GPIO 2 (SDA) GPIO 3 (SCL) and GPIO 27.
 
                       DEBUG options
     -t      trace arguments and activity (equivalent to -d130)
@@ -2769,19 +2396,13 @@ iCpiI2C - real I2C digital I/O on a Raspberry Pi for the iC environment
 B<iCpiI2C> is an I/O client for iCserver in the immediate C environment
 of a Raspberry Pi handling real 16 bit inputs and/or 16 bit outputs for
 each MCP23017 controller attached to a Raspberry Pi via 8 multiplexed
-I2C busses, or from a number of direct GPIO pins on the Raspberry Pi
-or both.
+I2C busses.
 
-A maximum of 127 MCP23017 controllers can be handled altogether.
+A maximum of 63 MCP23017 controllers can be handled altogether.
 8 MCP23017 controllers per multiplexed I2C channel /dev/i2c-11 to
 /dev/i2c-17 and 7 MCP23017 controllers for channel /dev/i2c-18.
 Each MCP23017 can have 16 I/Os in two 8 bit registers A and B.
 Each I/O can be either an input or an output or not used at all.
-
-All GPIO pins on a Raspberry Pi A, B, B+, 3B+ or 4 may be selected
-as either input bits or output bits independent of whether MCP23017s
-are present or not, except GPIO 2, 3 and 27 if MCP23017s are also
-processed.  All MCP23017 and GPIO inputs are handled by interrupts.
 
 =head1 TECHNICAL BACKGROUND
 
@@ -2796,8 +2417,7 @@ https://github.com/GeVanCo/WiringPi/blob/master/wiringPi/mcp23017.c
 
 B<iCpiI2C> handles real 16 bit inputs and/or 16 bit outputs for each
 MCP23017 controller attached to a Raspberry Pi via 8 multiplexed I2C
-busses of a PCA9548A I2C Switch, or from a number of direct GPIO pins
-on the Raspberry Pi or both.
+busses of a PCA9548A I2C Switch.
 
 To enable the PCA9548A I2C Mux/Switch in the Linux kernel, enable I2C
 in "Interface Options" in "raspi-config" and also add the following
@@ -2818,7 +2438,7 @@ bit I/O can be either an input or an output or not used at all.
 
 If no PCA9548A I2C Mux/Switch is used, a maximum of 7 MCP23017
 controllers can be handled on /dev/i2c-1 for a newer Raspberry Pi
-or on /dev/i2c-0 for a very old Raspberry Pi. 
+or on /dev/i2c-0 for a very old Raspberry Pi.
 
 To concentrate the interrupts from INTA and INTB of all 8 groups
 of MCP23017 controllers an extra MCP23017 is used at address 0x27
@@ -2826,64 +2446,11 @@ of /dev/i2c-18 (or /dev/i2c-1 or /dev/i2c-0 without mux).
 The INTA and INTB output of this MCP are mirrored and are connected
 to GPIO 27 for interrupt handling.
 
-All GPIO pins on a Raspberry Pi A, B, B+, 3B+ or 4 may be selected
-as either input bits or output bits independent of whether MCP23017s
-are present or not, except GPIO 2, 3 and 27 if MCP23017s are also
-processed. All MCP23017 and GPIO inputs are handled by interrupts.
-
-If no MCP23017 controllers are found or if the program is called
-with the -G option, only Raspberry Pi GPIO pins will be handled.
-
 This program was forked from the immediate C driver iCpiFace.c
 which uses the SPI interface, which can control up to 8 MCP23S17
 devices as used in the PiFace expansion board. Since the MCP23S17
 is very similar to the MCP23017, it was appropriate to base the
 new driver on the previous code.
-
-The direct GPIO connections on the Raspberry Pi:
-
- 0) The Raspberry Pi A or B brings out 17 GPIO signals on a 26 pin
-    connecteor, 5 of which double up to do the I2C interface, 2 for
-    a UART, leaving 10 for general purpose input/output (there are
-    4 more on a 2nd connector, which is not normally fitted). The
-    Raspberry Pi B+ brings out 9 more GPIO signals on its 40 pin
-    connector making a total of 19 free GPIO pins.  The Linux "sysfs"
-    can access the value of these GPIO pins from user space and more
-    importantly can generate interrupts from them.
-
-    All GPIO pin I/O is handled by the Linux "sysfs" and its interrupts.
-
-    For details see:
-    http://www.auctoris.co.uk/2012/07/19/gpio-with-sysfs-on-a-raspberry-pi/
-
-    The "sysfs" export, unexport, direction, edge and value commands
-    can be run by normal (non root) users if they belong to group gpio.
-    To achieve this the true path that the link /sys/class/gpio/gpio*
-    points to must be adjusted to root:gpio by a system script.
-    The path in the kernel and the matching udev script has changed a
-    number of times between 2012 and 2015 causing much confusion.
-
-    The following change works for me as of December 2015
-    https://github.com/raspberrypi/linux/issues/1117
-
-    popcornmix commented on Aug 25 2015
-    Looks like something may have changed in the later kernel where
-    /sys/devices/soc/*.gpio/gpio is now /sys/devices/platform/soc/*.gpio/gpio
-    Can you try editing:
-    /lib/udev/rules.d/60-python-pifacecommon.rules and
-    /lib/udev/rules.d/60-python3-pifacecommon.rules (if they both exist) to be:
-
- KERNEL=="i2cdev*", GROUP="i2c", MODE="0660"
- SUBSYSTEM=="gpio*", PROGRAM="/bin/sh -c 'chown -R root:gpio /sys/class/gpio &&\
- chmod -R 770 /sys/class/gpio; chown -R root:gpio /sys/devices/virtual/gpio &&\
- chmod -R 770 /sys/devices/virtual/gpio;\
- chown -R root:gpio /sys/devices/platform/soc/*.gpio/gpio &&\
- chmod -R 770 /sys/devices/platform/soc/*.gpio/gpio'"
-
-    Another complication is, that after a "sysfs" export, the first access
-    to the direction (or any other) register takes about 200 ms. I have
-    taken care of this by retrying  every 50 ms for a max of 2.5 seconds
-    before giving up. (Discussed in a number of forums).
 
 The I/O connections on any MCP23017 board are controlled from the
 Raspberry Pi via three different paths:
@@ -2922,11 +2489,11 @@ Raspberry Pi via three different paths:
     INTB bus of te same I2C channel is connected to bit 0 of Port B. In
     a similar fashion all the INTA busses and INTB buses are connected
     to bits 1 to 7 of their respective Port on the concentrator. The
-    concentrator MCP is configured to set INTA and INTB (which are
-    mirrored) LOW when any bit on one of its inputs goes LOW. Since
-    these inputs are the interrupts from each of the I2C channels
-    the INTA from the concentrator going LOW signals an input change
-    in one of the 63 possible data MCPs. INTA from the concentrator
+    concentrator MCP is configured to set INTA (mirrored with INTB)
+    LOW when any bit on one of its inputs goes LOW. Since these inputs
+    are the interrupts from any of the I2C channels, the INTA from the
+    concentrator going LOW signals an input change in one of the 126
+    ports of the 63 possible data MCPs.  INTA from the concentrator
     is connected to GPIO 27, which is configured to interrupt the
     Raspberry Pi as described below.
 
@@ -2957,22 +2524,36 @@ Raspberry Pi via three different paths:
     it is still low, the scan is repeated until it goes high, which
     makes GPIO 27 ready for the next falling edge interrupt.
 
- 3) GPIO 27 (the interrupt from the MCP23017 inputs) is exported with
+ 3a) When compiling and running iCpiI2C on systems with kernel < 5.10
+     "sysfs" is used, which has been the kernel GPIO support program
+     for more than 20 years, but which is now deprecated and no longer
+     supported.
+    GPIO 27 (the interrupt from the MCP23017 inputs) is exported with
     "sysfs" in the MCP23017 driver and set to interrupt on its falling
     edge. The interrupt is out-of-band, so if select(2) is used,
-    the third exception file descriptor set must be used. select is
+    the third exception file descriptor set must be used. 'select' is
     generally used in the iC system, rather than poll(2), because
-    select handles timeouts correctly when interrupted.
+    'select' handles timeouts correctly when interrupted.
 
- NOTE: only one instance of iCpiI2C may be run and all MCP23017s as
- well as extra GPIO's must be controlled by this one instance. If two
- instances were running, the common interrupts would clash.  If GPIO 27
- has already been exported by another program or by another instance
- of iCpiI2C the program exits with an error message, since GPIO 27
- cannot be used by more than one program simultaneously.  Some programs
- (MCP23S17 Digital Emulator) do not unexport GPIOs when they close. The
- -f command line option can be used to force use of GPIO 2, 3 and 27
- if you are sure there is no running program actually using those GPIOs.
+ 3b) When compiling and running iCpiI2C on systems with kernel >= 5.10
+     the new kernel interface "GPIO Character Device Userspace API V2"
+     is used.
+    GPIO 27 (the interrupt from the MCP23017 inputs) is configured to
+    interrupt on its falling edge. (In v2 ioctl ABI terminology it is
+    configured ACTIVE_LOW and interrupt on EDGE_RISING, which means
+    interrupt on state going from non-active to active - which is low).
+    'select' is used again rather than 'poll' for the reasons stated
+    in 3a.
+
+ NOTE: only one instance of iCpiI2C may be run and all MCP23017s must
+ be controlled by this one instance. If two instances were running,
+ the common interrupts would clash.  If GPIO 27 has already been
+ exported by another program or by another instance of iCpiI2C the
+ program exits with an error message, since GPIO 27 cannot be used by
+ more than one program simultaneously.  Some programs (MCP23S17 Digital
+ Emulator) do not unexport GPIOs when they close. The -f command line
+ option can be used to force use of GPIO 2, 3 and 27 if you are sure
+ there is no running program actually using those GPIOs.
 
 =head1 AUTHOR
 

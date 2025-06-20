@@ -1,6 +1,6 @@
 /********************************************************************
  *
- *	Copyright (C) 2015  John E. Wulff
+ *	Copyright (C) 2014 - 2025  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -9,46 +9,47 @@
  *  to contact the author, see the README file
  *
  *	iCpiFace
- *	iCpiGPIO	(alternative name soft linked to the above)
  *
  *	I/O client for iCserver in the immediate C environment of a
  *	Raspberry Pi handling real 8 bit inputs and 8 bit outputs
- *	for each PiFace controllers attached to a Raspberry Pi
- *	or from a number of direct GPIO pins on the Raspberry Pi
- *	or both.  It also handles 8 bits of push button input and
- *	control of an LCD Text panel for a PiFaceCAD.
- *
- *	All GPIO pins on a Raspberry Pi A, B or B+ may be selected as
- *	either input bits or output bits independent of whether PiFaces
- *	are present or not, except GPIO 25 if PiFaces are also processed.
- *	All GPIO inputs are handled by interrupts.
- *
- *	If no PiFace controllers are found or if the program is called
- *	with the name iCpiGPIO, only GPIO pins will be handled.
+ *	for each PiFace controllers attached to a Raspberry Pi.  It
+ *	also handles 8 bits of push button input and control of an
+ *	LCD Text panel for a PiFaceCAD.
  *
  *	A maximum of 8 PiFace controllers can be handled altogether
  *	- either one plugged directly into a Raspberry Pi
  *	- or 4 on one PiRack - 7 on 2 PiRacks - 8 require 3 PiRacks
  *
+ *	Alternatively up to 8 'Piface Relay+' boards, optionally
+ *	extended with 'PiFace Relay extra' cards are supported.
+ *	These are compatible with Rapberry Pi's B+ and higher, which
+ *	have the 40 pin extender. They plug as top hat's onto the
+ *	40 pin extender, which is provided on the 'Piface Relay+'
+ *	for plugging in more 'Piface Relay+' boards.
+ *
+ *	Another option is the 'PiFace Digital 2' board, which does
+ *	not have pins for plugging in more boards.
+ *
  *	One of the PiFaces (at address 4) can be a PiFaceCAD, which
  *	has 8 button inputs and a 2 line x 16 character LCD display
  *
- *	Similar I/O operations for both PiFaces and Raspberry Pi GPIOs
- *	can be obtained by linking the driver directly to an iC app,
- *	in which case these I/O operations are not handled by iCserver.
- *
  *******************************************************************/
 
+#if !defined(RASPBERRYPI) || !defined(TCP) || defined(_WINDOWS)
+#error - must be compiled with RASPBERRYPI and TCP defined and not _WINDOWS
+#else	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */
+
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+#include	<linux/gpio.h>
+#include	<sys/ioctl.h>
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 #include	<signal.h>
 #include	<ctype.h>
 #include	<assert.h>
 #include	<errno.h>
 #include	<sys/stat.h>
+#include	<unistd.h>
 #include	<fcntl.h>
-
-#if !defined(RASPBERRYPI) || !defined(TCP) || defined(_WINDOWS)
-#error - must be compiled with RASPBERRYPI and TCP defined and not _WINDOWS
-#else	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */
 
 #include	"tcpc.h"
 #include	"icc.h"			/* declares iC_emalloc() in misc.c */
@@ -60,18 +61,14 @@
 
 /********************************************************************
  *
- *  Select either a piFaceIO iC_pfL[un] with a small int un as index
- *  Alternativeley select a gpioIO element with the pointer gep
+ *  Select a piFaceIO iC_pfL[un] with a small int un as index
  *
  *******************************************************************/
 
-typedef union	chS {
-    int		un		/* always < 8 for PiFace, > 8 if gpioIO* for GPIO */;
-    gpioIO *	gep;
-} chS;
-
 static fd_set		infds;			/* initialised file descriptor set for normal iC_wait_for_next_event() */
+#if RASPBERRYPI < 5010	/* sysfs */
 static fd_set		ixfds;			/* initialised extra descriptor set for normal iC_wait_for_next_event() */
+#endif	/* RASPBERRYPI < 5010 - sysfs */
 static struct timeval	toCini = { 0,  50000 };	/* 50 ms select() timeout - initial value */
 static struct timeval	toC750 = { 0, 750000 };	/* 750 ms select() timeout - re-iniialising value */
 static struct timeval	toCnt  = { 0,  50000 };	/* 50 ms select() timeout */
@@ -84,110 +81,61 @@ static const char *	usage =
 "Usage:\n"
 " %s [-GBIftmqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]\n"
 "          [ -d <deb>]\n"
-"          [ [~]Xn[-Xm|+[<mask>]][:<pfa>][-<inst>] ...]\n"
-"          [ [~]IXn[-IXm|+[<mask>]][:<pfa>][-<inst>] ...]\n"
-"          [ [~]QXn[-QXm|+[<mask>]][:<pfa>][-<inst>] ...]\n"
-"          [ [~]IXn,<gpio>[,<gpio>,...][-<inst>] ...]\n"
-"          [ [~]QXn,<gpio>[,<gpio>,...][-<inst>] ...]\n"
-"          [ [~]IXn.<bit>,<gpio>[-<inst>] ...]\n"
-"          [ [~]QXn.<bit>,<gpio>[-<inst>] ...]      # at least 1 IEC argument\n"
+"          [ [~]Xn[-Xm]:<pfa>[-<inst>] ...]\n"
+"          [ [~]IXn[-IXm][+[<mask>]]:<pfa>[-<inst>] ...]\n"
+"          [ [~]QXn[-QXm][+[<mask>]]:<pfa>[-<inst>] ...]\n"
 "          [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments\n"
 "    -s host IP address of server    (default '%s')\n"
 "    -p port service port of server  (default '%s')\n"
 "    -i inst instance of this client (default '') or 1 to %d digits\n"
-"    -G      service GPIO I/O only - block PiFaces and PiFace arguments\n"
 "            calling with alternate name \"iCpiGPIO\" has the same effect\n"
-"    -B      start iCbox -d to monitor active PiFace and/or GPIO I/O\n"
-"            A 1 to PiFace and GPIO outputs generates hi - LED and relay off\n"
-"            A 0 to PiFace and GPIO outputs generates lo - LED and relay on\n"
-"    -I      invert all PiFace and GPIO inputs and outputs\n"
-"            PiFace and GPIO input circuits are normally hi - 1 and\n"
+"    -B      start iCbox -d to monitor active PiFace I/O\n"
+"            A 1 to PiFace outputs generates hi - LED and relay off\n"
+"            A 0 to PiFace outputs generates lo - LED and relay on\n"
+"    -I      invert all PiFace inputs and outputs\n"
+"            PiFace input circuits are normally hi - 1 and\n"
 "            when a switch on the input is pressed it goes lo - 0. Therefore\n"
 "            it is appropriate to invert inputs and outputs. When inverted\n"
 "            a switch pressed on an input generates a 1 for the IEC inputs and\n"
 "            a 1 on an IEC output turns a LED and relay on, which is natural.\n"
 "    NOTE: the supplied PiFace driver inverts outputs but not inputs - go figure\n"
-"    -W GPIO number used by the w1-gpio kernel module (default 4, maximum 31).\n"
-"            When the GPIO with this number is used in this app, iCtherm is\n"
-"            permanently blocked to avoid Oops errors in module w1-gpio.\n"
-"    -f      force use of all interrupting gpio inputs - in particular\n"
-"            force use of gpio 25 - some programs do not unexport correctly.\n"
+"    -f      force use of gpio 25 - some programs do not unexport correctly.\n"
 "\n"
 "                      PIFACE arguments\n"
 "          For each PiFace or PiFaceCAD connected to a Raspberry Pi\n"
 "          8 bits of digital input and 8 bits of digital output with\n"
 "          known IEC variables are generated.\n"
-"    Xn[-Xm]\n"
-"    IXn[-IXm]\n"
-"    QXn[-QXm]\n"
+"    Xn[-Xm]:<pfa>\n"
+"    IXn[-IXm]:<pfa>\n"
+"    QXn[-QXm]:<pfa>\n"
 "          The argument Xn can optionally be preceded by either I for\n"
 "          inputs or Q for outputs. The IEC-1131 IEC's generated are\n"
 "          followed by a bit selector in the range .0 to .7.\n"
-"          For the list X1 X2 IX8 QX9 the following is generated:\n"
+"          For the list X1:0 X2:1 IX8:2 QX9:2 the following is generated:\n"
 "            inputs IX1.0 - .7 and outputs QX1.0 - .7 for PiFace unit 0\n"
 "            inputs IX2.0 - .7 and outputs QX2.0 - .7 for PiFace unit 1\n"
 "            inputs IX8.0 - .7 and outputs QX9.0 - .7 for PiFace unit 2\n"
 "          A range of IEC's can be specified with X0-X3, IX4-IX6 or QX7-QX9\n"
+"	   A PiFace unit address ':pfa' must be provided for an individual\n"
+"	   IEC or for the first IEC of a range.  A PiFace with that unit\n"
+"	   address must be available.\n"
 "          Actual PiFace unit addresses in the range 0 - 7 are selected by\n"
 "          jumpers JP1 and JP2 as well as CE0/CE1 (JP1 - JP8 on the PiRack).\n"
-"            The program scans which addresses are present and associates\n"
-"          them with unit numbers in ascending PiFace address order.\n"
-"          Normally IEC addresses will be chosen to coincide with PiFace\n"
-"          unit numbers, but this is not mandatory. What is mandatory is that\n"
-"          there are enough PiFaces to cover all the IEC's in the arguments.\n"
-"    Xn[-Xm]:<pfa>\n"
-"    IXn[-IXm]:<pfa>\n"
-"    QXn[-QXm]:<pfa>\n"
-"          Associate a particular IEC or IEC range with a specific PiFace\n"
-"          unit address or address range. <pfa> must be one of numbers 0 - 7\n"
-"          and a PiFace with that unit address must be available.\n"
-"            By choosing X1-X3:1 for 3 PiFaces, the IEC numbers will\n"
-"          be the same as the PiFace addresses which are 1 to 3. This\n"
-"          would be good programming practice. On the other hand there\n"
-"          are good reasons to choose different IEC arguments to fit in with\n"
-"          the iC application code and other I/O's.\n"
-"    D ID QD may be used as dummy IEC's instead of Xn IXn QXn to exclude a\n"
-"          PiFace unit or an individual PiFace input or output.\n"
 "\n"
 "                      PIFACE GPIOB+ extra arguments\n"
-"    QXn+  The whole GPIOB register is a 2nd output rather than an input\n"
-"    QXn+<mask>  Only the masked bits of GPIOB register are output bits\n"
-"    IXn+        The whole GPIOB register is an input (same as IXn)\n"
-"    IXn+<mask>  Only the masked bits of GPIOB register are input bits\n"
+"    QXn+:<pfa>  The whole GPIOB register is a 2nd output rather than an input\n"
+"    QXn+<mask>:<pfa>  Only the masked bits of GPIOB register are output bits\n"
+"    IXn+:<pfa>        The whole GPIOB register is an input (same as IXn)\n"
+"    IXn+<mask>:<pfa>  Only the masked bits of GPIOB register are input bits\n"
 "          <mask> for bits 0 - 3 may be expressed as 0b1111, 0xf, 017 or 15\n"
 "          The masks for output and input may not both contain the same bit\n"
-"    QXn+:<pfa> etc Associate a particular IEC+ with a specific PiFace address\n"
-"          GPIOB+ selections cannot be part of a range.\n"
 "\n"
-"                      GPIO arguments (same as for iCpiI2C)\n"
-"          Any IEC I/Os IXn.y and QXn.y which are to be linked to GPIO\n"
-"          inputs or outputs must be named in the argument list as follows:\n"
-"    IXn,<gpio>[,<gpio>,...]\n"
-"    QXn,<gpio>[,<gpio>,...]\n"
-"          Associate the bits of a particular input or output IEC\n"
-"          with a list of gpio numbers.  Up to 8 gpio numbers can\n"
-"          be given in a comma separated list. The first gpio number\n"
-"          will be aassociated with bit 0, the second with bit 1 etc\n"
-"          and the eighth with bit 7. If the list is shorter than\n"
-"          8 the trailing bits are not used. The letter 'd' can be\n"
-"          used in the list instead of a gpio number to mark that bit\n"
-"          as unused.  eg. IX3,17,18,19,20,d,d,21 associates IX3.0 to\n"
-"          IX3.3 with GPIO17 to GPIO20 and IX3.6 with GPIO21.\n"
-"          Alternatively:\n"
-"    IXn.<bit>,<gpio>\n"
-"    QXn.<bit>,<gpio>\n"
-"          Each input or output <bit> 0 to 7 is associated with one\n"
-"          gpio nunber eg. IX3.0,17 QX3.7,18\n"
-"\n"
-"                      COMMON extensions\n"
+"                      Common arguments\n"
 "    ~IEC  Each lone IEC or leading IEC of a range may be preceded by a\n"
 "          tilde '~', which inverts lone IEC inputs or outputs or all\n"
 "          members of a range.  If all IEC inputs and outputs are already\n"
 "          inverted with -I, then ~ inverts them again, which makes them\n"
-"          non-inverted. Individual bits for one IEC can be inverted\n"
-"          or left normal for GPIO IEC's by declaring the IEC more than\n"
-"          once with non-overlapping gpio bit lists or single bits.\n"
-"          (Not possible for PiFaces).\n"
+"          non-inverted.\n"
 "    IEC-inst Each individual IEC or range can be followed by -<inst>,\n"
 "          where <inst> consists of 1 to %d numeric digits.\n"
 "          Such an appended instance code takes precedence over the\n"
@@ -196,17 +144,11 @@ static const char *	usage =
 "    driver software see the %s man page\n"
 "\n"
 "                      CAVEAT\n"
-"    There must be at least 1 PiFace or GPIO IEC argument. No IEC\n"
-"    arguments are generated automatically for %s.\n"
-"    Only one instance of %s or an app with IEC parameters may be run\n"
-"    and all GPIOs, PiFaces and an optional PiFaceCAD must be controlled by\n"
-"    this one instance. If two instances were running, the common interrupts\n"
-"    would clash. Also no other program controlling GPIOs and PiFaces like\n"
-"    'PiFace Digital Emulator' may be run at the same time as this application.\n"
-"    An exception is iCpiPWM which controls GPIOs by DMA and not by interrupts.\n"
-"    Another exception is iCtherm which controls GPIO 4 by the 1Wire interface.\n"
-"    Care is taken that any GPIOs or PiFaces used in one app, %s, iCpiPWM\n"
-"    or even iCtherm do not clash with another app (using ~/.iC/gpios.used).\n"
+"    There must be at least 1 MCP23017 IEC argument. No IEC arguments are\n"
+"    generated automatically for iC[iI2C.\n"
+"   Care is taken that any GPIOs, MCP23S17's or MCP23017s used in one\n"
+"    app, iCpiGPIO, iCpiFace, iCpiI2C, iCpiPWM or even iCtherm do not"
+"    clash with another app (using ~/.iC/gpios.used).\n"
 "\n"
 "                      DEBUG options\n"
 #if YYDEBUG && !defined(_WINDOWS)
@@ -242,8 +184,8 @@ static const char *	usage =
 "    -R <app ...> run auxiliary app followed by -z and its arguments\n"
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
-"Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.19 $\n"
+"Copyright (C) 2014-2025 John E. Wulff     <immediateC@gmail.com>\n"
+"Version	$Id: iCpiFace.c 1.20 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -276,8 +218,8 @@ static unsigned short	topChannel = 0;
 static char	buffer[BS];
 static char	SR[] = "RSR";		/* generates RQ for iq 0, SI for iq 1, RQ for iq 2 */
 static char	IQ[] = "QIQ";
-static short	errorFlag = 0;
-static chS *	Units = NULL;		/* dynamic array to store PiFace unit numbers indexed by channel or GPIOl */
+static __u64	errorFlag = 0LL;
+static int *	Units = NULL;		/* dynamic array to store PiFace unit numbers indexed by channel */
 static int	ioUnits = 0;		/* dynamically allocated size of Units[] */
 static long long ownUsed = 0LL;
 char		iC_stdinBuf[REPLY];	/* store a line of STDIN - used by PiFaceCAD input */
@@ -285,11 +227,68 @@ static long	convert_nr(const char * str, char ** endptr);
 static int	termQuit(int sig);		/* clear and unexport RASPBERRYPI stuff */
 int		(*iC_term)(int) = &termQuit;	/* function pointer to clear and unexport RASPBERRYPI stuff */
 
-static void	storeUnit(unsigned short channel, chS s);
-static void	writeGPIO(gpioIO * gep, unsigned short channel, int val);
+static void	storeUnit(unsigned short channel, int s);
 
 FILE *		iC_outFP;		/* listing file pointer */
 FILE *		iC_errFP;		/* error file pointer */
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+
+typedef struct {
+    struct gpio_v2_line_config *	linecfg;
+    struct gpio_v2_line_request *	linereq;
+    struct gpio_v2_line_values *	linevals;
+    int					fd;
+} gpio_v2_t;
+/********************************************************************
+ * gpio_v2 line config, line request and line values,
+ *******************************************************************/
+static struct gpio_v2_line_config linecfg = {		/* default line is not available for request */
+		GPIO_V2_LINE_FLAG_USED
+};
+static struct gpio_v2_line_request linereq = {
+    .offsets = {0}
+};
+static struct gpio_v2_line_values linevals = {
+    .bits = 0,
+    .mask = 0
+};
+static int		idx;
+static __u64		maskBit;
+#define GPIOCHIP "/dev/gpiochip0"	/* gpiochipX (0-4) depending on Pi model */
+/********************************************************************
+ * pins is a convenience struct of gpio_v2 config structs to which
+* a pointer can be provided as the parameter for the various functions.
+ *******************************************************************/
+static gpio_v2_t pins =  {
+    .linecfg = &linecfg,
+    .linereq = &linereq,
+    .linevals = &linevals
+};
+/********************************************************************
+ * gpio_v2 attribute and attribute config for flags for out and in pins
+ * active lo (inverted - rising interrupt) read pins will use r25_attr and r25_cfg_attr
+ * active lo (inverted - no interrupt) read pins will use r23_attr and r23_cfg_attr
+ *******************************************************************/
+struct gpio_v2_line_attribute		r25_attr = {
+    .id = GPIO_V2_LINE_ATTR_ID_FLAGS
+};
+struct gpio_v2_line_config_attribute	r25_cfg_attr = {
+    .attr = {0}
+};
+struct gpio_v2_line_attribute		r23_attr = {
+    .id = GPIO_V2_LINE_ATTR_ID_FLAGS
+};
+struct gpio_v2_line_config_attribute	r23_cfg_attr = {
+    .attr = {0}
+};
+
+#define LINEEVENT_BUFFERS	 4	/* kernel buffers 16 line events */
+#define GPIO_LIMIT		 64	/* GPIO numbers are limited 0 - 63 */
+struct gpio_v2_line_event	lineevent[LINEEVENT_BUFFERS];
+static int	gpio_line_cfg_ioctl (gpio_v2_t * gpio);
+static int	gpio_line_get_values (gpio_v2_t * gpio, __u64 mask);
+int		chipFN;
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
 /********************************************************************
  *
@@ -309,7 +308,6 @@ main(
     unsigned short	pff;
     int			len;
     int			value;
-    int			sig;
     int			n;
     int			c;
     int			m;
@@ -346,44 +344,120 @@ main(
     int			iqExtra;
     int			ieStart = 0;
     int			ieEnd   = 0;
-    unsigned short	bit, bitStart, bitEnd;
-    unsigned short	gpio;
-    unsigned short	directFlag;		/* or PF for PiFace, GP for GPIO, DR direct for both */
+    unsigned short	directFlag = 0;	/* or PF for PiFace */
     #define		PF	1
-    #define		GP	2
-    #define		DR	4
     gpioIO *		gep;
-    gpioIO **		gpioLast;
-    unsigned short	gpioSav[8];
-    unsigned short	u;
     int			mask;
     int			b;
-    int			gpioCnt = 0;
     int			invMask;
     int			invFlag;
-    int			gpioTherm;
     char **		argip;
     int			argic;
     long long		gpioMask;
     ProcValidUsed *	gpiosp;
+#if RASPBERRYPI < 5010	/* sysfs */
+    int			sig;
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    unsigned short	gpio;
+    __u64		maskBit25;
+    __u64		maskBit23;
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */
+    iC_maxFN = 0;
 
 #ifdef	EFENCE
     regBuf = iC_emalloc(REQUEST);
     rpyBuf = iC_emalloc(REPLY);
 #endif	/* EFENCE */
     signal(SIGSEGV, iC_quit);			/* catch memory access signal */
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+
+    chipFN = open(GPIOCHIP, O_RDONLY);		/* Open GPIO chip */
+    if (chipFN < 0) {
+	perror ("Failed to open GPIO chip device");
+        return 1;
+    }
+    pins.fd = chipFN;
+    if ((iC_maxFN = chipFN)) {
+	iC_maxFN = chipFN;
+    }
+    idx = 0;				/* index into linereq offsets array */
+    maskBit = 1LL;			/* bit in 64 bit masks displaced by idx */
+    /********************************************************************
+     *  Provide separate attributes for read with and without fallin interrupt
+     *  for read inverted pin GPIO 25 and read inverted pin GPIO 23
+     *******************************************************************/
+
+    r25_attr.id =	GPIO_V2_LINE_ATTR_ID_FLAGS;
+    r25_attr.flags =    GPIO_V2_LINE_FLAG_INPUT         |
+			GPIO_V2_LINE_FLAG_ACTIVE_LOW    |
+			GPIO_V2_LINE_FLAG_EDGE_RISING   |
+			GPIO_V2_LINE_FLAG_BIAS_PULL_UP;
+
+    r23_attr.id =	GPIO_V2_LINE_ATTR_ID_FLAGS;
+    r23_attr.flags =    GPIO_V2_LINE_FLAG_INPUT         |
+			GPIO_V2_LINE_FLAG_ACTIVE_LOW    |
+			GPIO_V2_LINE_FLAG_BIAS_PULL_UP;
 
     /********************************************************************
-     *  By default do not invert PiFace and GPIO inputs as well as GPIO outputs
-     *  By default invert PiFace outputs
-     *  Both are inverted again with -I and '~'
+     *  gpio_v2 attribute config for read inverted pins
+     *******************************************************************/
+    r25_cfg_attr.attr = r25_attr;
+    r23_cfg_attr.attr = r23_attr;
+    /********************************************************************
+     *  gpio 25 configure with direction in and interrupts on rising edge
+     *******************************************************************/
+    gpio = 25;
+    maskBit25 = maskBit;
+    pins.linereq->offsets[idx] = gpio;
+    r25_cfg_attr.mask |= maskBit;		/* inverted input with rising interrupt */
+	if (iC_debug & 0200) fprintf(iC_outFP, "=== End Unexport GPIOs and close PiFaces ===\n");
+    if (iC_debug & 0200) fprintf(iC_outFP,
+	"configure gpio 25 offsets[%d] maskBit = 0x%llx inverted input with rising interrupt\n",
+	idx, maskBit);
+    idx++;
+    maskBit <<= 1;
+    /********************************************************************
+     *  gpio 23 configure with direction in and no interrupts
+     *******************************************************************/
+    gpio = 23;
+    maskBit23 = maskBit;
+    pins.linereq->offsets[idx] = gpio;
+    r23_cfg_attr.mask |= maskBit;		/* inverted input with no interrupt */
+    if (iC_debug & 0200) fprintf(iC_outFP,
+	"configure gpio 23 offsets[%d] maskBit = 0x%llx inverted input with no interrupt\n",
+	idx, maskBit);
+    idx++;
+    maskBit <<= 1;
+    /********************************************************************
+     *  gpio_v2 line lines (pins) configuration
+     *******************************************************************/
+    int i = 0;
+    pins.linecfg->attrs[i++] = r25_cfg_attr;	/* assign read gpio 25 attr to linecfg array */
+    pins.linecfg->attrs[i++] = r23_cfg_attr;	/* assign read gpio23 attr to linecfg array */
+    pins.linecfg->num_attrs = i;		/* for write and read pin and debounce attributes */
+    pins.linereq->num_lines = idx;
+    /********************************************************************
+     *  Set line (pin) configuration
+     *  Generate anonymous file descriptor
+     *******************************************************************/
+    if (gpio_line_cfg_ioctl (&pins) == -1) {
+	return 1;
+    }
+    if (pins.linereq->fd > iC_maxFN) {
+	iC_maxFN = pins.linereq->fd;
+    }
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+
+    /********************************************************************
+     *  By default do not invert PiFace inputs and outputs
+     *  Both are inverted with -I for all inputs and outputs and '~' for
+     *  individual inputs or outputs.
      *******************************************************************/
 
     invMask = invFlag = 0x00;
-    gpioTherm = 4;				/* default GPIO number used by kernel module w1-gpio */
     argip = iC_emalloc(argc * sizeof(char *));	/* temporary array to hold IEC arguments */
     argic = 0;
 
@@ -404,9 +478,6 @@ main(
 	iC_path     = "";		/* default path */
     } else {
 	*iC_progname++ = '\0';		/* path has been stripped and isolated */
-    }
-    if (strcmp(iC_progname, "iCpiGPIO") == 0) {
-	iC_opt_G = 1;			/* block PiFace I/O - same as -G flag */
     }
     iC_iccNM = iC_progname;		/* generate our own name - not 'stdin' from tcpc.c */
 
@@ -440,30 +511,18 @@ main(
 			slen != strspn(*argv, "0123456789")) {
 			fprintf(iC_errFP, "ERROR: %s: '-i %s' is non numeric or longer than %d digits\n",
 			    iC_progname, *argv, INSTSIZE);
-			errorFlag++;
+			errorFlag |= 0x1LL;
 		    } else {
 			iC_iidNM = *argv;
 			iidN = atoi(iC_iidNM);	/* internal instance from command line -i<instance> */
 		    }
 		    goto break2;
-		case 'G':
-		    iC_opt_G = 1;	/* GPIO direct action only - block PiFace IO, even if PiFaces present */
-		    break;
 		case 'B':
 		    iC_opt_B = 1;	/* start iCbox -d to monitor active PiFace and/or GPIO I/O */
 		    break;
 		case 'I':
 		    invMask = 0xff;	/* invert PiFace and GPIO inputs as well as GPIO outputs with -I */
-		    iC_opt_P = 1;	/* do not invert PiFace outputs with -I (inverted a second time) */
 		    break;
-		case 'W':
-		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
-		    gpioTherm = atoi(*argv);
-		    if (gpioTherm > 31) {
-			fprintf(iC_errFP, "ERROR: %s: -W %hu value > 31\n", iC_progname, gpioTherm);
-			goto error;
-		    }
-		    goto break2;
 		case 'f':
 		    forceFlag = 1;	/* force use of GPIO interrupts - in particular GPIO 25 */
 		    break;
@@ -482,7 +541,7 @@ main(
 			df & ~0777) {
 			fprintf(iC_errFP, "ERROR: %s: '-d %s' is not a well formed octal string or exceeds range 777\n",
 			    iC_progname, *argv);
-			errorFlag++;
+			errorFlag |= 0x2LL;
 		    }
 		    iC_debug |= df;	/* short */
 		    goto break2;
@@ -507,7 +566,6 @@ main(
 		    fprintf(iC_errFP, "ERROR: %s: missing value after '%s'\n", iC_progname, ((*--argv)-=2, *argv));
 		case 'h':
 		case '?':
-	      error:
 		    fprintf(iC_errFP, usage, iC_progname, iC_hostNM, iC_portNM,
 			INSTSIZE, INSTSIZE, iC_progname, iC_progname, iC_progname, iC_progname, iC_progname);
 		    exit(-1);
@@ -520,42 +578,41 @@ main(
 	} else {
 	    /********************************************************************
 	     *  Save IEC arguments for later analysis after all options have
-	     *  been determined, in particlar -G, and after Pifaces have
-	     *  been counted. IEC arguments and options may be mixed (except -R).
-	     *  IEC arguments must start with ~ X I Q or D.
+	     *  been determined, and after Pifaces have been counted.
+	     *  IEC arguments and options may be mixed (except -R).
+	     *  IEC arguments must start with ~ X I Q.
 	     *  A special case is the HOME evironment variable, which is generated
 	     *  by the Linux shell for ~. It is converted back to ~ here.
 	     *******************************************************************/
-	    iC_opt_P = 1;	/* using an IEC argument is equivalent to -P option */
-	    if (strspn(*argv, "~IQXD") == 0) {
+	    if (strspn(*argv, "~IQX") == 0) {
 		if (strcmp(*argv, getenv("HOME")) == 0) {
 		    argip[argic++] = "~";	/* transmogrify shell translation of HOME to ~ */
 		    continue;			/* get next command line argument */
 		}
-		fprintf(stderr, "ERROR: %s: invalid argument '%s' (IEC variables start with ~ I Q X or D for dummy)\n", iC_progname, *argv);
-		errorFlag++;
+		fprintf(stderr, "ERROR: %s: invalid argument '%s' (IEC variables start with ~ I Q or X)\n", iC_progname, *argv);
+		errorFlag |= 0x4LL;
 	    }
 	    argip[argic++] = *argv;
 	}
     }
   break3:
     if (iC_debug & 0200) {
-#if RASPBERRYPI < 6006
+#if RASPBERRYPI < 5010	/* sysfs */
 	fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n"
-			  "kernel = %d.%d ( < 6.6... )		use sysfs\n",
+			  "kernel = %d.%d ( < 5.10... )		use sysfs\n",
 			  iC_fullProgname, iC_path, iC_progname, RASPBERRYPI/1000, RASPBERRYPI%1000);
-#else
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n"
-			  "kernel = %d.%d ( >= 6.6...	)	use GPIO Character Device Userspace API (V2)\n",
+			  "kernel = %d.%d ( >= 5.10...	)	use GPIO Character Device Userspace API (V2)\n",
 			  iC_fullProgname, iC_path, iC_progname, RASPBERRYPI/1000, RASPBERRYPI%1000);
-#endif /* RASPBERRYPI < 6006 */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     }
     /********************************************************************
      *  if argc != 0 then -R and argv points to auxialliary app + arguments
      *               do not fork and execute aux app until this app has
      *               connected to iCserver and registered all its I/Os
      *******************************************************************/
-    if (! errorFlag && iC_opt_P) {
+    if (! errorFlag) {
 	/********************************************************************
 	 *  Open or create and lock the auxiliary file ~/.iC/gpios.used,
 	 *  which contains one binary struct ProcValidUsed gpios.
@@ -583,226 +640,257 @@ main(
 	    "Raspberry Pi Board revision = %d (0 = A,A+; 1 = B; 2 = B+,2B)\n"
 	    "valid    = 0x%016llx\n",
 	    gpiosp->proc, gpiosp->valid);
-	if (! iC_opt_G) {
+	/********************************************************************
+	 *  Initialise PiFace software control structures
+	 *******************************************************************/
+	for (pfp = iC_pfL; pfp < &iC_pfL[MAXPF]; pfp++) {
+	    for (iq = 0; iq < 3; iq++) {
+		pfq = &(pfp->s[iq]);
+		pfq->i.name = NULL;	/* PiFace IEC in or output not active */
+		pfq->val = -1;		/* dummy place holder for all PiFaces */
+		pfq->channel = 0xffff;
+		pfq->bmask = 0x00;
+	    }
+	    pfp->pfa = 0xffff;		/* no pfa assigned */
+	    pfp->spiFN = -1;		/* no SPI file open */
+	}
+	/********************************************************************
+	 *
+	 *  Identify and count PiFaces available.
+	 *
+	 *  Do this before checking whether GPIO 7 - 11 are not used by other apps.
+	 *  GPIO 7 - 11 (CE1 CE0 MISO MOSI SPI_CLK) are used during SPI and MCP23S17
+	 *  setup, but are left unchanged if no PiFaces are found. TODO check
+	 *  If a PiFace is found and they are in use by another app this will
+	 *  show up in the next section (iC_npf > 0) and an error will occur.
+	 *  It is up to the user to also stop those other apps and the error message
+	 *  will point this out. There is no use trying to use GPIO 7 - 11 with
+	 *  PiFace hardware present, which will interfere. This can be attempted
+	 *  by using the -G switch (opt_G set) with PiFace hardware. It may work.
+	 *
+	 *  If no PiFaces are found proceed with opt_G set. An error will then occur
+	 *  only if an argument requesting PiFace IO (Xn or Xn:<pfa>) is found.
+	 *
+	 *  Initialisation of /dev/spidev0.0 and/or /dev/spidev0.1 for SPI
+	 *  modes and read/writeBytes
+	 *
+	 *  Test for the presence of a PiFace by writing to the IOCON register and
+	 *  checking if the value returned is the same. If not, there is no PiFace
+	 *  at that address. Do this for all 4 addresses on both CE0 and CE1.
+	 *
+	 *  Initialise all PiFaces found by writing to all relevant MCP23S17
+	 *  registers because there may be input interrupts.
+	 *
+	 *******************************************************************/
+	pfp = iC_pfL;
+	pfa = pfe = pff = value = iC_npf = 0;
+	for (pfce = 0; pfce < 2; pfce++) {		/* scan CE0 and CE1 groups */
+	    if ((spidFN[pfce] = setupSPI(pfce)) < 0) {
+		fprintf(iC_errFP, "ERROR: %s: setup /dev/spidev0.%d failed: %s\n", iC_progname, pfce, strerror(errno));
+	    }
+	    m = 0;
+	    for (pfa = pfe ; pfa < 8; pfa++) {	/* scan 8 or 4 PiFaces in each group */
+		if (setupMCP23S17(spidFN[pfce], pfa, IOCON_ODR, 0, 0x00, 0x00) < 0) {	/* detect presence */
+		    continue;			/* no PiFace at this address */
+		}
+		pff = pfa;
+		assert(iC_npf < MAXPF);
+		pfp->pfa = pfa;			/* PiFace             selection fixed in iC_pfL[] entry */
+		if (pfa == 4 && pfe == 4) {		/* detect PiFaceCAD */
+		    /********************************************************************
+		     *  potentially a PiFaceCAD - test gpio 23 the LIRC output
+		     *******************************************************************/
+#if RASPBERRYPI < 5010	/* sysfs */
+		    if ((sig = gpio_export(23, "in", "falling", forceFlag, iC_fullProgname)) != 0) {
+			if (writeUnlockCloseGpios() < 0) {
+			    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
+			}
+			iC_quit(sig);		/* another program is using gpio 23 */
+		    }
+		    if ((gpio23FN = gpio_fd_open(23, O_RDONLY)) < 0) {
+			fprintf(iC_errFP, "ERROR: %s: PiFace open gpio 23: %s\n", iC_progname, strerror(errno));
+		    }
+		    /********************************************************************
+		     *  read the initial /sys/class/gpio/gpio23/value
+		     *******************************************************************/
+		    if ((value = gpio_read(gpio23FN)) == -1) {
+			fprintf(iC_errFP, "ERROR: %s: PiFace read gpio 23: %s\n", iC_progname, strerror(errno));
+		    }
+		    if (iC_debug & 0200) fprintf(iC_outFP, "Initial read 23 = %d (PiFaceCAD LIRC output)\n",
+			value);
+		    /********************************************************************
+		     *  Close gpio23/LIRC value
+		     *******************************************************************/
+		    if (gpio23FN > 0) {
+			close(gpio23FN);		/* close connection to /sys/class/gpio/gpio23/value */
+			gpio23FN = -1;
+		    }
+		    /********************************************************************
+		     *  free up the sysfs for gpio 23 - is not marked in gpios->u.used
+		     *******************************************************************/
+		    if ((sig = gpio_unexport(23)) != 0) {
+			if (writeUnlockCloseGpios() < 0) {
+			    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
+			}
+			iC_quit(sig);		/* unable to unexport gpio 23 */
+		    }
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+		    /********************************************************************
+		     *  read the initial v2 ioctl ABI value
+		     *******************************************************************/
+		    if ((value = gpio_line_get_values (&pins, maskBit23)) == -1) {
+			fprintf(iC_errFP, "ERROR: %s: PiFace read gpio 23: %s\n", iC_progname, strerror(errno));
+		    }
+		    if (iC_debug & 0200) fprintf(iC_outFP, "Initial read 23 = %d (PiFaceCAD LIRC output)\n",
+			value);
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+		}
+		if (pfa != 4 || value == 0) {	/* PiFace */
+		    pfp->intf = INTFB;		/* input on MCP23S17 GPB input interrupt register */
+		    pfp->inpr = GPIOB;		/* INTCAPB fails on bouncing switches */
+		    if (iC_debug & 0200) fprintf(iC_outFP, "PiFace %hu found\n", pfa);
+		} else {				/* PiFaceCAD is address 4 and GPIO23 LIRC is 1 */
+		    pfp->intf = INTFA;		/* input on MCP23S17 GPA input interrupt register */
+		    pfp->inpr = GPIOA;		/* INTCAPA fails on bouncing switches */
+		    if (iC_debug & 0200) fprintf(iC_outFP, "PiFaceCAD %hu found\n", pfa);
+		}
+		pfp->spiFN = spidFN[pfce];		/* SPI file number for this active unit */
+		pfp++;				/* next iC_pfL[] element */
+		m++;				/* count active PiFaces in this CE group */
+		iC_npf++;				/* count all active PiFaces */
+	    }
+	    if (m == 0) {
+		close(spidFN[pfce]);		/* no active PiFaces in this CE group */
+		spidFN[pfce] = -1;
+	    }
+	    pfe += 4;
+	    if (pff >= pfe) {
+		break;				/* PiFace Relay+ - adress range 0 - 7 */
+	    }
+	}
+	if (iC_npf) {
 	    /********************************************************************
-	     *  Initialise PiFace software control structures
+	     *  PiFaces found
+	     *  Check if GPIO 7-11,25 required by PiFace have been used in another app
 	     *******************************************************************/
-	    for (pfp = iC_pfL; pfp < &iC_pfL[MAXPF]; pfp++) {
-		for (iq = 0; iq < 3; iq++) {
-		    pfq = &(pfp->s[iq]);
-		    pfq->i.name = NULL;		/* PiFace IEC in or output not active */
-		    pfq->val = -1;		/* Dummy place holder for all PiFaces */
-		    pfq->channel = 0xffff;
-		    pfq->bmask = 0x00;
+	    gpioMask = 0x02000f80LL;		/* gpio 7-11,25 */
+	    assert((gpiosp->valid & gpioMask) == gpioMask);	/* assume these are valid for all RPi's */
+	    if (iC_debug & 0200) fprintf(iC_outFP,
+		"gpio     = 7, 8, 9, 10, 11, 25\n"
+		"used     = 0x%016llx\n"
+		"gpioMask = 0x%016llx\n",
+		gpiosp->u.used, gpioMask);
+	    if ((gpioMask & gpiosp->u.used)) {
+		gpioMask &= gpiosp->u.used;
+		fprintf(iC_errFP, "ERROR: %s: The following GPIO's required by PiFace have been used in another app\n",
+		    iC_progname);
+		for (b = 7; b <= 25; b++) {
+		    if ((gpioMask & (1LL << b))) {
+			fprintf(iC_errFP, "		GPIO %d\n", b);
+		    }
 		}
-		pfp->pfa = 0xffff;		/* no pfa assigned */
-		pfp->spiFN = -1;		/* no SPI file open */
+		fprintf(iC_errFP,
+		    "	Cannot run PiFaces correctly - also stop apps using these GPIOs,\n"
+		    "	because they will be interfered with by PiFace hardware\n");
+		errorFlag |= 0x8LL;
+		goto UnlockGpios;
 	    }
 	    /********************************************************************
-	     *
-	     *  Identify and count PiFaces available.
-	     *
-	     *  Do this before checking whether GPIO 7 - 11 are not used by other apps.
-	     *  GPIO 7 - 11 (CE1 CE0 MISO MOSI SPI_CLK) are used during SPI and MCP23S17
-	     *  setup, but are left unchanged if no PiFaces are found. TODO check
-	     *  If a PiFace is found and they are in use by another app this will
-	     *  show up in the next section (iC_npf > 0) and an error will occur.
-	     *  It is up to the user to also stop those other apps and the error message
-	     *  will point this out. There is no use trying to use GPIO 7 - 11 with
-	     *  PiFace hardware present, which will interfere. This can be attempted
-	     *  by using the -G switch (opt_G set) with PiFace hardware. It may work.
-	     *
-	     *  If no PiFaces are found proceed with opt_G set. An error will then occur
-	     *  only if an argument requesting PiFace IO (Xn or Xn:<pfa>) is found.
-	     *
-	     *  Initialisation of /dev/spidev0.0 and/or /dev/spidev0.1 for SPI
-	     *  modes and read/writeBytes
-	     *
-	     *  Test for the presence of a PiFace by writing to the IOCON register and
-	     *  checking if the value returned is the same. If not, there is no PiFace
-	     *  at that address. Do this for all 4 addresses on both CE0 and CE1.
-	     *
-	     *  Initialise all PiFaces found by writing to all relevant MCP23S17
-	     *  registers because there may be input interrupts.
-	     *
+	     *  Free to use PiFaces
+	     *  Block GPIOs 7-11,25 required by PiFace hardware
 	     *******************************************************************/
-	    pfp = iC_pfL;
-	    pfa = pfe = pff = value = iC_npf = 0;
-	    for (pfce = 0; pfce < 2; pfce++) {		/* scan CE0 and CE1 groups */
-		if ((spidFN[pfce] = setupSPI(pfce)) < 0) {
-		    fprintf(iC_errFP, "ERROR: %s: setup /dev/spidev0.%d failed: %s\n", iC_progname, pfce, strerror(errno));
+	    gpiosp->u.used |= gpioMask;		/* mark gpio used for ~/.iC/gpios.used */
+	    ownUsed        |= gpioMask;		/* mark gpio in ownUsed for termination */
+#if RASPBERRYPI < 5010	/* sysfs */
+	    /********************************************************************
+	     *  Initialisation using the /sys/class/gpio interface to the GPIO
+	     *  systems - slightly slower, but always usable as a non-root user
+	     *  export GPIO25, which is INTB of the MCP23S17 device.
+	     *
+	     *  Wait for Interrupts on GPIO25 which has been exported and then
+	     *  opening /sys/class/gpio/gpio25/value
+	     *
+	     *  This is actually done via the /sys/class/gpio interface regardless of
+	     *  the wiringPi access mode in-use. Maybe sometime it might get a better
+	     *  way for a bit more efficiency.	(comment by Gordon Henderson)
+	     *
+	     *  Set the gpio25/INTB for falling edge interrupts
+	     *******************************************************************/
+	    if ((sig = gpio_export(25, "in", "falling", forceFlag, iC_fullProgname)) != 0) {
+		if (writeUnlockCloseGpios() < 0) {
+		    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
 		}
-		m = 0;
-		for (pfa = pfe ; pfa < 8; pfa++) {	/* scan 8 or 4 PiFaces in each group */
-		    if (setupMCP23S17(spidFN[pfce], pfa, IOCON_ODR, 0, 0x00, 0x00) < 0) {	/* detect presence */
-			continue;			/* no PiFace at this address */
-		    }
-		    pff = pfa;
-		    assert(iC_npf < MAXPF);
-		    pfp->pfa = pfa;			/* PiFace             selection fixed in iC_pfL[] entry */
-		    if (pfa == 4 && pfe == 4) {		/* detect PiFaceCAD */
-			/********************************************************************
-			 *  potentially a PiFaceCAD - test gpio 23 the LIRC output
-			 *******************************************************************/
-			if ((sig = gpio_export(23, "in", "falling", forceFlag, iC_fullProgname)) != 0) {
-			    iC_quit(sig);		/* another program is using gpio 23 */
-			}
-			if ((gpio23FN = gpio_fd_open(23, O_RDONLY)) < 0) {
-			    fprintf(iC_errFP, "ERROR: %s: PiFace open gpio 23: %s\n", iC_progname, strerror(errno));
-			}
-			/********************************************************************
-			 *  read the initial /sys/class/gpio/gpio23/value
-			 *******************************************************************/
-			if ((value = gpio_read(gpio23FN)) == -1) {
-			    fprintf(iC_errFP, "ERROR: %s: PiFace read gpio 23: %s\n", iC_progname, strerror(errno));
-			}
-			if (iC_debug & 0200) fprintf(iC_outFP, "Initial read 23 = %d (PiFaceCAD LIRC output)\n",
-			    value);
-			/********************************************************************
-			 *  Close gpio23/LIRC value
-			 *******************************************************************/
-			if (gpio23FN > 0) {
-			    close(gpio23FN);		/* close connection to /sys/class/gpio/gpio23/value */
-			    gpio23FN = -1;
-			}
-			/********************************************************************
-			 *  free up the sysfs for gpio 23 - is not marked in gpios->u.used
-			 *******************************************************************/
-			if ((sig = gpio_unexport(23)) != 0) {
-			    iC_quit(sig);		/* unable to unexport gpio 23 */
-			}
-		    }
-		    if (pfa != 4 || value == 0) {	/* PiFace */
-			pfp->intf = INTFB;		/* input on MCP23S17 GPB input interrupt register */
-			pfp->inpr = GPIOB;		/* INTCAPB fails on bouncing switches */
-			if (iC_debug & 0200) fprintf(iC_outFP, "PiFace %hu found\n", pfa);
-		    } else {				/* PiFaceCAD is address 4 and GPIO23 LIRC is 1 */
-			pfp->intf = INTFA;		/* input on MCP23S17 GPA input interrupt register */
-			pfp->inpr = GPIOA;		/* INTCAPA fails on bouncing switches */
-			if (iC_debug & 0200) fprintf(iC_outFP, "PiFaceCAD %hu found\n", pfa);
-		    }
-		    pfp->spiFN = spidFN[pfce];		/* SPI file number for this active unit */
-		    pfp++;				/* next iC_pfL[] element */
-		    m++;				/* count active PiFaces in this CE group */
-		    iC_npf++;				/* count all active PiFaces */
-		}
-		if (m == 0) {
-		    close(spidFN[pfce]);		/* no active PiFaces in this CE group */
-		    spidFN[pfce] = -1;
-		}
-		pfe += 4;
-		if (pff >= pfe) {
-		    break;				/* PiFace Relay+ - adress range 0 - 7 */
-		}
+		iC_quit(sig);			/* another program is using gpio 25 */
 	    }
-	    if (iC_npf) {
-		/********************************************************************
-		 *  PiFaces found
-		 *  Check if GPIO 7-11,25 required by PiFace have been used in another app
-		 *******************************************************************/
-		gpioMask = 0x02000f80LL;		/* gpio 7-11,25 */
-		assert((gpiosp->valid & gpioMask) == gpioMask);	/* assume these are valid for all RPi's */
-		if (iC_debug & 0200) fprintf(iC_outFP,
-		    "gpio     = 7, 8, 9, 10, 11, 25\n"
-		    "used     = 0x%016llx\n"
-		    "gpioMask = 0x%016llx\n",
-		    gpiosp->u.used, gpioMask);
-		if ((gpioMask & gpiosp->u.used)) {
-		    gpioMask &= gpiosp->u.used;
-		    fprintf(iC_errFP, "ERROR: %s: The following GPIO's required by PiFace have been used in another app\n",
-			iC_progname);
-		    for (b = 7; b <= 25; b++) {
-			if ((gpioMask & (1LL << b))) {
-			    fprintf(iC_errFP, "		GPIO %d\n", b);
-			}
-		    }
-		    fprintf(iC_errFP,
-			"	Cannot run PiFaces correctly - also stop apps using these GPIOs,\n"
-			"	because they will be interfered with by PiFace hardware\n");
-		    errorFlag++;
-		    goto UnlockGpios;
-		}
-		/********************************************************************
-		 *  Free to use PiFaces
-		 *  Block GPIOs 7-11,25 required by PiFace hardware
-		 *******************************************************************/
-		gpiosp->u.used |= gpioMask;		/* mark gpio used for ~/.iC/gpios.used */
-		ownUsed        |= gpioMask;		/* mark gpio in ownUsed for termination */
-		/********************************************************************
-		 *  Initialisation using the /sys/class/gpio interface to the GPIO
-		 *  systems - slightly slower, but always usable as a non-root user
-		 *  export GPIO25, which is INTB of the MCP23S17 device.
-		 *
-		 *  Wait for Interrupts on GPIO25 which has been exported and then
-		 *  opening /sys/class/gpio/gpio25/value
-		 *
-		 *  This is actually done via the /sys/class/gpio interface regardless of
-		 *  the wiringPi access mode in-use. Maybe sometime it might get a better
-		 *  way for a bit more efficiency.	(comment by Gordon Henderson)
-		 *
-		 *  Set the gpio25/INTB for falling edge interrupts
-		 *******************************************************************/
-		if ((sig = gpio_export(25, "in", "falling", forceFlag, iC_fullProgname)) != 0) {
-		    iC_quit(sig);			/* another program is using gpio 25 */
-		}
-		/********************************************************************
-		 *  open /sys/class/gpio/gpio25/value permanently for obtaining
-		 *  out-of-band interrupts
-		 *******************************************************************/
-		if ((gpio25FN = gpio_fd_open(25, O_RDONLY)) < 0) {
-		    fprintf(iC_errFP, "ERROR: %s: PiFace open gpio 25: %s\n", iC_progname, strerror(errno));
-		}
-		if (gpio25FN > iC_maxFN) {
-		    iC_maxFN = gpio25FN;
-		}
-		/********************************************************************
-		 *  read the initial /sys/class/gpio/gpio25/value
-		 *******************************************************************/
-		if ((value = gpio_read(gpio25FN)) == -1) {
-		    fprintf(iC_errFP, "ERROR: %s: PiFace read gpio 25: %s\n", iC_progname, strerror(errno));
-		}
-		if (iC_debug & 0200) fprintf(iC_outFP, "Initial read 25 = %d\n", value);
-		/********************************************************************
-		 *  To allow several PiFace units and possibly a PiFaceCAD to run
-		 *  simultaneously on a PiRack, theINTB/GPIO25 line requires a pullup
-		 *  resistor, so the individual INTB outputs from each MCP23S17 can signal
-		 *  their interrupts via open-drain outputs. There is no pullup resistor on
-		 *  the PiFace, PiFaceCAD or the PiRack. Initially I solved this problem
-		 *  by soldering a 100 Kohm resistor on the PiRack, but this meant the
-		 *  software had to distinguish between a single PiFace mounted directly
-		 *  on the RPi and several mounted on a PiRack. In the single case, the
-		 *  INTB line can be hard driven without a pullup rather than open_drain.
-		 *
-		 *  A much simpler solution is to activate the 60 Kohm pullup resistor
-		 *  on the GPIO25 output of the RPI. Then open_drain on INTB can be used
-		 *  in both cases.
-		 *
-		 *  Execute the SUID root progran iCgpioPUD(25, 2) to do this.
-		 *******************************************************************/
-		iC_gpio_pud(25, BCM2835_GPIO_PUD_UP);	/* Enable Pull Up */
-	    } else {
-		iC_opt_G = 1;		/* no Pifaces - block all PiFace command line arguments */
+	    /********************************************************************
+	     *  open /sys/class/gpio/gpio25/value permanently for obtaining
+	     *  out-of-band interrupts
+	     *******************************************************************/
+	    if ((gpio25FN = gpio_fd_open(25, O_RDONLY)) < 0) {
+		fprintf(iC_errFP, "ERROR: %s: PiFace open gpio 25: %s\n", iC_progname, strerror(errno));
 	    }
+	    if (gpio25FN > iC_maxFN) {
+		iC_maxFN = gpio25FN;
+	    }
+	    /********************************************************************
+	     *  read the initial /sys/class/gpio/gpio25/value
+	     *******************************************************************/
+	    if ((value = gpio_read(gpio25FN)) == -1) {
+		fprintf(iC_errFP, "ERROR: %s: PiFace read gpio 25: %s\n", iC_progname, strerror(errno));
+	    }
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	    /********************************************************************
+	     *  read the initial v2 ioctl ABI gpio 25 value
+	     *******************************************************************/
+	    value = gpio_line_get_values (&pins, maskBit25);
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	    if (iC_debug & 0200) fprintf(iC_outFP, "Initial read 25 = %d\n", value);
+#if RASPBERRYPI < 5010	/* sysfs */
+	    /********************************************************************
+	     *  To allow several PiFace units and possibly a PiFaceCAD to run
+	     *  simultaneously on a PiRack, theINTB/GPIO25 line requires a pullup
+	     *  resistor, so the individual INTB outputs from each MCP23S17 can signal
+	     *  their interrupts via open-drain outputs. There is no pullup resistor on
+	     *  the PiFace, PiFaceCAD or the PiRack. Initially I solved this problem
+	     *  by soldering a 100 Kohm resistor on the PiRack, but this meant the
+	     *  software had to distinguish between a single PiFace mounted directly
+	     *  on the RPi and several mounted on a PiRack. In the single case, the
+	     *  INTB line can be hard driven without a pullup rather than open_drain.
+	     *
+	     *  A much simpler solution is to activate the 60 Kohm pullup resistor
+	     *  on the GPIO25 output of the RPI. Then open_drain on INTB can be used
+	     *  in both cases.
+	     *
+	     *  Execute the SUID root progran iCgpioPUD(25, 2) to do this.
+	     *******************************************************************/
+	    iC_gpio_pud(25, BCM2835_GPIO_PUD_UP);	/* Enable Pull Up */
+#endif	/* RASPBERRYPI < 5010 - sysfs */
+	} else {
+	    fprintf(iC_errFP, "ERROR: %s: no Pifaces - cannot execute\n", iC_progname);
+	    if (writeUnlockCloseGpios() < 0) {
+		fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
+	    }
+	    iC_quit(SIGUSR1);		/* error quit */
 	}
 	/********************************************************************
 	 *  Analyze IEC arguments X0 X1 IX2 QX3 etc or groups X4-X7 and any
-	 *  D ID QD dummy arguments
 	 *
-	 *  Match PiFaces, an optional PiFaceCAD and GPIOs to IEC arguments
-	 *  in the command line.
+	 *  Match PiFaces, an optional PiFaceCAD to IEC arguments in the
+	 *  command line.
 	 *******************************************************************/
-	directFlag = 0;
 	for (argp = argip; argp < &argip[argic]; argp++) {
 	    pfa = 0xffff;
 	    ieStart = ieEnd = 0;
-	    directFlag &= DR;				/* clear all bits except DR for each new argument */
 	    if (strlen(*argp) >= 128) {
-		fprintf(iC_errFP, "ERROR: %s: command line argument too long: '%s'\n", iC_progname, *argp);
-		exit(1);
+		fprintf(iC_errFP, "ERROR: %s: '%s' command line argument too long\n", iC_progname, *argp);
+		if (writeUnlockCloseGpios() < 0) {
+		    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
+		}
+		iC_quit(SIGUSR1);		/* error quit */
 	    }
 	    iid = iidN;					/* global instance either 0xffff for "" or 0 - 999 */
 	    *iids = '\0';				/* track argument instance for error messages */
-	    strncpy(tail, *argp, 128);			/* start scans with current argument */
+	    strncpy(tail, *argp, 127);			/* start scans with current argument */
 	    /********************************************************************
 	     *  Scan for an optional tilde ~ before any IEC argument, which inverts
 	     *  the input or output sense of the following IEC argument.
@@ -835,26 +923,20 @@ main(
 		*iqc    = '\0';				/* no I or Q IEC */
 		iqStart = 0;				/* or lone I or Q - trapped in next sscanf */
 		iqEnd   = 1;
-		unitA[0] = unitA[1] = max(unitA[0], unitA[1]);	/* Xx or D are paired */
+		unitA[0] = unitA[1] = max(unitA[0], unitA[1]);	/* Xx are paired */
 	    }
 	    /********************************************************************
-	     *  Scan for a mandatory Xx or D in IEC arguments Xx IXx or QXx or D or ID or QD
+	     *  Scan for a mandatory Xx in IEC arguments Xx IXx or QXx
 	     *******************************************************************/
-	    if ((n = sscanf(tail, "%1[XD]%5d%127s", xd, &ieStart, tail)) == 1 && *xd == 'D') {
-		for (iq = iqStart; iq <= iqEnd; iq++) {	/* D dummy found - uses up one PiFace */
-		    if (unitA[iq]++ >= iC_npf) {	/* maximum unassigned unit found so far */
-			fprintf(iC_errFP, "ERROR: %s: 'too many PiFace dummy IEC arguments (%d max)\n", iC_progname, iC_npf);
-			errorFlag++;
-		    }
-		}
-		goto endOneArg;
-	    }
+	    n = sscanf(tail, "%1[X]%5d%127s", xd, &ieStart, tail);
 	    if (n >= 2 && *xd == 'X') {
 		ieEnd = ieStart;			/* assume a single Xn IEC */
 		*iqe = *iqc;
 		if (n == 2) {
 		    *tail = '\0';			/* single IEC argument without -<i> or + or :pfa */
-		    goto check_opt_G;
+		    fprintf(iC_errFP, "ERROR: %s: '%s' single IEC argument without -<i> or + or :pfa\n", iC_progname, *argp);
+		    errorFlag |= 0x20LL;
+		    goto endOneArg;
 		}
 		if (*tail == '+') {			/* extra I/O for GPIOB+ */
 		    if (iqExtra == 0) goto illFormed;	/* GPIOB+ extra I/O must be 1 for 'I' or 2 for 'Q'*/
@@ -870,7 +952,11 @@ main(
 		    } else {
 			memmove(tail, tail+1, 126);	/* mask == 0xff by default */
 		    }
-		    if (*tail != ':') goto check_opt_G;
+		    if (*tail != ':') {
+			fprintf(iC_errFP, "ERROR: %s: '%s' IEC+ without :pfa\n", iC_progname, *argp);
+			errorFlag |= 0x40LL;
+			goto endOneArg;
+		    }
 		}
 		if (*tail == '-') {			/* range or instance alternatives start with '-' */
 		    /********************************************************************
@@ -881,20 +967,26 @@ main(
 		    }
 		    if ((n = sscanf(tail+1, "X%5d%127s", &ieEnd, tail)) == 0) {
 			ieEnd = ieStart;		/* a single Xn-i IEC with -instance and no :pfa */
-			goto check_opt_G;
+			fprintf(iC_errFP, "ERROR: %s: '%s' a single Xn-i IEC with -instance and no :pfa\n", iC_progname, *argp);
+			errorFlag |= 0x80LL;
+			goto endOneArg;
 		    }
 		    if (iqExtra == 2) goto illFormed;	/* GPIOB+ extra output may not have a range */
 		    if (ieEnd <= ieStart) {		/* *tail remains '-' */
 			fprintf(iC_errFP, "ERROR: %s: '%s' is not a positive IEC range\n", iC_progname, *argp);
-			errorFlag++;
+			errorFlag |= 0x100LL;
 			goto endOneArg;
 		    }
 		    if (n == 1) {
 			*tail = '\0';			/* a range Xn-Xm without instance or :pfa */
-			goto check_opt_G;
+			fprintf(iC_errFP, "ERROR: %s: '%s' a range Xn-Xm without instance or :pfa\n", iC_progname, *argp);
+			errorFlag |= 0x200LL;
+			goto endOneArg;
 		    }
 		    if (*tail == '-') {
-			goto check_opt_G;		/* a range Xn-Xm with -instance */
+			fprintf(iC_errFP, "ERROR: %s: '%s' range Xn-Xm without :pfa followed by instance or another range\n", iC_progname, *argp);
+			errorFlag |= 0x400LL;
+			goto endOneArg;
 		    }					/* a range Xn-Xm with :pfa */
 		}
 		if (*tail == ':') {
@@ -906,58 +998,10 @@ main(
 			pfa = 0xffff;			/* no pfa assigned */
 		    }
 		    if (n <= 1) *tail = '\0';
-		  check_opt_G:
-		    if (iC_opt_G) {
-			fprintf(iC_errFP, "ERROR: %s: '%s' no PiFace IEC arguments allowed with option -G\n", iC_progname, *argp);
-			errorFlag++;
-			goto endOneArg;
-		    }
 		    if (iC_debug & 0200) fprintf(iC_outFP, "%sX%d-%sX%d:%hu%s\n",
 			iqc, ieStart, iqe, ieEnd, pfa, iids);
-		    directFlag |= PF | DR;
-		} else {
-		    /********************************************************************
-		     *  GPIO IEC arguments with .<bit>,gpio or ,gpio,gpio,...
-		     *******************************************************************/
-		    if (iqStart != iqEnd || ieStart != ieEnd || iqExtra == 2) {
-			goto illFormed;		/* GPIO argument must be single IXn or QXn */
-		    }
-		    if (*tail == '.') {
-			if (sscanf(tail, ".%hu%127s", &bit, tail) != 2 || bit >= 8 || *tail == '-') {
-			    goto illFormed;		/* must have tail for gpio number */
-			}
-			bitStart = bitEnd = bit;	/* only 1 bit processed */
-		    } else {
-			bitStart = 0;
-			bitEnd   = 7;		/* process all 8 bits */
-		    }
-		    for (bit = 0; bit <= 7; bit++) {
-			gpioSav[bit] = 0xffff;	/* initialise empty Save list */
-		    }
-		    for (bit = bitStart, n = 2; bit <= bitEnd && n == 2; bit++) {
-			if (*tail == '-') goto checkInstance;
-			*dum = '\0';
-			gpio = 0;
-			if (((n = sscanf(tail, ",%hu%127s", &gpio, tail)) < 1 &&
-			    (n = sscanf(tail, ",%1[d]%127s", dum, tail)) < 1) ||
-			    gpio > 55) {
-			    goto illFormed;
-			}
-			if (n == 1) *tail = '\0';
-			directFlag |= GP | DR;
-			if (*dum == '\0') {
-			    gpioSav[bit] = gpio;	/*  Save list of GPIO numbers for later building */
-			    if (iC_debug & 0200) fprintf(iC_outFP, "%sX%d.%hu	gpio = %hu\n",
-				iqc, ieStart, bit, gpio);
-			}
-		    }
-		    if (n == 2 && *tail == ',') {
-			fprintf(iC_errFP, "ERROR: %s: '%s' gpio list limited to 8 comma separated numbers or 1 if .bit\n", iC_progname, *argp);
-			errorFlag++;
-			goto endOneArg;
-		    }
+		    directFlag |= PF;
 		}
-	      checkInstance:
 		if (*tail == '-') {
 		    if (n != 1 && (n = sscanf(tail, "-%3hu%127s", &iid, tail)) == 1) {	/* individual instance has precedence */
 			snprintf(iids, 6, "-%hu", iid);	/* instance "-0" to "-999" */
@@ -970,15 +1014,14 @@ main(
 	    } else {					/* n == 0 or 1 or *xd != 'X' */
 	      illFormed:
 		fprintf(iC_errFP, "ERROR: %s: '%s' is not a well formed IEC\n", iC_progname, *argp);
-		errorFlag++;
+		errorFlag |= 0x800LL;
 		goto endOneArg;
 	    }
 	    /********************************************************************
-	     *  Use the IEC argument to extend PiFace or GPIO control structures
+	     *  Use the IEC argument to extend PiFace control structures
 	     *  Check IEC argument was not used before
 	     *******************************************************************/
 	    if (directFlag & PF) {
-		assert((directFlag & GP) == 0);		/* should not have both */
 		int		ie;
 		/********************************************************************
 		 *  Build one or more PiFace control structures iC_pfL[un]
@@ -998,7 +1041,7 @@ main(
 				iC_pfL[un].s[iq].channel == iid) {
 				fprintf(iC_errFP, "ERROR: %s: PiFace IEC %cX%d%s used more than once\n",
 				    iC_progname, IQ[iq], ie, iids);
-				errorFlag++;
+				errorFlag |= 0x1000LL;
 				goto endOneArg;
 			    }
 			    if (pfa != 0xffff && iC_pfL[un].pfa == pfa) {	/* not 0xffff and pfa found */
@@ -1011,7 +1054,7 @@ main(
 				}
 				fprintf(iC_errFP, "ERROR: %s: PiFace %hu used more than once with %cX%d%s and %cX%d%s\n",
 				    iC_progname, pfa, IQ[iq], ie1, iids, IQ[iq], ie, iids);
-				errorFlag++;
+				errorFlag |= 0x2000LL;
 				goto endOneArg;
 			    }
 			}
@@ -1019,14 +1062,14 @@ main(
 			    do {
 				if ((unit = unitA[iq]++) >= iC_npf) {	/* maximum unassigned unit found so far */
 				    fprintf(iC_errFP, "ERROR: %s: '%d is too many PiFace IEC arguments (%d max)\n", iC_progname, unit+1, iC_npf);
-				    errorFlag++;
+				    errorFlag |= 0x4000LL;
 				    goto endOneArg;
 				}
 			    } while (iC_pfL[unit].s[iq].val >= 0);	/* use the next unused pfa entry */
 			} else {
 			    fprintf(iC_errFP, "ERROR: %s: PiFace %hu named in %cX%d:%hu%s is not available\n",
 				iC_progname, pfa, IQ[iq], ie, pfa, iids);
-			    errorFlag++;
+			    errorFlag |= 0x8000LL;
 			    goto endOneArg;
 			}
 		      pfaFound:
@@ -1035,7 +1078,7 @@ main(
 				gep->Gchannel == iid) {
 				fprintf(iC_errFP, "ERROR: %s: PiFace IEC %cX%d:%hu%s has already been used as a GPIO IEC\n",
 				    iC_progname, IQ[iq], ie, pfa, iids);
-				errorFlag++;
+				errorFlag |= 0x10000LL;
 				goto endOneArg;
 			    }
 			}
@@ -1047,10 +1090,10 @@ main(
 			} else
 			if ((em = mask & pfp->s[iq^0x03].bmask)) {	/* IXn or QXn+ */
 			    unsigned short	iid1;
-			    char		iids1[6];
+			    char		iids1[8];
 			    *iids1 = '\0';		/* instance string of alternate I/O */
 			    if ((iid1 = pfp->s[iq^0x03].channel) != 0xffff) {
-				snprintf(iids1, 6, "-%hu", iid1);	/* instance "-0" to "-999" */
+				snprintf(iids1, 7, "-%hu", iid1);	/* instance "-0" to "-999" */
 			    }
 			    fprintf(iC_errFP, "WARNING: %s: %cX%d+0x%02x:%hu%s conflicts with %cX%d+0x%02x:%hu%s in bits 0x%02x - ignore these bits\n",
 				iC_progname, IQ[iq], ie, mask, pfa, iids,
@@ -1068,92 +1111,6 @@ main(
 			pfa = 0xffff;
 		    }
 		}
-	    } else if (directFlag & GP) {
-		/********************************************************************
-		 *  Build or extend a new gpioIO structure and store in iC_gpL[iqStart]
-		 *      iqStart 0 = 'Q', 1 = 'I'
-		 *  temporarily store ieStart (IEC number) in val of iqDetails
-		 *  temporarily store iid (instance) in channel of iqDetails
-		 *  Check that the GPIO for the IEC argument is valid for this RPi
-		 *  and was not used before in this or another app.
-		 *******************************************************************/
-		gpioLast = &iC_gpL[iqStart];	/* scan previous gpio list */
-		for (gep = iC_gpL[iqStart]; gep; gep = gep->nextIO) {
-		    if (gep->Gval == ieStart &&
-			gep->Gchannel == iid) {
-			goto previousElement;	/* already partially filled */
-		    }
-		    gpioLast = &gep->nextIO;
-		}
-		for (un = 0; un < iC_npf; un++) {	/* check IEC not used for PiFace */
-		    if (iC_pfL[un].s[iqStart].val == ieStart &&
-			iC_pfL[un].s[iqStart].channel == iid) {
-			fprintf(iC_errFP, "ERROR: %s: GPIO IEC %cX%d%s has already been used as a PiFace IEC\n",
-			    iC_progname, IQ[iqStart], ieStart, iids);
-			errorFlag++;
-			goto endOneArg;
-		    }
-		}
-		*gpioLast = gep = iC_emalloc(sizeof(gpioIO));	/* new gpioIO element */
-		gep->Gname = NULL;		/* GPIO IEC in or output not active */
-		gep->Gval = ieStart;
-		gep->Gchannel = iid;		/* temporary IEC details in new element */
-		for (bit = 0; bit <= 7; bit++) {
-		    gep->gpioNr[bit] = 0xffff;	/* mark gpio number unused */
-		    gep->gpioFN[bit] = -1;	/* mark file number unused */
-		}
-		gpioCnt++;
-	      previousElement:
-		for (bit = 0; bit <= 7; bit++) {
-		    if((gpio = gpioSav[bit]) != 0xffff) {
-			mask = iC_bitMask[bit];
-			assert(gpio <= 55);
-			gpioMask = 1LL << gpio;		/* gpio is 0 - 55 max */
-			if (iC_debug & 0200) fprintf(iC_outFP,
-			    "gpio     = %hu\n"
-			    "used     = 0x%016llx\n"
-			    "gpioMask = 0x%016llx\n",
-			    gpio, gpiosp->u.used, gpioMask);
-			if ((u = gep->gpioNr[bit]) != 0xffff &&
-			    ((mask & gep->Ginv) != (mask & invFlag) ||
-			    (u != gpio))) {		/* ignore 2nd identical definition */
-			    fprintf(iC_errFP, "ERROR: %s: %c%sX%d.%hu,%hu%s cannot override %c%sX%d.%hu,%hu%s\n",
-				iC_progname,
-				invFlag & mask ? '~' : ' ', iqc, ieStart, bit, gpio, iids,
-				gep->Ginv & mask ? '~' : ' ', iqc, ieStart, bit, gep->gpioNr[bit], iids);
-			    errorFlag++;
-			} else if (!(gpiosp->valid & gpioMask)) {
-			    fprintf(iC_errFP, "ERROR: %s: trying to use invalid gpio %hu on %sX%d.%hu%s on RPi board rev %d\n",
-				iC_progname, gpio, iqc, ieStart, bit, iids, gpiosp->proc);
-			    errorFlag++;
-			} else if (gpiosp->u.used & gpioMask) {
-			    fprintf(iC_errFP, "ERROR: %s: trying to use gpio %hu a 2nd time on %c%sX%d.%hu%s\n",
-				iC_progname, gpio, invFlag & mask ? '~' : ' ', iqc, ieStart, bit, iids);
-			    errorFlag++;
-			} else {
-			    gep->Ginv |= mask & invFlag;/* by default do not invert GPIO in or outputs - inverted with -I or '~' */
-			    gpiosp->u.used |= gpioMask;	/* mark gpio used for ~/.iC/gpios.used */
-			    ownUsed        |= gpioMask;	/* mark gpio in ownUsed for termination */
-			    gep->gpioNr[bit] = gpio;	/* save gpio number for this bit */
-			    gep->Gbmask |= iC_bitMask[bit];	/* OR hex 01 02 04 08 10 20 40 80 */
-			    /********************************************************************
-			     *  Check if GPIO number is used by w1-gpio kernel module to drive iCtherm
-			     *  If yes and bit 0 (OopsMask) has not been set in gpios->u.oops before
-			     *  remove w1-therm and w1-gpio and set bit 0 to block iCtherm
-			     *******************************************************************/
-			    if (gpio == gpioTherm) {
-				strncpy(buffer, "sudo modprobe -r w1-therm w1-gpio", BS);	/* remove kernel modules */
-				if (iC_debug & 0200) fprintf(iC_outFP, "%s\n", buffer);
-				if ((b = system(buffer)) != 0) {
-				    perror("sudo modprobe");
-				    fprintf(iC_errFP, "WARNING: %s: system(\"%s\") could not be executed $? = %d - ignore\n",
-					iC_progname, buffer, b);
-				}
-				gpiosp->u.oops |= OopsMask;	/* block iCtherm permanently */
-			    }
-			}
-		    }
-		}
 	    }
 	  endOneArg:
 	    invFlag = 0x00;				/* start new tilde '~' analysis for next argument */
@@ -1165,12 +1122,15 @@ main(
 	if (writeUnlockCloseGpios() < 0) {
 	    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
 		iC_progname);
-	    errorFlag++;
+	    errorFlag |= 0x20000LL;
 	}
     }
   FreeNow:
     free(argip);
     if (errorFlag) {
+	if (iC_debug & 0200) {
+	    fprintf(iC_errFP, "ERROR: %s: 0x%llx - check in source to locate error line\n", iC_progname, errorFlag);
+	}
 	iC_quit(-3);					/* after all the command line has been analyzed */
     }
     if (directFlag == 0) {
@@ -1198,20 +1158,6 @@ main(
 	}
     }
     /********************************************************************
-     *  Generate IEC names for all GPIO output and input arguments
-     *  Do the same for iC_gpL[0] and iC_gpL[1]
-     *******************************************************************/
-    for (iq = 0; iq < 2; iq++) {
-	for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
-	    len = snprintf(buffer, BS, "%cX%d", IQ[iq], gep->Gval);	/* IEC name without instance */
-	    if ((iid = gep->Gchannel) != 0xffff) {			/* append possible instance */
-		len += snprintf(buffer + len, BS, "-%hu", iid);
-	    }
-	    gep->Gname = iC_emalloc(++len);
-	    strcpy(gep->Gname, buffer);		/* store name */
-	}
-    }
-    /********************************************************************
      *  Clear val and channel members in iC_pfL[] entries
      *******************************************************************/
     for (pfp = iC_pfL; pfp < &iC_pfL[MAXPF]; pfp++) {
@@ -1219,17 +1165,6 @@ main(
 	    pfq = &(pfp->s[iq]);
 	    pfq->val = 0;			/* restore values */
 	    pfq->channel = 0;
-	}
-    }
-    /********************************************************************
-     *  Do the same for iC_gpL[0] and iC_gpL[1]
-     *******************************************************************/
-    for (iq = 0; iq < 2; iq++) {
-	for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
-	    assert(gep->Gname);		/* later scans rely on a name */
-	    gep->Ginv ^= invMask;	/* by default do not invert GPIO in or outputs - inverted with -I or '~' */
-	    gep->Gval = 0;		/* restore values */
-	    gep->Gchannel = 0;
 	}
     }
     for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {	/* TODO may not be needed */
@@ -1251,8 +1186,8 @@ main(
     }
     if (iC_debug & 0200) fprintf(iC_outFP, "### unit = %d iC_npf = %d\n", unit, iC_npf);
     unit = iC_npf;					/* deal only with real PiFaces */
-    if (unit == 0 && gpioCnt == 0) {
-	fprintf(iC_errFP, "ERROR: %s: no PiFaces or gpio's to run\n", iC_progname);
+    if (unit == 0) {
+	fprintf(iC_errFP, "ERROR: %s: no PiFaces to run\n", iC_progname);
 	iC_quit(-2);
     }
     /********************************************************************
@@ -1285,60 +1220,6 @@ main(
 	}
     }
     /********************************************************************
-     *  Export and open all gpio files for all GPIO arguments
-     *  open /sys/class/gpio/gpioN/value permanently for obtaining
-     *  out-of-band interrupts and to allow read and write operations
-     *******************************************************************/
-    for (iq = 0; iq < 2; iq++) {
-	for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
-	    for (bit = 0; bit <= 7; bit++) {
-		if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-		    if (iq == 0) {
-			/********************************************************************
-			 *  QXn gpio N export with direction out and no interrupts
-			 *******************************************************************/
-			if ((sig = gpio_export(gpio, "out", "none", forceFlag, iC_fullProgname)) != 0) {
-			    iC_quit(sig);		/* another program is using gpio N */
-			}
-			if ((gep->gpioFN[bit] = gpio_fd_open(gpio, O_RDWR)) < 0) {
-			    fprintf(iC_errFP, "ERROR: %s: Cannot open GPIO %d for output: %s\n", iC_progname, gpio, strerror(errno));
-			} else {
-			    gpio_write(gep->gpioFN[bit], 0);	/* write 0 to GPIO to initialise it */
-			}
-		    } else {
-			/********************************************************************
-			 *  IXn gpio N export with direction in and interrupts on both edges
-			 *******************************************************************/
-			if ((sig = gpio_export(gpio, "in", "both", forceFlag, iC_fullProgname)) != 0) {
-			    iC_quit(sig);		/* another program is using gpio N */
-			}
-			if ((gep->gpioFN[bit] = gpio_fd_open(gpio, O_RDONLY)) < 0) {
-			    fprintf(iC_errFP, "ERROR: %s: Cannot open GPIO %d for input: %s\n", iC_progname, gpio, strerror(errno));
-			}
-			/********************************************************************
-			 *  Execute the SUID root progran iCgpioPUD(gpio, pud) to set pull-up
-			 *  to 3.3 volt. It is not recommended to connect a GPIO input to 5 volt,
-			 *  although I have never had a problem doing so. JW 2023-07-04
-			 *  Previously (before version 1.17) the following was done:
-			 *    for normal   input (logic 0 = low)  set pull down pud = 1
-			 *    for inverted input (logic 0 = high) set pull up   pud = 2
-			 *  That required pulling the input high for normal input, which is
-			 *  awkward, especially if you should only use 3.3 volt, not 5 volt.
-			 *  Now it is always pull up  pud = 2. GPIO inputs are activated by
-			 *  pulling them down to 0 volts, which is the same as PiFace inputs.
-			 *******************************************************************/
-			iC_gpio_pud(gpio, BCM2835_GPIO_PUD_UP);
-		    }
-		    if (gep->gpioFN[bit] > iC_maxFN) {
-			iC_maxFN = gep->gpioFN[bit];
-		    }
-		} else if (iq == 1) {
-		    gep->Ginv &= ~iC_bitMask[bit];	/* blank out missing GPIO input bits IXx.y */
-		}
-	    }
-	}
-    }
-    /********************************************************************
      *  Generate a meaningful name for network registration
      *******************************************************************/
     len = snprintf(buffer, BS, "%s", iC_iccNM);
@@ -1346,9 +1227,6 @@ main(
 	if (pfp->Iname || pfp->Qname) {
 	    len += snprintf(buffer+len, BS-len, "_%hu", pfp->pfa);	/* name PiFace pfa */
 	}
-    }
-    if (gpioCnt) {
-	len += snprintf(buffer+len, BS-len, "_G");		/* name GPIO marker */
     }
     if (*iC_iidNM) {
 	len += snprintf(buffer+len, BS-len, "-%s", iC_iidNM);	/* name-instance header */
@@ -1401,45 +1279,31 @@ main(
     len = snprintf(regBuf, regBufLen, "N%s", iC_iccNM);	/* name header */
     cp = regBuf + len;
     regBufLen -= len;
-    if (!iC_opt_G) {
-	/********************************************************************
-	 *  Generate registration string made up of all active PiFace I/O names
-	 *  There is either 1 input or 1 output name or both per active PiFace
-	 *******************************************************************/
-	for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
-	    assert(regBufLen > ENTRYSZ);	/* accomodates ",SIX123456,RQX123456,Z" */
-	    for (iq = 0; iq < 3; iq++) {
-		if ((np = pfp->s[iq].i.name) != NULL) {
-		    assert(*np == IQ[iq]);
-		    len = snprintf(cp, regBufLen, ",%c%s", SR[iq], np);
-		    cp += len;			/* input send name or output receive name */
-		    regBufLen -= len;
-		}
-	    }
-	    /********************************************************************
-	     *  Initialise and register active PiFaceCad
-	     *******************************************************************/
-	    if (pfp->pfa == 4 && pfp->intf == INTFA && pfp->Iname) {
-		pifacecad_lcd_clear();
-		pifacecad_lcd_display_on();	/* default is on */
-		pifacecad_lcd_set_backlight(1);	/* default is on */
-		len = snprintf(cp, regBufLen, ",R%s", pfCADname);
-		cp += len;				/* output receive name */
+    /********************************************************************
+     *  Generate registration string made up of all active PiFace I/O names
+     *  There is either 1 input or 1 output name or both per active PiFace
+     *******************************************************************/
+    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
+	assert(regBufLen > ENTRYSZ);	/* accomodates ",SIX123456,RQX123456,Z" */
+	for (iq = 0; iq < 3; iq++) {
+	    if ((np = pfp->s[iq].i.name) != NULL) {
+		assert(*np == IQ[iq]);
+		len = snprintf(cp, regBufLen, ",%c%s", SR[iq], np);
+		cp += len;			/* input send name or output receive name */
 		regBufLen -= len;
-		pfCADpfp = pfp;			/* use for ACK */
 	    }
 	}
-    }
-    /********************************************************************
-     *  Extend registration string with all active GPIO I/O names
-     *******************************************************************/
-    for (iq = 0; iq < 2; iq++) {
-	for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
-	    np = gep->Gname;
-	    assert(regBufLen > ENTRYSZ);	/* accomodates ",SIX123456,RQX123456,Z" */
-	    len = snprintf(cp, regBufLen, ",%c%s", SR[iq], np);
-	    cp += len;				/* input send name or output receive name */
+	/********************************************************************
+	 *  Initialise and register active PiFaceCad
+	 *******************************************************************/
+	if (pfp->pfa == 4 && pfp->intf == INTFA && pfp->Iname) {
+	    pifacecad_lcd_clear();
+	    pifacecad_lcd_display_on();	/* default is on */
+	    pifacecad_lcd_set_backlight(1);	/* default is on */
+	    len = snprintf(cp, regBufLen, ",R%s", pfCADname);
+	    cp += len;				/* output receive name */
 	    regBufLen -= len;
+	    pfCADpfp = pfp;			/* use for ACK */
 	}
     }
     /********************************************************************
@@ -1457,17 +1321,15 @@ main(
      *  Distribute read and/or write channels returned in acknowledgment
      *******************************************************************/
     if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {	/* busy wait for acknowledgment reply */
-	chS	sel;				/* can store either NULL or gpioIO* and un/mask */
+	int	sel;				/* can store either 0 or un/mask */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_micro) iC_microPrint("ack received", 0);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	if (iC_debug & 0200) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
-	if (iC_opt_B) {				/* prepare to execute iCbox -d */
-	    len = snprintf(buffer, BS, "iCbox -dz%s -n %s-DI", (iC_debug & DQ) ? "q" : "", iC_iccNM);
-	    b = 4;				/* initial number of tokens in buffer */
-	    op = buffer + len;			/* optional host and port appended in iC_fork_and_exec() */
-	    ol = BS - len;
-	}
+	len = snprintf(buffer, BS, "iCbox -dz%s -n %s-DI", (iC_debug & DQ) ? "q" : "", iC_iccNM);
+	b = 4;				/* initial number of tokens in buffer */
+	op = buffer + len;			/* optional host and port appended in iC_fork_and_exec() */
+	ol = BS - len;
 	cp = rpyBuf - 1;	/* increment to first character in rpyBuf in first use of cp */
 	/********************************************************************
 	 *  Channels for PiFace acknowledgments
@@ -1485,7 +1347,7 @@ main(
 		    if (iC_debug & 0200) fprintf(iC_outFP, "PiFace %d %s  on channel %hu\n",
 			pfp->pfa, np, channel);
 		    pfq->channel = channel;	/* link send channel to PiFace (ignore receive channel) */
-		    sel.un = (pfp - iC_pfL) | (iq & 0x02) << 2;	/* iC_pfL index un identifies PiFace GPIOB+ */
+		    sel = (pfp - iC_pfL) | (iq & 0x02) << 2;	/* iC_pfL index un identifies PiFace GPIOB+ */
 		    storeUnit(channel, sel);		/* link PiFace unit number to send channel */
 		    if (iC_opt_B) {
 			assert(ol > 10);
@@ -1514,50 +1376,9 @@ main(
 		}
 		if (iC_debug & 0200) fprintf(iC_outFP, "PiFaceCAD %d %s on channel %hu\n",
 		    pfp->pfa, pfCADname, channel);
-		sel.un = pfp - iC_pfL;		/* iC_pfL index un identifies PiFace */
+		sel = pfp - iC_pfL;		/* iC_pfL index sel identifies PiFace */
 		storeUnit(channel, sel);	/* link PiFace unit number to send channel */
 		pfCADchannel = channel;
-		cp = strchr(cp, ',');
-	    }
-	}
-	/********************************************************************
-	 *  Channels for GPIO acknowledgments
-	 *******************************************************************/
-	for (iq = 0; iq < 2; iq++) {
-	    for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
-		np = gep->Gname;		/* not NULL assert previously */
-		assert(cp);			/* not enough channels in ACK string */
-		channel = atoi(++cp);		/* read channel from ACK string */
-		assert(channel > 0);
-		if (channel > topChannel) {
-		    topChannel = channel;
-		}
-		if (iC_debug & 0200) {
-		    fprintf(iC_outFP, "GPIO");
-		    for (bit = 0; bit <= 7; bit++) {
-			if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-			    fprintf(iC_outFP, ",%hu", gpio);
-			} else {
-			    fprintf(iC_outFP, ",d");
-			}
-		    }
-		    fprintf(iC_outFP, "	%s  on channel %hu\n", np, channel);
-		}
-		gep->Gchannel = channel;	/* link send channel to GPIO (ignore receive channel) */
-		sel.gep = gep;			/* identifies GPIO */
-		storeUnit(channel, sel);	/* link GPIO element pointer to send channel */
-		if (iC_opt_B) {
-		    assert(ol > 14);
-		    len = snprintf(op, ol, " %s", np);	/* add I/O name to execute iCbox -d */
-		    b++;				/* count tokens in buffer */
-		    op += len;
-		    ol -= len;
-		    if ((mask = gep->Gbmask) != 0xff) {
-			len = snprintf(op, ol, ",%d", mask);	/* mask out any GPIO bits not used */
-			op += len;
-			ol -= len;
-		    }
-		}
 		cp = strchr(cp, ',');
 	    }
 	}
@@ -1616,106 +1437,51 @@ main(
 	    }
 	    fprintf(iC_outFP, "\n");
 	}
-	if (gpioCnt) {
-	    char *	iidPtr;
-	    char *	iidSep;
-	    fprintf(iC_outFP, "Allocation for %d GPIO group%s, global instance = \"%s\"\n",
-		gpioCnt, gpioCnt == 1 ? "" : "s", iC_iidNM);
-	    fprintf(iC_outFP, "	IEC bit	inst	gpio	iC channel\n\n");
-	    for (iq = 0; iq < 2; iq++) {
-		for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
-		    strcpy(buffer, gep->Gname);		/* retrieve name[-instance] */
-		    if ((iidPtr = strchr(buffer, '-')) != NULL) {
-			iidSep = "-";
-			*iidPtr++ = '\0';		/* separate name and instance */
-		    } else {
-			iidSep = iidPtr = "";		/* null or global instance */
-		    }
-		    for (bit = 0; bit <= 7; bit++) {
-			if ((gpio = gep->gpioNr[bit]) != 0xffff) {	/* saved gpio number for this bit */
-			    fprintf(iC_outFP, "	%c%s.%hu	%s%s	%3hu	%5hu\n",
-				gep->Ginv & iC_bitMask[bit] ? '~' : ' ',
-				buffer, bit, iidSep, iidPtr, gpio, gep->Gchannel);
-			}
-		    }
-		}
-		fprintf(iC_outFP, "\n");
-	    }
-	}
     }
     cp = regBuf;
     regBufLen = REPLY;
-    if (iC_debug & 0100) {
-	op = buffer;
-	ol = BS;
-    }
+    op = buffer;
+    ol = BS;
     /********************************************************************
      *  Generate PiFace initialisation inputs and outputs for active PiFaces
      *  Send possible TCP/IP after GPIO done
      *******************************************************************/
-    if (!iC_opt_G) {
-	assert(gpio25FN > 0);
-	if (iC_debug & 0200) fprintf(iC_outFP, "### Initialise %d unit(s)\n", iC_npf);
-	gpio_read(gpio25FN);			/* dummy read to clear interrupt on /dev/class/gpio25/value */
+#if RASPBERRYPI < 5010	/* sysfs */
+    assert(gpio25FN > 0);
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    assert(pins.linereq->fd > 0);
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    if (iC_debug & 0200) fprintf(iC_outFP, "### Initialise %d unit(s)\n", iC_npf);
+    gpio_read(gpio25FN);			/* dummy read to clear interrupt on /dev/class/gpio25/value */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_micro) iC_microPrint("SPI initialise", 0);
+    if (iC_micro) iC_microPrint("SPI initialise", 0);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-	for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
-	    if (((pfa = pfp->pfa) != 4 || pfp->intf != INTFA) && pfp->Qname) {	/* PiFace */
-		writeByte(pfp->spiFN, pfa, OLATA, pfp->Qinv);	/* normally write inverted data to PiFace A output */
-		pfp->Qval = 0;			/* force all output bits (TODO not used) */
-	    }					/* PiFaceCAD output does not need initialising */
-	    if (pfp->Iname) {
-		assert(regBufLen > 11);		/* fits largest data telegram */
-		val = readByte(pfp->spiFN, pfa, pfp->inpr);	/* read registered PiFace B/A at initialisation */
-		/* by default do not invert PiFace inputs - they are inverted with -I */
-		len = snprintf(cp, regBufLen, ",%hu:%d",	/* data telegram */
-				pfp->Ichannel,
-				(val ^ pfp->Iinv) & pfp->Ibmask
-			      );
-		cp += len;
-		regBufLen -= len;
-		if (iC_debug & 0100) {
-		    len = snprintf(op, ol, " P%d %s(INI)", pfp->pfa, pfp->Iname);	/* source name */
-		    op += len;
-		    ol -= len;
-		}
-		pfp->Ival = val;		/* initialise input for comparison */
+    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
+	if (((pfa = pfp->pfa) != 4 || pfp->intf != INTFA) && pfp->Qname) {	/* PiFace */
+	    writeByte(pfp->spiFN, pfa, OLATA, pfp->Qinv);	/* normally write inverted data to PiFace A output */
+	    pfp->Qval = 0;			/* force all output bits (TODO not used) */
+	}					/* PiFaceCAD output does not need initialising */
+	if (pfp->Iname) {
+	    assert(regBufLen > 11);		/* fits largest data telegram */
+	    val = readByte(pfp->spiFN, pfa, pfp->inpr);	/* read registered PiFace B/A at initialisation */
+	    /* by default do not invert PiFace inputs - they are inverted with -I */
+	    len = snprintf(cp, regBufLen, ",%hu:%d",	/* data telegram */
+			    pfp->Ichannel,
+			    (val ^ pfp->Iinv) & pfp->Ibmask
+			  );
+	    cp += len;
+	    regBufLen -= len;
+	    if (iC_debug & 0100) {
+		len = snprintf(op, ol, " P%d %s(INI)", pfp->pfa, pfp->Iname);	/* source name */
+		op += len;
+		ol -= len;
 	    }
-	    if (pfp->QPname) {							/* PiFace GPIOB+ */
-		writeByte(pfp->spiFN, pfa, OLATB, pfp->QPinv);	/* normally write non-inverted data to PiFace B output */
-		pfp->QPval = 0;			/* force all output bits (TODO not used) */
-	    }
+	    pfp->Ival = val;		/* initialise input for comparison */
 	}
-    }
-    /********************************************************************
-     *  Extend with GPIO IXn initialisation inputs
-     *  There may be no GPIOs or only GPIO outputs - nothing to initialise
-     *******************************************************************/
-    for (gep = iC_gpL[1]; gep; gep = gep->nextIO) {	/* IXn inputs only */
-	val = 0;
-	for (bit = 0; bit <= 7; bit++) {
-	    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-		if ((n = gpio_read(gep->gpioFN[bit])) != -1) {
-		    if (n) val |= iC_bitMask[bit];
-		} else {
-		    fprintf(iC_errFP, "WARNING: %s: GPIO %hu returns invalid value -1 (not 0 or 1 !!)\n",
-			iC_progname, gpio);		/* should not happen */
-		}
-	    }
+	if (pfp->QPname) {							/* PiFace GPIOB+ */
+	    writeByte(pfp->spiFN, pfa, OLATB, pfp->QPinv);	/* normally write non-inverted data to PiFace B output */
+	    pfp->QPval = 0;			/* force all output bits (TODO not used) */
 	}
-	assert(gep->Gname);
-	assert(regBufLen > 11);			/* fits largest data telegram */
-	/* by default do not invert GPIO inputs - they are inverted with -I */
-	len = snprintf(cp, regBufLen, ",%hu:%d", gep->Gchannel, val ^ gep->Ginv);	/* data telegram */
-	cp += len;
-	regBufLen -= len;
-	if (iC_debug & 0100) {
-	    len = snprintf(op, ol, " G %s(INI)", gep->Gname);	/* source name */
-	    op += len;
-	    ol -= len;
-	}
-	gep->Gval = val;			/* initialise input for comparison */
     }
     /********************************************************************
      *  Send IXn inputs if any - to iCsever to initialise receivers
@@ -1723,14 +1489,6 @@ main(
     if (cp > regBuf) {
 	iC_send_msg_to_server(iC_sockFN, regBuf+1);	/* send data telegram(s) to iCserver (skip initial ',') */
 	if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
-    }
-    /********************************************************************
-     *  Write GPIO QXn initialisation outputs
-     *******************************************************************/
-    for (gep = iC_gpL[0]; gep; gep = gep->nextIO) {	/* QXn outputs only */
-	val = 0;				/* initialise with logical 0 */
-	gep->Gval = gep->Ginv ^ 0xff;		/* force all output bits */
-	writeGPIO(gep, gep->Gchannel, val);
     }
     if (argc != 0) {
 	/********************************************************************
@@ -1744,20 +1502,13 @@ main(
      *  Clear and then set all bits to wait for interrupts
      *******************************************************************/
     FD_ZERO(&infds);				/* should be done centrally if more than 1 connect */
-    FD_ZERO(&ixfds);				/* should be done centrally if more than 1 connect */
     FD_SET(iC_sockFN, &infds);			/* watch sock for inputs */
-    if (iC_npf) FD_SET(gpio25FN, &ixfds);	/* watch GPIO25 for out-of-band input - do after iC_connect_to_server() */
-    /********************************************************************
-     *  Set all GPIO IXn input bits for interrupts
-     *******************************************************************/
-    for (gep = iC_gpL[1]; gep; gep = gep->nextIO) {	/* IXn inputs only */
-	for (bit = 0; bit <= 7; bit++) {
-	    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-		assert(gep->gpioFN[bit] > 0);		/* make sure it has been opened */
-		FD_SET(gep->gpioFN[bit], &ixfds);	/* watch GPIO N for out-of-band input */
-	    }
-	}
-    }
+#if RASPBERRYPI < 5010	/* sysfs */
+    FD_ZERO(&ixfds);				/* should be done centrally if more than 1 connect */
+    FD_SET(gpio25FN, &ixfds);			/* watch GPIO25 for out-of-band input - do after iC_connect_to_server() */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    FD_SET(pins.linereq->fd, &infds);		/* watch GPIO 25 for interrupts with v2 ioctl ABI */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     if ((iC_debug & DZ) == 0) FD_SET(0, &infds);	/* watch stdin for inputs unless - FD_CLR on EOF */
     if (iC_debug & 0200) fprintf(iC_outFP, "iC_sockFN = %d	gpio25FN = %d spidFN[0] = %d spidFN[1] = %d\n",
 	iC_sockFN, gpio25FN, spidFN[0], spidFN[1]);
@@ -1769,7 +1520,11 @@ main(
     slr = 0;
     cbc = 0x03;					/* first input will switch to cursor/blink off */
     for (;;) {
+#if RASPBERRYPI < 5010	/* sysfs */
 	if ((retval = iC_wait_for_next_event(&infds, &ixfds, toCntp)) == 0)
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	if ((retval = iC_wait_for_next_event(&infds, NULL, toCntp)) == 0)
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	{
 	    if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
 		toCnt = toC750;			/* re-initialise timeout value */
@@ -1793,7 +1548,7 @@ main(
 		    if (isdigit(rpyBuf[0])) {
 			char *	cpe;
 			char *	cps;
-			chS	sel;		/* union can store either int un or gpioIO * gep */
+			int	sel;		/* can store int */
 
 			do {
 			    if ((cpe = strchr(++cp, ',')) != NULL) { /* find next comma in input */
@@ -1815,7 +1570,7 @@ main(
 				    }
 				    writePiFaceCAD(cps, 0);	/* display on local PiFaceCAD */
 				} else
-				if ((un = (sel = Units[channel]).un) < 16) {
+				if ((un = (sel = Units[channel])) < 16) {
 				    iq = (un & 0x08) >> 2;	/* selects OLATA or OLATB */
 				    un &= 0x07;			/* Unit # for pfa */
 				    pfp = &iC_pfL[un];
@@ -1889,11 +1644,6 @@ main(
 					fprintf(iC_errFP, "WARNING: %s: unit = %d, iq = %d, channel = %hu, val = %d; no output registered - should not happen\n",
 					    iC_progname, un, iq, channel, val);		/* should not happen */
 				    }
-				} else {
-				    /********************************************************************
-				     *  TCP/IP output for a GPIO
-				     *******************************************************************/
-				    writeGPIO(sel.gep, channel, val);
 				}
 			    } else {
 				fprintf(iC_errFP, "channel = %hu, topChannel = %hu\n", channel, topChannel);
@@ -1910,9 +1660,28 @@ main(
 		}
 	    }	/* end of TCP/IP input */
 	    /********************************************************************
-	     *  GPIO25 interrupt means SIO input from a PiFace
+	     *  GPIO 25 interrupt means SIO input from a PiFace
 	     *******************************************************************/
-	    if (gpio25FN > 0 && FD_ISSET(gpio25FN, &iC_exfds)) {	/* watch for out-of-band GPIO25 input */
+#if RASPBERRYPI < 5010	/* sysfs */
+	    if (gpio25FN > 0 && FD_ISSET(gpio25FN, &iC_exfds))	/* watch for out-of-band GPIO 25 input */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	    if (FD_ISSET(pins.linereq->fd, &iC_rdfds))		/* watch for iGPIO 25 interrup with v2 ioctl ABI */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	    {
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+		if ((m = read(pins.linereq->fd, lineevent, sizeof lineevent[0]*LINEEVENT_BUFFERS)) == -1) {
+		    perror ("ERROR: read - lineevent");
+		    iC_quit(SIGUSR1);		/* error quit */
+		}
+		m /= sizeof lineevent[0];		/* number of lineevent buffers read */
+		if (iC_debug & 0200) fprintf(iC_outFP, "ioctl m = %d GPIO 25 interrupts:", m);
+		for (n = 0; n < m; n++) {
+		    gpio = lineevent[n].offset;	/* GPIO number from offset */
+		    assert(gpio < GPIO_LIMIT && lineevent[n].id == GPIO_V2_LINE_EVENT_RISING_EDGE);
+		if (iC_debug & 0200) fprintf(iC_outFP, " [%d] gpio= %d:", n, gpio);
+		}
+		if (iC_debug & 0200) fprintf(iC_outFP, "\n");
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 		m1 = 0;
 #if YYDEBUG && !defined(_WINDOWS)
 		if (iC_micro) iC_microPrint("SPI input received", 0);
@@ -1927,7 +1696,7 @@ main(
 		    /********************************************************************
 		     *  Scan PiFace units for input interrupts (even those not used)
 		     *  More interrupts can arrive for PiFace's already scanned, especially
-		     *  with bouncing mechanical contacts - repeat the scan until GPIO25 == 1
+		     *  with bouncing mechanical contacts - repeat the scan until GPIO25 == 1 (0 for v2 ioctl ABI)
 		     *******************************************************************/
 		    m = 0;
 		    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
@@ -1957,11 +1726,19 @@ main(
 			}
 		    }
 		    m1++;
-		    if ((val = gpio_read(gpio25FN)) == -1) {
-			perror("GPIO25 read");
+#if RASPBERRYPI < 5010	/* sysfs */
+		    if ((val = gpio_read(gpio25FN)) == -1)
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+		    if ((val = gpio_line_get_values (&pins, maskBit25)) == -1)
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+		    {
+			perror("ERROR: GPIO 25 read");
 			fprintf(iC_errFP, "ERROR: %s: GPIO25 read failed\n", iC_progname);
 			break;
 		    }
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+		    val = !val;				/* v2 ioctl ABI returns 0 for inactive - change to 1 for while test */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 		} while (val != 1);			/* catch interrupts which came in during for loop */
 		if (cp > regBuf) {
 		    iC_send_msg_to_server(iC_sockFN, regBuf+1);			/* send data telegram(s) to iCserver */
@@ -1976,56 +1753,6 @@ main(
 		    *(regBuf+1) = '\0';			/* clean debug output next time */
 		}
 	    }	/*  end of GPIO25 interrupt */
-	    /********************************************************************
-	     *  GPIO N interrupt means GPIO n input
-	     *******************************************************************/
-	    m1 = 0;
-	    cp = regBuf;
-	    regBufLen = REPLY;
-	    if (iC_debug & 0100) {
-		op = buffer;
-		ol = BS;
-	    }
-	    for (gep = iC_gpL[1]; gep; gep = gep->nextIO) {	/* IXn inputs only */
-		assert(regBufLen > 11);		/* fits largest data telegram */
-		m = 0;
-		val = gep->Gval;
-		for (bit = 0; bit <= 7; bit++) {
-		    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-			assert(gep->gpioFN[bit] > 0);
-			if (FD_ISSET(gep->gpioFN[bit], &iC_exfds)) {	/* any out-of-band GPIO N input */
-			    if ((n = gpio_read(gep->gpioFN[bit])) == 0) {
-				val &= ~(1 << bit);
-			    } else if (n == 1) {
-				val |= 1 << bit;
-			    } else {
-				fprintf(iC_errFP, "WARNING: %s: GPIO %hu returns invalid value %d (not 0 or 1 !!)\n",
-				    iC_progname, gpio, n);		/* should not happen */
-			    }
-			    m++;
-#if YYDEBUG && !defined(_WINDOWS)
-			    if (m1++ == 0 && iC_micro) iC_microPrint("GPIO input received", 0);
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
-			}
-		    }
-		}
-		if (m && val != gep->Gval) {
-		    /* by default do not invert GPIO inputs - they are inverted with -I */
-		    len = snprintf(cp, regBufLen, ",%hu:%d", gep->Gchannel, val ^ gep->Ginv); /* data telegram */
-		    cp += len;
-		    regBufLen -= len;
-		    if (iC_debug & 0100) {
-			len = snprintf(op, ol, " G %s", gep->Gname); /* source name */
-			op += len;
-			ol -= len;
-		    }
-		    gep->Gval = val;		/* store change for comparison */
-		}
-	    }	/*  end of GPIO N interrupt */
-	    if (cp > regBuf) {
-		iC_send_msg_to_server(iC_sockFN, regBuf+1);	/* send data telegram(s) to iCserver */
-		if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
-	    }
 	    /********************************************************************
 	     *  STDIN interrupt
 	     *******************************************************************/
@@ -2081,53 +1808,19 @@ main(
  *******************************************************************/
 
 static void
-storeUnit(unsigned short channel, chS sel)
+storeUnit(unsigned short channel, int sel)
 {
     while (channel >= ioUnits) {
-	Units = (chS *)realloc(Units,		/* initially NULL */
-	    (ioUnits + IOUNITS) * sizeof(chS));
+	Units = (int *)realloc(Units,		/* initially NULL */
+	    (ioUnits + IOUNITS) * sizeof(int));
 	assert(Units);
-	memset(&Units[ioUnits], '\0', IOUNITS * sizeof(chS));
+	memset(&Units[ioUnits], '\0', IOUNITS * sizeof(int));
 	ioUnits += IOUNITS;			/* increase the size of the array */
 	if (iC_debug & 0200) fprintf(iC_outFP, "storeUnit: Units[%d] increase\n", ioUnits);
     }
-    if (iC_debug & 0200) fprintf(iC_outFP, "storeUnit: Units[%d] <= %d\n", channel, sel.un);
+    if (iC_debug & 0200) fprintf(iC_outFP, "storeUnit: Units[%d] <= %d\n", channel, sel);
     Units[channel] = sel;			/* store PiFace unit number gpioIO * */
 } /* storeUnit */
-
-/********************************************************************
- *
- *	Write changed GPIO output bits
- *
- *******************************************************************/
-
-static void
-writeGPIO(gpioIO * gep, unsigned short channel, int val)
-{
-    int			diff;
-    int			fd;
-    int			mask;
-    unsigned short	bit;
-
-    assert(gep && gep->Gname && *gep->Gname == 'Q');	/* make sure this is really a GPIO output */
-    if (iC_debug & 0100) fprintf(iC_outFP, "P: %s:	%hu:%d	> G %s\n",
-	iC_iccNM, channel, (int)val, gep->Gname);
-    val ^= gep->Ginv;			/* normally write non-inverted data to GPIO output */
-    diff = val ^ gep->Gval;		/* bits which are going to change */
-    assert ((diff & ~0xff) == 0);	/* may receive a message which involves no change */
-    while (diff) {
-	bit = iC_bitIndex[diff];	/* returns 0 - 7 for values 1 - 255 (avoid 0) */
-	mask  = iC_bitMask[bit];	/* returns hex 01 02 04 08 10 20 40 80 */
-	if ((fd = gep->gpioFN[bit]) != -1) {	/* is GPIO pin open ? */
-	    gpio_write(fd, val & mask);	/* yes - write to GPIO (does not need to be a bit in pos 0) */
-	} else if ((iC_debug & 0300) == 0300) {
-	    fprintf(iC_errFP, "WARNING: %s: no GPIO associated with %s.%hu\n",
-		iC_progname, gep->Gname, bit);
-	}
-	diff &= ~mask;			/* clear the bit just processed */
-    }
-    gep->Gval = val;			/* ready for next output */
-} /* writeGPIO */
 
 /********************************************************************
  *
@@ -2159,6 +1852,72 @@ convert_nr(const char * str, char ** endptr)
     }
     return val;
 } /* convert_nr */
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+
+/********************************************************************
+ *  Configure ioctl for gpio control using ABI V2 access.
+ *  @param gpio gpio v2_struct holding pointers to linecfg and linereq
+ *  structs and open file descriptor returned by prior call to
+ *  gpio_dev_open()..
+ *  linecfg - v2 ioctl config struct for gpio pins (lines).
+ *  linereq - v2 ioctl request struct member of linecfg containing
+ *  separate file-descriptor used for read/write access of configured
+ *  gpio pins (lines).
+ *  @return returns 0 on success, -1 otherwise.
+ *******************************************************************/
+
+static int
+gpio_line_cfg_ioctl (gpio_v2_t * gpio)
+{
+    /********************************************************************
+     * get ioctl values for line request
+     *******************************************************************/
+    if (ioctl (gpio->fd, GPIO_V2_GET_LINE_IOCTL, gpio->linereq) < 0) {
+	perror ("ioctl-GPIO_V2_GET_LINE_IOCTL");
+	return -1;
+    }
+    if (iC_debug & 0200) fprintf(iC_outFP, "++++ gpio->fd = %d\n", gpio->fd);
+    /********************************************************************
+     * set the line config for the retured linereq file descriptor
+     *******************************************************************/
+    if (ioctl (gpio->linereq->fd, GPIO_V2_LINE_SET_CONFIG_IOCTL,
+      gpio->linecfg) < 0) {
+	perror ("ioctl-GPIO_V2_LINE_SET_CONFIG_IOCTL");
+	return -1;
+    }
+    if (iC_debug & 0200) fprintf(iC_outFP, "++++ gpio->linereq->fd = %d\n", gpio->linereq->fd);
+    return 0;
+} /* gpio_line_cfg_ioctl */
+
+/********************************************************************
+ *  Read gpio pin (line) values (HI/LO) from bits set or clearned
+ *  in gpio->linevals->bits for pins with bit set high in gpio->linevals->mask
+ *  from mask using gpio_v2 ioct line request.
+ *  @param linereq pointer to gpio_v2_line_request struct holding linereq with
+ *  open linereq file descriptor set by prior call to gpio_line_cfg_ioctl()
+ *  used to read linevals to gpio pin index(s) in linereq->offsets specified
+ *  by bits HI in mask.
+ *  @param mask bitmap with bits 1 (HI) that correspond to index in
+ *  gpio->linereq->offsets pin array that will be set.
+ *  @return returns bit value 0 or 1 on success, -1 otherwise.
+ *******************************************************************/
+
+static int
+gpio_line_get_values (gpio_v2_t * gpio, __u64 mask)
+{
+    /********************************************************************
+     *  get GPIO pin value to bit in lineval->bits (0 or 1) for pins with
+     *  bit == 1 in mask.
+     *******************************************************************/
+    struct gpio_v2_line_values * data = gpio->linevals;
+    data->mask = mask;				/* set linevals mask to mask */
+    if (ioctl(gpio->linereq->fd, GPIO_V2_LINE_GET_VALUES_IOCTL, data) < 0) {
+	perror ("ioctl-GPIO_V2_LINE_GET_VALUES_IOCTL-1");
+	return -1;
+    }
+    return (data->bits & mask) ? 1 : 0;
+} /* gpio_line_get_values */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
 /********************************************************************
  *
@@ -2170,121 +1929,89 @@ convert_nr(const char * str, char ** endptr)
 static int
 termQuit(int sig)
 {
-    if (iC_opt_P) {
-	if (iC_debug & 0200) fprintf(iC_outFP, "=== Unexport GPIOs and close PiFaces =======\n");
-	piFaceIO *	pfp;
-	int		pfce;
-	int		iq;
-	gpioIO *	gep;
-	unsigned short	bit;
-	unsigned short	gpio;
-	int		fn;
-	ProcValidUsed *	gpiosp;
+    if (iC_debug & 0200) fprintf(iC_outFP, "=== Unexport GPIOs and close PiFaces =======\n");
+    piFaceIO *	pfp;
+    int		pfce;
+    ProcValidUsed *	gpiosp;
 
+    /********************************************************************
+     *  PiFaces
+     *******************************************************************/
+    if (iC_npf) {
+	if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### Shutdown active PiFace units\n");
+#if RASPBERRYPI < 5010	/* sysfs */
 	/********************************************************************
-	 *  Unexport and close all gpio files for all GPIO arguments
+	 *  Turn off the pullup resistor on gpio25/INTB
 	 *******************************************************************/
-	for (iq = 0; iq < 2; iq++) {
-	    for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
-		for (bit = 0; bit <= 7; bit++) {
-		    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-			/********************************************************************
-			 *  Execute the SUID root progran iCgpioPUD(gpio, pud) to turn off pull-up/down
-			 *******************************************************************/
-			if (iq == 1) iC_gpio_pud(gpio, BCM2835_GPIO_PUD_OFF);	/* inputs only */
-			/********************************************************************
-			 *  Close GPIO N value
-			 *******************************************************************/
-			if ((fn = gep->gpioFN[bit])> 0) {
-			    close(fn);			/* close connection to /sys/class/gpio/gpio_N/value */
-			}
-			/********************************************************************
-			 *  Force all outputs and inputs to direction "in" and "none" interrupts
-			 *******************************************************************/
-			if (sig != SIGUSR2 && gpio_export(gpio, "in", "none", 1, iC_progname) != 0) {
-			    sig = SIGUSR1;		/* unable to export gpio_N */
-			}
-			/********************************************************************
-			 *  free up the sysfs for gpio N unless used by another program (SIGUSR2)
-			 *******************************************************************/
-			if (iC_debug & 0200) fprintf(iC_outFP, "### Unexport GPIO %hu\n", gpio);
-			if (sig != SIGUSR2 && gpio_unexport(gpio) != 0) {
-			    sig = SIGUSR1;		/* unable to unexport gpio_N */
-			}
+	iC_gpio_pud(25, BCM2835_GPIO_PUD_OFF);
+#endif	/* RASPBERRYPI < 5010 - sysfs */
+	for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
+	    /********************************************************************
+	     *  Clear active PiFace outputs and turn off active PiFaceCad
+	     *  Shutdown all active PiFace Units leaving interrupts off and open drain
+	     *******************************************************************/
+	    if (pfp->Qgate || pfp->Igate || pfp->QPgate) {		/* works for both iCpiFace and apps */
+		if (pfp->Qgate) {
+		    if (pfp->pfa != 4 || pfp->intf != INTFA) {	/* PiFace */
+			writeByte(pfp->spiFN, pfp->pfa, OLATA, pfp->Qinv);
+		    } else {					/* PiFaceCAD */
+			pifacecad_lcd_clear();
+			pifacecad_lcd_display_off();
+			pifacecad_lcd_set_backlight(0);
 		    }
 		}
-	    }
-	}
-	/********************************************************************
-	 *  PiFaces
-	 *******************************************************************/
-	if (iC_npf) {
-	    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### Shutdown active PiFace units\n");
-	    /********************************************************************
-	     *  Turn off the pullup resistor on gpio25/INTB
-	     *******************************************************************/
-	    iC_gpio_pud(25, BCM2835_GPIO_PUD_OFF);
-	    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
-		/********************************************************************
-		 *  Clear active PiFace outputs and turn off active PiFaceCad
-		 *  Shutdown all active PiFace Units leaving interrupts off and open drain
-		 *******************************************************************/
-		if (pfp->Qgate || pfp->Igate || pfp->QPgate) {		/* works for both iCpiFace and apps */
-		    if (pfp->Qgate) {
-			if (pfp->pfa != 4 || pfp->intf != INTFA) {	/* PiFace */
-			    writeByte(pfp->spiFN, pfp->pfa, OLATA, pfp->Qinv);
-			} else {					/* PiFaceCAD */
-			    pifacecad_lcd_clear();
-			    pifacecad_lcd_display_off();
-			    pifacecad_lcd_set_backlight(0);
-			}
-		    }
-		    if (pfp->QPgate) {
-			writeByte(pfp->spiFN, pfp->pfa, OLATB, pfp->QPinv);
-		    }
-		    if (setupMCP23S17(pfp->spiFN, pfp->pfa, IOCON_ODR, 0, 0x00, 0x00) < 0) {
-			fprintf(iC_errFP, "ERROR: %s: PiFace %d not found after succesful test ???\n",
-			    iC_progname, pfp->pfa);
-		    }
+		if (pfp->QPgate) {
+		    writeByte(pfp->spiFN, pfp->pfa, OLATB, pfp->QPinv);
 		}
-	    }
-	    /********************************************************************
-	     *  Close selected spidev devices
-	     *******************************************************************/
-	    for (pfce = 0; pfce < 2; pfce++) {
-		if (spidFN[pfce] > 0) {
-		    close(spidFN[pfce]);		/* close connection to /dev/spidev0.0, /dev/spidev0.1 */
-		}
-	    }
-	    /********************************************************************
-	     *  Close GPIO25/INTB/INTA value
-	     *  free up the sysfs for gpio 25 unless used by another program (SIGUSR2)
-	     *******************************************************************/
-	    if (gpio25FN > 0) {
-		close(gpio25FN);			/* close connection to /sys/class/gpio/gpio25/value */
-		if (iC_debug & 0200) fprintf(iC_outFP, "### Unexport GPIO 25\n");
-		if (sig != SIGUSR2 && gpio_unexport(25) != 0) {
-		    sig = SIGUSR1;			/* unable to unexport gpio 25 */
+		if (setupMCP23S17(pfp->spiFN, pfp->pfa, IOCON_ODR, 0, 0x00, 0x00) < 0) {
+		    fprintf(iC_errFP, "ERROR: %s: PiFace %d not found after succesful test ???\n",
+			iC_progname, pfp->pfa);
 		}
 	    }
 	}
 	/********************************************************************
-	 *  Open and lock the auxiliary file ~/.iC/gpios.used again
-	 *  Other apps may have set used bits since this app was started
+	 *  Close selected spidev devices
 	 *******************************************************************/
-	if ((gpiosp = openLockGpios(0)) == NULL) {
-	    fprintf(iC_errFP, "ERROR: %s: in openLockGpios()\n",
-		iC_progname);
-	    return (SIGUSR1);		/* error quit */
+	for (pfce = 0; pfce < 2; pfce++) {
+	    if (spidFN[pfce] > 0) {
+		close(spidFN[pfce]);		/* close connection to /dev/spidev0.0, /dev/spidev0.1 */
+	    }
 	}
-	gpiosp->u.used &= ~ownUsed;		/* clear all bits for GPIOs and A/D channels used in this app */
-	if (writeUnlockCloseGpios() < 0) {	/* unlink (remove) ~/.iC/gpios.used if gpios->u.used and oops is 0 */
-	    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
-		iC_progname);
-	    return (SIGUSR1);		/* error quit */
+#if RASPBERRYPI < 5010	/* sysfs */
+	/********************************************************************
+	 *  Close GPIO25/INTB/INTA value
+	 *  free up the sysfs for gpio 25 unless used by another program (SIGUSR2)
+	 *******************************************************************/
+	if (gpio25FN > 0) {
+	    close(gpio25FN);			/* close connection to /sys/class/gpio/gpio25/value */
+	    if (iC_debug & 0200) fprintf(iC_outFP, "### Unexport GPIO 25\n");
+	    if (sig != SIGUSR2 && gpio_unexport(25) != 0) {
+		sig = SIGUSR1;			/* unable to unexport gpio 25 */
+	    }
 	}
-	if (iC_debug & 0200) fprintf(iC_outFP, "=== End Unexport GPIOs and close PiFaces ===\n");
-    } /* iC_opt_P */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	close(pins.linereq->fd);
+	close(chipFN);
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+    }
+    /********************************************************************
+     *  Open and lock the auxiliary file ~/.iC/gpios.used again
+     *  Other apps may have set used bits since this app was started
+     *******************************************************************/
+    if ((gpiosp = openLockGpios(0)) == NULL) {
+	fprintf(iC_errFP, "ERROR: %s: in openLockGpios()\n",
+	    iC_progname);
+	return (SIGUSR1);		/* error quit */
+    }
+    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### %s: openLock, used = 0x%016llx, ownUsed = 0x%016llx\n", iC_progname, gpiosp->u.used, ownUsed);
+    gpiosp->u.used &= ~ownUsed;		/* clear all bits for GPIOs and A/D channels used in this app */
+    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### %s: writeUnlockCloseGpios, used = 0x%016llx\n", iC_progname, gpiosp->u.used);
+    if (writeUnlockCloseGpios() < 0) {	/* unlink (remove) ~/.iC/gpios.used if gpios->u.used and oops is 0 */
+	fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
+	    iC_progname);
+	return (SIGUSR1);		/* error quit */
+    }
+    if (iC_debug & 0200) fprintf(iC_outFP, "=== End Unexport GPIOs and close PiFaces ===\n");
     return (sig);			/* finally quit */
 } /* termQuit */
 #endif	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */
@@ -2299,129 +2026,74 @@ iCpiFace - real digital I/O on a Raspberry Pi for the iC environment
 
 =head1 SYNOPSIS
 
- iCpiFace | iCpiGPIO
-          [-GBIftmqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+ iCpiFace [-BIftmqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
           [ -d <deb>]
+          [ [~]Xn[-Xm|+[<mask>]][:<pfa>][-<inst>] ...]
           [ [~]IXn[-IXm|+[<mask>]][:<pfa>][-<inst>] ...]
           [ [~]QXn[-QXm|+[<mask>]][:<pfa>][-<inst>] ...]
-          [ [~]IXn,<gpio>[,<gpio>,...][-<inst>] ...]
-          [ [~]QXn,<gpio>[,<gpio>,...][-<inst>] ...]
-          [ [~]IXn.<bit>,<gpio>[-<inst>] ...]
-          [ [~]QXn.<bit>,<gpio>[-<inst>] ...]      # at least 1 IEC argument
           [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
-    -s host IP address of server    (default '127.0.0.1')
+    -s host IP address of server    (default '127.0.0.1127.0.0.1s')
     -p port service port of server  (default '8778')
     -i inst instance of this client (default '') or 1 to 3 digits
-    -G      service GPIO I/O only - block PiFaces and PiFace arguments
-            calling with alternate name "iCpiGPIO" has the same effect
-    -B      start iCbox -d to monitor active PiFace and/or GPIO I/O
-            A 1 to PiFace and GPIO outputs generates hi - LED and relay off
-            A 0 to PiFace and GPIO outputs generates lo - LED and relay on
-    -I      invert all PiFace and GPIO inputs and outputs
-            PiFace and GPIO input circuits are normally hi - 1 and
+            calling with alternate name \"iCpiGPIO\" has the same effect
+    -B      start iCbox -d to monitor active PiFace I/O
+            A 1 to PiFace outputs generates hi - LED and relay off
+            A 0 to PiFace outputs generates lo - LED and relay on
+    -I      invert all PiFace inputs and outputs
+            PiFace input circuits are normally hi - 1 and
             when a switch on the input is pressed it goes lo - 0. Therefore
             it is appropriate to invert inputs and outputs. When inverted
             a switch pressed on an input generates a 1 for the IEC inputs and
             a 1 on an IEC output turns a LED and relay on, which is natural.
     NOTE: the supplied PiFace driver inverts outputs but not inputs - go figure
-    -W GPIO number used by the w1-gpio kernel module (default 4, maximum 31).
-            When the GPIO with this number is used in this app, iCtherm is
-            permanently blocked to avoid Oops errors in module w1-gpio.
-    -f      force use of all interrupting gpio inputs - in particular
-            force use of gpio 25 - some programs do not unexport correctly.
+    -f      force use of gpio 25 - some programs do not unexport correctly.
 
                       PIFACE arguments
           For each PiFace or PiFaceCAD connected to a Raspberry Pi
           8 bits of digital input and 8 bits of digital output with
           known IEC variables are generated.
-    Xn[-Xm]
-    IXn[-IXm]
-    QXn[-QXm]
+    Xn[-Xm]:<pfa>
+    IXn[-IXm]:<pfa>
+    QXn[-QXm]:<pfa>
           The argument Xn can optionally be preceded by either I for
           inputs or Q for outputs. The IEC-1131 IEC's generated are
           followed by a bit selector in the range .0 to .7.
-          For the list X1 X2 IX8 QX9 the following is generated:
+          For the list X1:0 X2:1 IX8:2 QX9:2 the following is generated:
             inputs IX1.0 - .7 and outputs QX1.0 - .7 for PiFace unit 0
             inputs IX2.0 - .7 and outputs QX2.0 - .7 for PiFace unit 1
             inputs IX8.0 - .7 and outputs QX9.0 - .7 for PiFace unit 2
           A range of IEC's can be specified with X0-X3, IX4-IX6 or QX7-QX9
+	   A PiFace unit address ':pfa' must be provided for an individual
+	   IEC or for the first IEC of a range.  A PiFace with that unit
+	   address must be available.
           Actual PiFace unit addresses in the range 0 - 7 are selected by
           jumpers JP1 and JP2 as well as CE0/CE1 (JP1 - JP8 on the PiRack).
-            The program scans which addresses are present and associates
-          them with unit numbers in ascending PiFace address order.
-          Normally IEC addresses will be chosen to coincide with PiFace
-          unit numbers, but this is not mandatory. What is mandatory is that
-          there are enough PiFaces to cover all the IEC's in the arguments.
-    Xn[-Xm]:<pfa>
-    IXn[-IXm]:<pfa>
-    QXn[-QXm]:<pfa>
-          Associate a particular IEC or IEC range with a specific PiFace
-          unit address or address range. <pfa> must be one of numbers 0 - 7
-          and a PiFace with that unit address must be available.
-            By choosing X1-X3:1 for 3 PiFaces, the IEC numbers will
-          be the same as the PiFace addresses which are 1 to 3. This
-          would be good programming practice. On the other hand there
-          are good reasons to choose different IEC arguments to fit in with
-          the iC application code and other I/O's.
-    D ID QD may be used as dummy IEC's instead of Xn IXn QXn to exclude a
-          PiFace unit or an individual PiFace input or output.
 
                       PIFACE GPIOB+ extra arguments
-    QXn+  The whole GPIOB register is a 2nd output rather than an input
-    QXn+<mask>  Only the masked bits of GPIOB register are output bits
-    IXn+        The whole GPIOB register is an input (same as IXn)
-    IXn+<mask>  Only the masked bits of GPIOB register are input bits
+    QXn+:<pfa>  The whole GPIOB register is a 2nd output rather than an input
+    QXn+<mask>:<pfa>  Only the masked bits of GPIOB register are output bits
+    IXn+:<pfa>        The whole GPIOB register is an input (same as IXn)
+    IXn+<mask>:<pfa>  Only the masked bits of GPIOB register are input bits
           <mask> for bits 0 - 3 may be expressed as 0b1111, 0xf, 017 or 15
           The masks for output and input may not both contain the same bit
-    QXn+:<pfa> etc Associate a particular IEC+ with a specific PiFace address
-          PiFace GPIOB+ selections cannot be part of a range.
 
-                      GPIO arguments (same as for iCpiI2C)
-          Any IEC I/Os IXn.y and QXn.y which are to be linked to GPIO
-          inputs or outputs must be named in the argument list as follows:
-    IXn,<gpio>[,<gpio>,...]
-    QXn,<gpio>[,<gpio>,...]
-          Associate the bits of a particular input or output IEC
-          with a list of gpio numbers.  Up to 8 gpio numbers can
-          be given in a comma separated list. The first gpio number
-          will be aassociated with bit 0, the second with bit 1 etc
-          and the eighth with bit 7. If the list is shorter than
-          8 the trailing bits are not used. The letter 'd' can be
-          used in the list instead of a gpio number to mark that bit
-          as unused.  eg. IX3,17,18,19,20,d,d,21 associates IX3.0 to
-          IX3.3 with GPIO17 to GPIO20 and IX3.6 with GPIO21.
-          Alternatively:
-    IXn.<bit>,<gpio>
-    QXn.<bit>,<gpio>
-          Each input or output <bit> 0 to 7 is associated with one
-          gpio nunber eg. IX3.0,17 QX3.7,18
-
-                      COMMON extensions
+                      Common arguments
     ~IEC  Each lone IEC or leading IEC of a range may be preceded by a
           tilde '~', which inverts lone IEC inputs or outputs or all
           members of a range.  If all IEC inputs and outputs are already
           inverted with -I, then ~ inverts them again, which makes them
-          non-inverted. Individual bits for one IEC can be inverted
-          or left normal for GPIO IEC's by declaring the IEC more than
-          once with non-overlapping gpio bit lists or single bits.
-           (Not possible for PiFaces).
+          non-inverted.
     IEC-inst Each individual IEC or range can be followed by -<inst>,
-          where <inst> consists of 1 to 3 numeric digits.
+          where <inst> consists of 1 to %d numeric digits.
           Such an appended instance code takes precedence over the
           general instance specified with the -i <inst> option above.
 
                       CAVEAT
-    There must be at least 1 PiFace or GPIO IEC argument. No IEC arguments
-    are generated automatically for iCpiFace.
-    Only one instance of iCpiFace or an app with IEC parameters may be run
-    and all GPIOs, PiFaces and an optional PiFaceCAD must be controlled by
-    this one instance. If two instances were running, the common interrupts
-    would clash. Also no other program controlling GPIOs and PiFaces like
-    'PiFace Digital Emulator' may be run at the same time as this application.
-    An exception is iCpiPWM which controls GPIOs by DMA and not by interrupts.
-    Another exception is iCtherm which controls GPIO 4 by the 1Wire interface.
-    Care is taken that any GPIOs or PiFaces used in one app, iCpiFace, iCpiPWM
-    or even iCtherm do not clash with another app (using ~/.iC/gpios.used).
+    There must be at least 1 MCP23017 IEC argument. No IEC arguments are
+    generated automatically for iC[iI2C.
+   Care is taken that any GPIOs, MCP23S17's or MCP23017s used in one
+    app, iCpiGPIO, iCpiFace, iCpiI2C, iCpiPWM or even iCtherm do not
+    clash with another app (using ~/.iC/gpios.used).
 
                       DEBUG options
     -t      trace arguments and activity (equivalent to -d100)
@@ -2439,7 +2111,7 @@ iCpiFace - real digital I/O on a Raspberry Pi for the iC environment
     -z      block keyboard input on this app - used by -R
     -h      this help text
          T  at run time displays registrations and equivalences
-         q  or ctrl+D  at run time stops iCpiFace
+         q  or ctrl+D  at run time stops %s
 
                       AUXILIARY app
     -R <app ...> run auxiliary app followed by -z and its arguments
@@ -2449,18 +2121,9 @@ iCpiFace - real digital I/O on a Raspberry Pi for the iC environment
 
 B<iCpiFace> is an I/O client for iCserver in the immediate C
 environment of a Raspberry Pi handling real 8 bit inputs and 8
-bit outputs for each PiFace controllers attached to a Raspberry Pi
-or from a number of direct GPIO pins on the Raspberry Pi or both.
+bit outputs for each PiFace controllers attached to a Raspberry Pi.
 It also handles 8 bits of push button input and control of an LCD
 Text panel for a PiFaceCAD.
-
-All GPIO pins on a Raspberry Pi A, B or B+ may be selected as either
-an input bit or output bit independent of whether PiFaces are present
-or not, except GPIO 7-11 and GPIO 25 if PiFaces are also processed.
-All GPIO inputs are handled by interrupts.
-
-If no PiFace controllers are found or if the program is called with -G
-or with the alternate name B<iCpiGPIO>, only GPIO pins will be handled.
 
 A maximum of 8 PiFace controllers can be handled altogether - either
 one plugged directly into a Raspberry Pi - or 4 on one PiRack -
@@ -2471,56 +2134,7 @@ button inputs and a 2 line x 16 character LCD display. The PiFaceCAD
 fits neatly as the last controller on a PiRack or can be mounted on
 its own on the Raspberry Pi.
 
-Similar I/O operations for both PiFaces and Raspberry Pi GPIOs can be
-obtained by linking the driver directly to an iC app, in which case
-these I/O operations are not handled by iCserver.
-
 =head1 TECHNICAL BACKGROUND
-
-The direct GPIO connections on the Raspberry Pi:
-
- 0) The Raspberry Pi A or B brings out 17 GPIO signals on a 26 pin
-    connecteor, 5 of which double up to do the SPI interface, 2 for
-    a UART, leaving 10 for general purpose input/output (there are
-    4 more on a 2nd connector, which is not normally fitted). The
-    Raspberry Pi B+ brings out 9 more GPIO signals on its 40 pin
-    connector making a total of 19 free GPIO pins.  The Linux "sysfs"
-    can access the value of these GPIO pins from user space and more
-    importantly can generate interrupts from them.
-
-    All GPIO pin I/O is handled by the Linux "sysfs" and its interrupts.
-
-    For details see:
-    http://www.auctoris.co.uk/2012/07/19/gpio-with-sysfs-on-a-raspberry-pi/
-
-    The "sysfs" export, unexport, direction, edge and value commands
-    can be run by normal (non root) users if they belong to group gpio.
-    To achieve this the true path that the link /sys/class/gpio/gpio*
-    points to must be adjusted to root:gpio by a system script.
-    The path in the kernel and the matching udev script has changed a
-    number of times between 2012 and 2015 causing much confusion.
-
-    The following change works for me as of December 2015
-    https://github.com/raspberrypi/linux/issues/1117
-
-    popcornmix commented on Aug 25 2015
-    Looks like something may have changed in the later kernel where
-    /sys/devices/soc/*.gpio/gpio is now /sys/devices/platform/soc/*.gpio/gpio
-    Can you try editing:
-    /lib/udev/rules.d/60-python-pifacecommon.rules and
-    /lib/udev/rules.d/60-python3-pifacecommon.rules (if they both exist) to be:
-
- KERNEL=="spidev*", GROUP="spi", MODE="0660"
- SUBSYSTEM=="gpio*", PROGRAM="/bin/sh -c 'chown -R root:gpio /sys/class/gpio &&\
- chmod -R 770 /sys/class/gpio; chown -R root:gpio /sys/devices/virtual/gpio &&\
- chmod -R 770 /sys/devices/virtual/gpio;\
- chown -R root:gpio /sys/devices/platform/soc/*.gpio/gpio &&\
- chmod -R 770 /sys/devices/platform/soc/*.gpio/gpio'"
-
-    Another complication is, that after a "sysfs" export, the first access
-    to the direction (or any other) register takes about 200 ms. I have
-    taken care of this by retrying  every 50 ms for a max of 2.5 seconds
-    before giving up. (Discussed in a number of forums).
 
 Lines marked with ** apply only to PiFace Relay+ and PiFace Relay Extra.
 
@@ -2599,15 +2213,15 @@ Raspberry Pi via four different paths:
     select handles timeouts correctly when interrupted.
 
     NOTE: only one instance of iCpiFace may be run and all PiFaces and
-    an optional PiFaceCAD as well as extra GPIO's must be controlled
-    by this one instance. If two instances were running, the common
-    interrupts would clash.  If GPIO25 has already been exported by
-    another program or by another instance of iCpiFace the program
-    exits with an error message, since GPIO25 cannot be used by more
-    than one program simultaneously.  Some programs (PiFace Digital
-    Emulator) do not unexport GPIO25 when they close. The -f command
-    line option can be used to force use of GPIO25 if you are sure
-    there is no running program actually using GPIO25.
+    an optional PiFaceCAD must be controlled by this one instance.
+    If two instances were running, the common interrupts would clash.
+    If GPIO25 has already been exported by another program or by
+    another instance of iCpiFace the program exits with an error message,
+    since GPIO25 cannot be used by more than one program simultaneously.
+    Some programs (PiFace Digital Emulator) do not unexport GPIO25 when
+    they close. The -f command line option can be used to force use of
+    GPIO25 if you are sure there is no running program actually using
+    GPIO25.
 
  4) To allow several PiFace units and possibly a PiFaceCAD to run
     simultaneously on a PiRack, the INTB/GPIO25 line requires a pullup

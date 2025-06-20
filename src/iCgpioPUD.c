@@ -60,7 +60,7 @@ static const char *	usage =
 "    NOTE:   This program must be suid root to run\n"
 "\n"
 "Copyright (C) 2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCgpioPUD.c 1.3 $\n"
+"Version	$Id: iCgpioPUD.c 1.4 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -146,6 +146,7 @@ main(
     /********************************************************************
      *  Turn the actual pull-up/down resistor on or off
      *******************************************************************/
+    bcm2835_set_debug(0);
     if (!bcm2835_init()) {
 	fprintf(stderr, "ERROR: %s: bcm2835_init failed - run as SUID root\n", iC_progname);
 	exit(1);

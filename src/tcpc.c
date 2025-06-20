@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c 1.36 $";
+"@(#)$Id: tcpc.c 1.37 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -346,12 +346,14 @@ iC_wait_for_next_event(fd_set * infdsp, fd_set * ixfdsp, struct timeval * ptv)
 	}
     } while ((retval = select(iC_maxFN + 1, &iC_rdfds, 0, exfdsp, ptv)) == -1 && errno == EINTR);
 
-#ifdef	_WIN32
     if (retval == -1) {
+#ifdef	_WIN32
 	fprintf(iC_errFP, "ERROR: select failed: %d\n", WSAGetLastError());
+#else
+	perror("select failed");
+#endif	/* _WIN32 */
 	iC_quit(SIGUSR1);
     }
-#endif	/* _WIN32 */
 
     return retval;
 } /* iC_wait_for_next_event */

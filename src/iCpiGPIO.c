@@ -164,7 +164,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2025 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiGPIO.c 1.2 $\n"
+"Version	$Id: iCpiGPIO.c 1.3 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -288,9 +288,9 @@ static gpio_v2_t pins =  {
 /********************************************************************
  * gpio_v2 attribute and attribute config for flags for out and in pins
  * active hi (non-inverted) write pins will use default linecfg flags
- * active lo (inverted) write pins will use wi_attr and wi__cfg_attr
- * active hi (non-inverted) read pins will use rd_attr and rd__cfg_attr
- * active lo (inverted) read pins will use ri_attr and ri__cfg_attr
+ * active lo (inverted) write pins will use wi_attr and wi_cfg_attr
+ * active hi (non-inverted) read pins will use rd_attr and rd_cfg_attr
+ * active lo (inverted) read pins will use ri_attr and ri_cfg_attr
  *
  * struct gpio_v2_line_attribute - a configurable attribute of a line
  * @id: attribute identifier with value from &enum gpio_v2_line_attr_id
@@ -372,6 +372,7 @@ static gpio_T			gpioArray[GPIO_LIMIT];
 static gpio_T			gepArray[LINEEVENT_BUFFERS];
 static int	gpio_line_cfg_ioctl (gpio_v2_t * gpio);
 static int	gpio_line_set_values (gpio_v2_t * gpio, __u64 bits,  __u64 mask);
+static int	gpio_line_get_values (gpio_v2_t * gpio, __u64 mask);
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
 /********************************************************************
@@ -616,11 +617,11 @@ main(
     if (iC_debug & 0200) {
 #if RASPBERRYPI < 5010	/* sysfs */
 	fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n"
-			  "kernel = %d.%d ( < 6.6... )		use sysfs\n",
+			  "kernel = %d.%d ( < 5.10... )		use sysfs\n",
 			  iC_fullProgname, iC_path, iC_progname, RASPBERRYPI/1000, RASPBERRYPI%1000);
 #else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n"
-			  "kernel = %d.%d ( >= 6.6...	)	use GPIO Character Device Userspace API (V2)\n",
+			  "kernel = %d.%d ( >= 5.10...	)	use GPIO Character Device Userspace API (V2)\n",
 			  iC_fullProgname, iC_path, iC_progname, RASPBERRYPI/1000, RASPBERRYPI%1000);
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     }
@@ -667,7 +668,10 @@ main(
 	    ieStart = ieEnd = 0;
 	    if (strlen(*argp) >= 128) {
 		fprintf(iC_errFP, "ERROR: %s: command line argument too long: '%s'\n", iC_progname, *argp);
-		exit(1);
+		if (writeUnlockCloseGpios() < 0) {
+		    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
+		}
+		iC_quit(SIGUSR1);		/* error quit */
 	    }
 	    iid = iidN;					/* global instance either 0xffff for "" or 0 - 999 */
 	    *iids = '\0';				/* track argument instance for error messages */
@@ -887,8 +891,7 @@ main(
 	if (iC_debug & 0200) fprintf(iC_outFP, "used     = 0x%016llx\n"
 					       "oops     = 0x%016llx\n", gpiosp->u.used, gpiosp->u.oops);
 	if (writeUnlockCloseGpios() < 0) {
-	    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
-		iC_progname);
+	    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
 	    errorFlag++;
 	}
     }
@@ -916,7 +919,7 @@ main(
 	}
     }
     /********************************************************************
-     *  Do the same for iC_gpL[0] and iC_gpL[1]
+     *  Clear val and channel members in  iC_gpL[0] and iC_gpL[1]
      *******************************************************************/
     for (iq = 0; iq < 2; iq++) {
 	for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
@@ -1013,19 +1016,17 @@ main(
 			 *  Execute the SUID root progran iCgpioPUD(gpio, pud) to set pull-up
 			 *  to 3.3 volt. It is not recommended to connect a GPIO input to 5 volt,
 			 *  although I have never had a problem doing so. JW 2023-07-04
-			 *  Previously (before version 1.17) the following was done:
-			 *    for normal   input (logic 0 = low)  set pull down pud = 1
-			 *    for inverted input (logic 0 = high) set pull up   pud = 2
-			 *  That required pulling the input high for normal input, which is
-			 *  awkward, especially if you should only use 3.3 volt, not 5 volt.
-			 *  Now it is always pull up  pud = 2. GPIO inputs are activated by
-			 *  pulling them down to 0 volts, which is the same as PiFace inputs.
+			 *  This requires the following to obtain correct initialisation of inputs:
+			 *    for normal   input (logic 0 = low)  set pull down pud = 1 BCM2835_GPIO_PUD_DOWN
+			 *    for inverted input (logic 0 = high) set pull up   pud = 2 BCM2835_GPIO_PUD_UP
 			 *******************************************************************/
-			iC_gpio_pud(gpio, BCM2835_GPIO_PUD_UP);
+			iC_gpio_pud(gpio, gep->Ginv ? BCM2835_GPIO_PUD_UP : BCM2835_GPIO_PUD_DOWN);
 		    }
 		    if (gep->gpioFN[bit] > iC_maxFN) {
 			iC_maxFN = gep->gpioFN[bit];
 		    }
+		    if (iC_debug & 0200) fprintf(iC_outFP, "configure %c%s.%hu,%hu\n",
+			gep->Ginv  ? '~' : ' ', gep->Gname, bit, gpio);
 #else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 		    /********************************************************************
 		     *  Configure gpio line request and line configurations
@@ -1283,18 +1284,31 @@ main(
 	    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
 #if RASPBERRYPI < 5010	/* sysfs */
 		if ((n = gpio_read(gep->gpioFN[bit])) != -1) {
+		    if (iC_debug & 0200) fprintf(iC_outFP, "Initial value: %c%s.%hu,%hu = %d\n",
+			gep->Ginv  ? '~' : ' ', gep->Gname, bit, gpio, n);
 		    if (n) val |= iC_bitMask[bit];
 		} else {
 		    fprintf(iC_errFP, "WARNING: %s: GPIO %hu returns invalid value -1 (not 0 or 1 !!)\n",
 			iC_progname, gpio);		/* should not happen */
 		}
-#endif	/* RASPBERRYPI < 5010 - sysfs */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+		__u64 inMask = 1LL << gep->gpioFN[bit];	/* shift with idx in gep->gpioFN[bit] */
+		n = gpio_line_get_values (&pins, inMask);
+		if (iC_debug & 0200) fprintf(iC_outFP, "Initial value: %c%s.%hu,%hu = %d\n",
+		    gep->Ginv  ? '~' : ' ', gep->Gname, bit, gpio, n);
+		if (n) val |= iC_bitMask[bit];
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	    }
 	}
 	assert(gep->Gname);
 	assert(regBufLen > 11);			/* fits largest data telegram */
+#if RASPBERRYPI < 5010	/* sysfs */
 	/* by default do not invert GPIO inputs - they are inverted with -I */
 	len = snprintf(cp, regBufLen, ",%hu:%d", gep->Gchannel, val ^ gep->Ginv);	/* data telegram */
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	/* in V2 ABI for ioctl val is active in bit which must not be inverted again */
+	len = snprintf(cp, regBufLen, ",%hu:%d", gep->Gchannel, val);			/* data telegram */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	cp += len;
 	regBufLen -= len;
 	if (iC_debug & 0100) {
@@ -1448,7 +1462,7 @@ main(
 	    }	/*  end of GPIO N interrupt */
 #else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	    if (! (FD_ISSET(pins.linereq->fd, &iC_rdfds))) goto END_GPIO_INTERRUPT;
-	    if ((m = read (pins.linereq->fd, lineevent, sizeof lineevent[0]*LINEEVENT_BUFFERS)) == -1) {
+	    if ((m = read(pins.linereq->fd, lineevent, sizeof lineevent[0]*LINEEVENT_BUFFERS)) == -1) {
 		perror ("read - lineevent");
 		goto END_GPIO_INTERRUPT;
 	    }
@@ -1673,7 +1687,7 @@ gpio_line_cfg_ioctl (gpio_v2_t * gpio)
  *******************************************************************/
 
 static int
-gpio_line_set_values (gpio_v2_t * gpio, __u64 bits,  __u64 mask)
+gpio_line_set_values (gpio_v2_t * gpio, __u64 bits, __u64 mask)
 {
     gpio->linevals->bits = bits;		/* new line */
     gpio->linevals->mask = mask;		/* set linevals mask to mask */
@@ -1687,6 +1701,35 @@ gpio_line_set_values (gpio_v2_t * gpio, __u64 bits,  __u64 mask)
     }
     return 0;
 } /* gpio_line_set_values */
+
+/********************************************************************
+ *  Read gpio pin (line) values (HI/LO) from bits set or clearned
+ *  in gpio->linevals->bits for pins with bit set high in gpio->linevals->mask
+ *  from mask using gpio_v2 ioct line request.
+ *  @param linereq pointer to gpio_v2_line_request struct holding linereq with
+ *  open linereq file descriptor set by prior call to gpio_line_cfg_ioctl()
+ *  used to read linevals to gpio pin index(s) in linereq->offsets specified
+ *  by bits HI in mask.
+ *  @param mask bitmap with bits 1 (HI) that correspond to index in
+ *  gpio->linereq->offsets pin array that will be set.
+ *  @return returns bit value 0 or 1 on success, -1 otherwise.
+ *******************************************************************/
+
+static int
+gpio_line_get_values (gpio_v2_t * gpio, __u64 mask)
+{
+    /********************************************************************
+     *  get GPIO pin value to bit in lineval->bits (0 or 1) for pins with
+     *  bit == 1 in mask.
+     *******************************************************************/
+    struct gpio_v2_line_values * data = gpio->linevals;
+    data->mask = mask;				/* set linevals mask to mask */
+    if (ioctl(gpio->linereq->fd, GPIO_V2_LINE_GET_VALUES_IOCTL, data) < 0) {
+	perror ("ioctl-GPIO_V2_LINE_GET_VALUES_IOCTL-1");
+	return -1;
+    }
+    return (data->bits & mask) ? 1 : 0;
+} /* gpio_line_get_values */
 
 /********************************************************************
  * Closes the open line request file descriptor for v2 linereq.
@@ -1798,7 +1841,9 @@ termQuit(int sig)
 	    iC_progname);
 	return (SIGUSR1);		/* error quit */
     }
+    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### %s: openLock, used = 0x%016llx, ownUsed = 0x%016llx\n", iC_progname, gpiosp->u.used, ownUsed);
     gpiosp->u.used &= ~ownUsed;		/* clear all bits for GPIOs and A/D channels used in this app */
+    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### %s: writeUnlockCloseGpios, used = 0x%016llx\n", iC_progname, gpiosp->u.used);
     if (writeUnlockCloseGpios() < 0) {	/* unlink (remove) ~/.iC/gpios.used if gpios->u.used and oops is 0 */
 	fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
 	    iC_progname);
@@ -1929,11 +1974,11 @@ The direct GPIO connections on the Raspberry Pi:
     The Linux 'sysfs' can access the value of these GPIO pins from user
     space and more importantly can generate interrupts from them.
 
-    For RPi OS's with a Linux kernel version < 6.6  GPIO pin I/O is
+    For RPi OS's with a Linux kernel version < 5.10  GPIO pin I/O is
     handled by the Linux 'sysfs' and its interrupts.
     Full details for 'sysfs' GPIO control is in iCpiFace(1).
 
-    For RPi OS's with a Linux kernel version >= 6.6  GPIO pin I/O is
+    For RPi OS's with a Linux kernel version >= 5.10  GPIO pin I/O is
     handled by the Linux kernel interface called:
     'GPIO Character Device Userspace API V2'. https://docs.kernel.org/
     userspace-api/gpio/chardev.html#gpio-v2-line-request

@@ -1,5 +1,5 @@
 static const char rpi_rev_c[] =
-"$Id: rpi_rev.c 1.5 $";
+"$Id: rpi_rev.c 1.6 $";
 /********************************************************************
  *
  *	Copyright (C) 2015  John E. Wulff
@@ -76,6 +76,8 @@ static const char rpi_rev_c[] =
  *		2	(0xa020d3)	Rpi 3B+	tested by JW (checked 17/04/2018)
  *
  *******************************************************************/
+
+#define _GNU_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -172,10 +174,12 @@ boardrev(void) {
  *
  *******************************************************************/
 
-static FILE *		gpiosFP;
-static int		gpiosFN;
+static char *		mem;
+static char *		buff;
 static ProcValidUsed	gpios;
+static int		gpiosFN;
 static char *		gpiosName;
+static int		blksize;
 
 ProcValidUsed *
 openLockGpios(int force)
@@ -183,13 +187,21 @@ openLockGpios(int force)
     int		exists = 1;
     char *	home;
     struct stat	sb;
+    int		align;
 
     gpios.proc = boardrev();
     assert(gpios.proc < sizeof gpioValid / sizeof gpioValid[0]);
     gpios.valid = gpioValid[gpios.proc];
+
     if ((home = getenv("HOME")) != NULL) {
 	gpiosName = iC_emalloc(strlen(home)+16);	/* +1 for '\0' */
 	sprintf(gpiosName, "%s/.iC", home);		/* directory ~/.iC */;
+
+	blksize = 0x1000;				/* for RPi */
+	align = blksize-1;
+	mem = (char *) malloc((int)blksize+align);
+	buff = (char *)(((uintptr_t)mem+align)&~((uintptr_t)align));
+
 	if (stat(gpiosName, &sb) < 0 ||
 	    ! S_ISDIR(sb.st_mode & S_IFMT)) {
 	    if (errno == ENOENT) {
@@ -207,11 +219,13 @@ openLockGpios(int force)
 	if (stat(gpiosName, &sb) < 0 ||
 	    ! S_ISREG(sb.st_mode & S_IFMT)) {
 	    if (errno == ENOENT) {
-		exists = 0;
-		if ((gpiosFP = fopen(gpiosName, "w+")) == NULL) {
+		if ((gpiosFN = open(gpiosName,
+		    O_RDWR|O_CREAT|O_TRUNC|O_DIRECT|O_SYNC,
+		    S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)) == -1) {
 		    perror("rpi_rev: cannot create ~/.iC/gpios.used");
 		    return NULL;	/* error */
 		}
+		exists = 0;
 		gpios.u.used  = 0LL;
 		gpios.u.oops  = 0LL;
 	    } else {
@@ -224,12 +238,8 @@ openLockGpios(int force)
 	fprintf(iC_errFP, "*** error: rpi_rev: no environment variable HOME ???\n");
 	return NULL;	/* error */
     }
-    if (exists && (gpiosFP = fopen(gpiosName, "r+")) == NULL) {
-	perror("rpi_rev: cannot fopen ~/.iC/gpios.used");
-	return NULL;		/* error */
-    }
-    if ((gpiosFN = fileno(gpiosFP)) < 0) {
-	perror("rpi_rev: cannot fileno ~/.iC/gpios.used");
+    if (exists && (gpiosFN = open(gpiosName, O_RDWR|O_DIRECT|O_SYNC)) == -1) {
+	perror("rpi_rev: cannot open ~/.iC/gpios.used");
 	return NULL;		/* error */
     }
     if (flock(gpiosFN, LOCK_EX) < 0) {	/* block until file is unlocked - lock the file */
@@ -238,9 +248,12 @@ openLockGpios(int force)
     }
     if (force || ! exists) {
 	gpios.u.used  = 0LL;		/* keep u.oops forever once set */
-    } else if (fread(&gpios.u, sizeof gpios.u, 1, gpiosFP) < 1) {
-	fprintf(iC_errFP, "*** error: rpi_rev: openLockGpios: fread failed\n");
-	return NULL;		/* error */
+    } else {
+	if (read(gpiosFN, buff, (size_t)blksize) < 1) {	/* 16 bytes u.used and u.oops */
+	    fprintf(iC_errFP, "*** error: rpi_rev: openLockGpios: read failed\n");
+	    return NULL;		/* error */
+	}
+	memcpy(&gpios.u, buff, sizeof gpios.u);
     }
     return &gpios;			/* current proc valid used and oops */
 } /* openLockGpios */
@@ -255,26 +268,32 @@ openLockGpios(int force)
 int
 writeUnlockCloseGpios(void)
 {
-    if (fseek(gpiosFP, 0L, SEEK_SET) < 0) {	/* rewind to re-write the file */
-	perror("rpi_rev: cannot fseek ~/.iC/gpios.used");
+    struct stat	sb;
+
+    if (lseek(gpiosFN, 0L, SEEK_SET) < 0) {	/* rewind to re-write the file */
+	perror("rpi_rev: cannot lseek ~/.iC/gpios.used");
 	return -1;		/* error */
     }
-    if (fwrite(&gpios.u, sizeof gpios.u, 1, gpiosFP) < 1) {	/* 16 bytes u.used and u.oops */
-	return -1;		/* error */
-    }
-    if (fsync(gpiosFN) < 0) {			/* write all data to disk */
-	perror("rpi_rev: cannot fsync ~/.iC/gpios.used");
+    memcpy(buff, &gpios.u, sizeof gpios.u);
+    if (write(gpiosFN, buff, (size_t)blksize) < 1) {	/* 16 bytes u.used and u.oops */
+	perror("rpi_rev: cannot write ~/.iC/gpios.used");
+	free((char *)mem);
 	return -1;		/* error */
     }
     if (flock(gpiosFN, LOCK_UN) < 0) {		/* remove the lock held by this process */
 	perror("rpi_rev: cannot unlock ~/.iC/gpios.used");
 	return -1;		/* error */
     }
-    if (fclose(gpiosFP) < 0) {
+    if (close(gpiosFN) < 0) {
 	perror("rpi_rev: cannot close ~/.iC/gpios.used");
 	return -1;		/* error */
     }
-    if (!gpios.u.used && !gpios.u.oops && unlink(gpiosName) < 0) {
+    free((char *)mem);
+    if (stat(gpiosName, &sb) == 0 &&
+	S_ISREG(sb.st_mode & S_IFMT) &&
+	!gpios.u.used &&
+	!gpios.u.oops &&
+	unlink(gpiosName) < 0) {
 	perror("rpi_rev: cannot unlink ~/.iC/gpios.used");
 	return -1;		/* error */
     }
