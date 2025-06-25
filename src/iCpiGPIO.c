@@ -67,7 +67,7 @@
 #include	"rpi_rev.h"		/* Determine Raspberry Pi Board Rev */
 #if RASPBERRYPI < 5010	/* sysfs */
 #include	"rpi_gpio.h"
-#include	"bcm2835.h"		/* iCgpioPUD parameters */
+#include	"bcm2835.h"		/* iC_gpio_pud parameters */
 #endif	/* RASPBERRYPI < 5010 - sysfs */
 
 static const char *	usage =
@@ -164,7 +164,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2025 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiGPIO.c 1.3 $\n"
+"Version	$Id: iCpiGPIO.c 1.4 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -1013,8 +1013,8 @@ main(
 			    fprintf(iC_errFP, "ERROR: %s: Cannot open GPIO %d for input: %s\n", iC_progname, gpio, strerror(errno));
 			}
 			/********************************************************************
-			 *  Execute the SUID root progran iCgpioPUD(gpio, pud) to set pull-up
-			 *  to 3.3 volt. It is not recommended to connect a GPIO input to 5 volt,
+			 *  Execute the SUID root progran iC_gpio_pud(gpio, pud) to set pull-up/down
+			 *  to 3.3 volt/0 volt. It is not recommended to connect a GPIO input to 5 volt,
 			 *  although I have never had a problem doing so. JW 2023-07-04
 			 *  This requires the following to obtain correct initialisation of inputs:
 			 *    for normal   input (logic 0 = low)  set pull down pud = 1 BCM2835_GPIO_PUD_DOWN
@@ -1345,9 +1345,9 @@ main(
      *  Clear and then set all bits to wait for interrupts
      *******************************************************************/
     FD_ZERO(&infds);				/* should be done centrally if more than 1 connect */
-    FD_ZERO(&ixfds);
     FD_SET(iC_sockFN, &infds);			/* watch TCP/IP socket for inputs */
 #if RASPBERRYPI < 5010	/* sysfs */
+    FD_ZERO(&ixfds);
     /********************************************************************
      *  Set all GPIO IXn input bits for interrupts
      *******************************************************************/
@@ -1369,7 +1369,12 @@ main(
      *  Wait for input in a select statement most of the time
      *******************************************************************/
     for (;;) {
-	if ((retval = iC_wait_for_next_event(&infds, &ixfds, NULL)) > 0) {
+#if RASPBERRYPI < 5010	/* sysfs */
+	if ((retval = iC_wait_for_next_event(&infds, &ixfds, NULL)) > 0)
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	if ((retval = iC_wait_for_next_event(&infds, NULL, NULL)) > 0)
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	{
 	    /********************************************************************
 	     *  TCP/IP input from iCserver
 	     *******************************************************************/
@@ -1415,7 +1420,15 @@ main(
 	    /********************************************************************
 	     *  GPIO N interrupt means GPIO n input
 	     *******************************************************************/
+#if RASPBERRYPI < 5010	/* sysfs */
 	    m = 0;
+#else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+	    if (! (FD_ISSET(pins.linereq->fd, &iC_rdfds))) goto END_GPIO_INTERRUPT;
+	    if ((m = read(pins.linereq->fd, lineevent, sizeof lineevent[0]*LINEEVENT_BUFFERS)) == -1) {
+		perror ("read - lineevent");
+		goto END_GPIO_INTERRUPT;
+	    }
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	    cp = regBuf;
 	    regBufLen = REPLY;
 	    if (iC_debug & 0100) {
@@ -1459,13 +1472,8 @@ main(
 			ol -= len;
 		    }
 		}
-	    }	/*  end of GPIO N interrupt */
+	    }	/*  end of sysfs GPIO N interrupt */
 #else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
-	    if (! (FD_ISSET(pins.linereq->fd, &iC_rdfds))) goto END_GPIO_INTERRUPT;
-	    if ((m = read(pins.linereq->fd, lineevent, sizeof lineevent[0]*LINEEVENT_BUFFERS)) == -1) {
-		perror ("read - lineevent");
-		goto END_GPIO_INTERRUPT;
-	    }
 	    m /= sizeof lineevent[0];		/* number of lineevent buffers read */
 	    if (iC_debug & 0200) {
 		fprintf(iC_outFP, "ioctl GPIO %d interrupts:", m);
@@ -1526,7 +1534,9 @@ main(
 		iC_send_msg_to_server(iC_sockFN, regBuf+1);	/* send data telegram(s) to iCserver */
 		if (iC_debug & 0100) fprintf(iC_outFP, "G: %s:	%s	<%s\n", iC_iccNM, regBuf+1, buffer);
 	    }
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
 	  END_GPIO_INTERRUPT:;
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	    /********************************************************************
 	     *  STDIN interrupt
 	     *******************************************************************/
@@ -1791,7 +1801,7 @@ termQuit(int sig)
 	    for (bit = 0; bit <= 7; bit++) {
 		if ((gpio = gep->gpioNr[bit]) != 0xffff) {
 		    /********************************************************************
-		     *  Execute the SUID root progran iCgpioPUD(gpio, pud) to turn off pull-up/down
+		     *  Execute the SUID root progran iC_gpio_pud(gpio, pud) to turn off pull-up/down
 		     *******************************************************************/
 		    if (iq == 1) iC_gpio_pud(gpio, BCM2835_GPIO_PUD_OFF);	/* inputs only */
 		    /********************************************************************

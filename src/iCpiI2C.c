@@ -76,8 +76,10 @@
 #include	"comp.h"		/* defines TSIZE 256 */
 #include	"icc.h"			/* declares iC_emalloc() in misc.c */
 #include	"rpi_rev.h"		/* Determine Raspberry Pi Board Rev */
-#include	"rpi_gpio.h"
 #include	"mcp23017.h"
+#if RASPBERRYPI < 5010	/* sysfs */
+#include	"rpi_gpio.h"
+#endif	/* RASPBERRYPI < 5010 - sysfs */
 
 /********************************************************************
  *  Bit-field to select the IEC associated with a particular register
@@ -171,13 +173,13 @@ static	int	i2cFdA[10] =		/* file descriptors for open I2C channels */
 		{ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
 static	int	i2cFdCnt   = 0;		/* number of open I2C channels */
 static	int	chList[] = { 8, 9, 0 };	/* order of testing for I2C channels for locating concentrator MCP */
-static	int	gpio27FN = -1;		/* /sys/class/gpio/gpio27/value I2C file number */
 
 static  char **	argp;
 static  int	ofs     = 0;
 static  int	invFlag = 0;
 static fd_set	infds;			/* initialised file descriptor set for normal iC_wait_for_next_event() */
 #if RASPBERRYPI < 5010	/* sysfs */
+static	int	gpio27FN = -1;		/* /sys/class/gpio/gpio27/value I2C file number */
 static fd_set	ixfds;			/* initialised extra descriptor set for normal iC_wait_for_next_event() */
 #endif	/* RASPBERRYPI < 5010 - sysfs */
 
@@ -304,7 +306,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2023-2025 John E. Wulff     <immediateC@gmail.com>\n"
-"Version       $Id: iCpiI2C.c 1.11 $\n"
+"Version       $Id: iCpiI2C.c 1.12 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -1377,11 +1379,11 @@ main( int argc, char ** argv)
      *******************************************************************/
 #if RASPBERRYPI < 5010	/* sysfs */
     assert(gpio27FN > 0);
+    gpio_read(gpio27FN);			/* dummy read to clear interrupt on /dev/class/gpio27/value */
 #else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     assert(pins.linereq->fd > 0);
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     if (iC_debug & 0200) fprintf(iC_outFP, "### Initialise %d unit(s)\n", mcpCnt);
-    gpio_read(gpio27FN);			/* dummy read to clear interrupt on /dev/class/gpio27/value */
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_micro) iC_microPrint("I2C initialise", 0);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */

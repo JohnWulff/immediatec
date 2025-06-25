@@ -54,10 +54,12 @@
 #include	"tcpc.h"
 #include	"icc.h"			/* declares iC_emalloc() in misc.c */
 #include	"rpi_rev.h"		/* Determine Raspberry Pi Board Rev */
-#include	"rpi_gpio.h"
 #include	"mcp23s17.h"
 #include	"pifacecad.h"
-#include	"bcm2835.h"
+#if RASPBERRYPI < 5010	/* sysfs */
+#include	"rpi_gpio.h"
+#include	"bcm2835.h"		/* iC_gpio_pud parameters */
+#endif	/* RASPBERRYPI < 5010 - sysfs */
 
 /********************************************************************
  *
@@ -185,7 +187,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2025 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.20 $\n"
+"Version	$Id: iCpiFace.c 1.21 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -1448,11 +1450,11 @@ main(
      *******************************************************************/
 #if RASPBERRYPI < 5010	/* sysfs */
     assert(gpio25FN > 0);
+    gpio_read(gpio25FN);			/* dummy read to clear interrupt on /dev/class/gpio25/value */
 #else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     assert(pins.linereq->fd > 0);
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     if (iC_debug & 0200) fprintf(iC_outFP, "### Initialise %d unit(s)\n", iC_npf);
-    gpio_read(gpio25FN);			/* dummy read to clear interrupt on /dev/class/gpio25/value */
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_micro) iC_microPrint("SPI initialise", 0);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -1506,12 +1508,14 @@ main(
 #if RASPBERRYPI < 5010	/* sysfs */
     FD_ZERO(&ixfds);				/* should be done centrally if more than 1 connect */
     FD_SET(gpio25FN, &ixfds);			/* watch GPIO25 for out-of-band input - do after iC_connect_to_server() */
+    if (iC_debug & 0200) fprintf(iC_outFP, "iC_sockFN = %d gpio25FN = %d spidFN[0] = %d spidFN[1] = %d\n",
+	iC_sockFN, gpio25FN, spidFN[0], spidFN[1]);
 #else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     FD_SET(pins.linereq->fd, &infds);		/* watch GPIO 25 for interrupts with v2 ioctl ABI */
+    if (iC_debug & 0200) fprintf(iC_outFP, "iC_sockFN = %d pins.linereq->fd = %d spidFN[0] = %d spidFN[1] = %d\n",
+	iC_sockFN, pins.linereq->fd, spidFN[0], spidFN[1]);
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     if ((iC_debug & DZ) == 0) FD_SET(0, &infds);	/* watch stdin for inputs unless - FD_CLR on EOF */
-    if (iC_debug & 0200) fprintf(iC_outFP, "iC_sockFN = %d	gpio25FN = %d spidFN[0] = %d spidFN[1] = %d\n",
-	iC_sockFN, gpio25FN, spidFN[0], spidFN[1]);
     /********************************************************************
      *  External input (TCP/IP via socket, SIO from PiFace, GPIO and STDIN)
      *  Wait for input in a select statement most of the time
