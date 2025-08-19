@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h 1.87 $";
+"@(#)$Id: icc.h 1.88 $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -38,6 +38,11 @@ static const char icc_h[] =
 #define ICG_H
 
 #include	<signal.h>
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+#include	<linux/gpio.h>
+#include	<sys/ioctl.h>
+#include	<stdlib.h>
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 #ifndef INT_MAX
 #include	<limits.h>
 #endif	/* INT_MAX */
@@ -937,5 +942,33 @@ extern struct termios	ttyparms;
 #define snprintf	 _snprintf
 extern int		mkstemp(char * template);
 #endif	/* _WIN32 */
+#if defined TCP && defined RASPBERRYPI
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+#define GPIOCHIP "/dev/gpiochip0"	/* gpiochipX (0-4) depending on Pi model */
+#define LINEEVENT_BUFFERS	 4	/* kernel buffers 16 line events */
+#define GPIO_LIMIT		 64	/* GPIO numbers are limited 0 - 63 */
+typedef struct {
+    struct gpio_v2_line_config *	linecfg;
+    struct gpio_v2_line_request *	linereq;
+    struct gpio_v2_line_values *	linevals;
+    int					fd;
+} gpio_v2_t;
+typedef struct gpio_T {
+    gpioIO *		gep;
+    unsigned short	val;		/* stores either val or bit */
+} gpio_T;
+extern int	maskIdx[17];
+#ifdef LOAD
+extern gpio_T	gpioArray[GPIO_LIMIT];
+extern gpio_T	gepArray[LINEEVENT_BUFFERS];
+extern struct gpio_v2_line_event	lineevent[LINEEVENT_BUFFERS];
+extern gpio_v2_t pins;
+extern int	gpio_line_cfg_ioctl (gpio_v2_t * gpio);
+extern int	gpio_line_set_values (gpio_v2_t * gpio, __u64 bits,  __u64 mask);
+extern int	gpio_line_get_values (gpio_v2_t * gpio, __u64 mask);
+extern __u64	maskBit25;
+#endif /* LOAD */
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+#endif /* defined TCP && defined RASPBERRYPI */
 
 #endif	/* ICC_H */

@@ -39,10 +39,6 @@
 #error - must be compiled with RASPBERRYPI and TCP defined and not _WINDOWS
 #else	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */
 
-#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
-#include	<linux/gpio.h>
-#include	<sys/ioctl.h>
-#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 #include	<signal.h>
 #include	<ctype.h>
 #include	<assert.h>
@@ -60,24 +56,6 @@
 #include	"rpi_gpio.h"
 #include	"bcm2835.h"		/* iC_gpio_pud parameters */
 #endif	/* RASPBERRYPI < 5010 - sysfs */
-
-/********************************************************************
- *
- *  Select a piFaceIO iC_pfL[un] with a small int un as index
- *
- *******************************************************************/
-
-static fd_set		infds;			/* initialised file descriptor set for normal iC_wait_for_next_event() */
-#if RASPBERRYPI < 5010	/* sysfs */
-static fd_set		ixfds;			/* initialised extra descriptor set for normal iC_wait_for_next_event() */
-#endif	/* RASPBERRYPI < 5010 - sysfs */
-static struct timeval	toCini = { 0,  50000 };	/* 50 ms select() timeout - initial value */
-static struct timeval	toC750 = { 0, 750000 };	/* 750 ms select() timeout - re-iniialising value */
-static struct timeval	toCnt  = { 0,  50000 };	/* 50 ms select() timeout */
-static struct timeval *	toCntp = NULL;		/* select() timeout initial value off */
-static const char *	pfCADname = "PFCAD4";	/* iC string */
-static piFaceIO *	pfCADpfp = NULL;	/* for PiFaceCAD string via PFCAD4 */
-static unsigned short	pfCADchannel = 0;
 
 static const char *	usage =
 "Usage:\n"
@@ -187,7 +165,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2025 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.21 $\n"
+"Version	$Id: iCpiFace.c 1.22 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -197,6 +175,18 @@ short		iC_debug = 0;
 int		iC_micro = 0;
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 unsigned short	iC_osc_lim = 1;
+
+static fd_set		infds;			/* initialised file descriptor set for normal iC_wait_for_next_event() */
+#if RASPBERRYPI < 5010	/* sysfs */
+static fd_set		ixfds;			/* initialised extra descriptor set for normal iC_wait_for_next_event() */
+#endif	/* RASPBERRYPI < 5010 - sysfs */
+static struct timeval	toCini = { 0,  50000 };	/* 50 ms select() timeout - initial value */
+static struct timeval	toC750 = { 0, 750000 };	/* 750 ms select() timeout - re-iniialising value */
+static struct timeval	toCnt  = { 0,  50000 };	/* 50 ms select() timeout */
+static struct timeval *	toCntp = NULL;		/* select() timeout initial value off */
+static const char *	pfCADname = "PFCAD4";	/* iC string */
+static piFaceIO *	pfCADpfp = NULL;	/* for PiFaceCAD string via PFCAD4 */
+static unsigned short	pfCADchannel = 0;
 
 /********************************************************************
  *
@@ -235,12 +225,6 @@ FILE *		iC_outFP;		/* listing file pointer */
 FILE *		iC_errFP;		/* error file pointer */
 #if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
 
-typedef struct {
-    struct gpio_v2_line_config *	linecfg;
-    struct gpio_v2_line_request *	linereq;
-    struct gpio_v2_line_values *	linevals;
-    int					fd;
-} gpio_v2_t;
 /********************************************************************
  * gpio_v2 line config, line request and line values,
  *******************************************************************/
@@ -256,7 +240,6 @@ static struct gpio_v2_line_values linevals = {
 };
 static int		idx;
 static __u64		maskBit;
-#define GPIOCHIP "/dev/gpiochip0"	/* gpiochipX (0-4) depending on Pi model */
 /********************************************************************
  * pins is a convenience struct of gpio_v2 config structs to which
 * a pointer can be provided as the parameter for the various functions.
@@ -374,84 +357,6 @@ main(
     rpyBuf = iC_emalloc(REPLY);
 #endif	/* EFENCE */
     signal(SIGSEGV, iC_quit);			/* catch memory access signal */
-#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
-
-    chipFN = open(GPIOCHIP, O_RDONLY);		/* Open GPIO chip */
-    if (chipFN < 0) {
-	perror ("Failed to open GPIO chip device");
-        return 1;
-    }
-    pins.fd = chipFN;
-    if ((iC_maxFN = chipFN)) {
-	iC_maxFN = chipFN;
-    }
-    idx = 0;				/* index into linereq offsets array */
-    maskBit = 1LL;			/* bit in 64 bit masks displaced by idx */
-    /********************************************************************
-     *  Provide separate attributes for read with and without fallin interrupt
-     *  for read inverted pin GPIO 25 and read inverted pin GPIO 23
-     *******************************************************************/
-
-    r25_attr.id =	GPIO_V2_LINE_ATTR_ID_FLAGS;
-    r25_attr.flags =    GPIO_V2_LINE_FLAG_INPUT         |
-			GPIO_V2_LINE_FLAG_ACTIVE_LOW    |
-			GPIO_V2_LINE_FLAG_EDGE_RISING   |
-			GPIO_V2_LINE_FLAG_BIAS_PULL_UP;
-
-    r23_attr.id =	GPIO_V2_LINE_ATTR_ID_FLAGS;
-    r23_attr.flags =    GPIO_V2_LINE_FLAG_INPUT         |
-			GPIO_V2_LINE_FLAG_ACTIVE_LOW    |
-			GPIO_V2_LINE_FLAG_BIAS_PULL_UP;
-
-    /********************************************************************
-     *  gpio_v2 attribute config for read inverted pins
-     *******************************************************************/
-    r25_cfg_attr.attr = r25_attr;
-    r23_cfg_attr.attr = r23_attr;
-    /********************************************************************
-     *  gpio 25 configure with direction in and interrupts on rising edge
-     *******************************************************************/
-    gpio = 25;
-    maskBit25 = maskBit;
-    pins.linereq->offsets[idx] = gpio;
-    r25_cfg_attr.mask |= maskBit;		/* inverted input with rising interrupt */
-	if (iC_debug & 0200) fprintf(iC_outFP, "=== End Unexport GPIOs and close PiFaces ===\n");
-    if (iC_debug & 0200) fprintf(iC_outFP,
-	"configure gpio 25 offsets[%d] maskBit = 0x%llx inverted input with rising interrupt\n",
-	idx, maskBit);
-    idx++;
-    maskBit <<= 1;
-    /********************************************************************
-     *  gpio 23 configure with direction in and no interrupts
-     *******************************************************************/
-    gpio = 23;
-    maskBit23 = maskBit;
-    pins.linereq->offsets[idx] = gpio;
-    r23_cfg_attr.mask |= maskBit;		/* inverted input with no interrupt */
-    if (iC_debug & 0200) fprintf(iC_outFP,
-	"configure gpio 23 offsets[%d] maskBit = 0x%llx inverted input with no interrupt\n",
-	idx, maskBit);
-    idx++;
-    maskBit <<= 1;
-    /********************************************************************
-     *  gpio_v2 line lines (pins) configuration
-     *******************************************************************/
-    int i = 0;
-    pins.linecfg->attrs[i++] = r25_cfg_attr;	/* assign read gpio 25 attr to linecfg array */
-    pins.linecfg->attrs[i++] = r23_cfg_attr;	/* assign read gpio23 attr to linecfg array */
-    pins.linecfg->num_attrs = i;		/* for write and read pin and debounce attributes */
-    pins.linereq->num_lines = idx;
-    /********************************************************************
-     *  Set line (pin) configuration
-     *  Generate anonymous file descriptor
-     *******************************************************************/
-    if (gpio_line_cfg_ioctl (&pins) == -1) {
-	return 1;
-    }
-    if (pins.linereq->fd > iC_maxFN) {
-	iC_maxFN = pins.linereq->fd;
-    }
-#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 
     /********************************************************************
      *  By default do not invert PiFace inputs and outputs
@@ -639,9 +544,9 @@ main(
 	    goto FreeNow;
 	}
 	if (iC_debug & 0200) fprintf(iC_outFP,
-	    "Raspberry Pi Board revision = %d (0 = A,A+; 1 = B; 2 = B+,2B)\n"
+	    "%s: Raspberry Pi Board revision = %d (0 = A,A+; 1 = B; 2 = B+,2B)\n"
 	    "valid    = 0x%016llx\n",
-	    gpiosp->proc, gpiosp->valid);
+	    iC_progname, gpiosp->proc, gpiosp->valid);
 	/********************************************************************
 	 *  Initialise PiFace software control structures
 	 *******************************************************************/
@@ -718,8 +623,8 @@ main(
 		    if ((value = gpio_read(gpio23FN)) == -1) {
 			fprintf(iC_errFP, "ERROR: %s: PiFace read gpio 23: %s\n", iC_progname, strerror(errno));
 		    }
-		    if (iC_debug & 0200) fprintf(iC_outFP, "Initial read 23 = %d (PiFaceCAD LIRC output)\n",
-			value);
+		    if (iC_debug & 0200) fprintf(iC_outFP, "%s: Initial read 23 = %d (PiFaceCAD LIRC output)\n",
+			iC_progname, value);
 		    /********************************************************************
 		     *  Close gpio23/LIRC value
 		     *******************************************************************/
@@ -743,18 +648,18 @@ main(
 		    if ((value = gpio_line_get_values (&pins, maskBit23)) == -1) {
 			fprintf(iC_errFP, "ERROR: %s: PiFace read gpio 23: %s\n", iC_progname, strerror(errno));
 		    }
-		    if (iC_debug & 0200) fprintf(iC_outFP, "Initial read 23 = %d (PiFaceCAD LIRC output)\n",
-			value);
+		    if (iC_debug & 0200) fprintf(iC_outFP, "%s: Initial read 23 = %d (PiFaceCAD LIRC output)\n",
+			iC_progname, value);
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 		}
 		if (pfa != 4 || value == 0) {	/* PiFace */
 		    pfp->intf = INTFB;		/* input on MCP23S17 GPB input interrupt register */
 		    pfp->inpr = GPIOB;		/* INTCAPB fails on bouncing switches */
-		    if (iC_debug & 0200) fprintf(iC_outFP, "PiFace %hu found\n", pfa);
+		    if (iC_debug & 0200) fprintf(iC_outFP, "%s: PiFace %hu found\n", iC_progname, pfa);
 		} else {				/* PiFaceCAD is address 4 and GPIO23 LIRC is 1 */
 		    pfp->intf = INTFA;		/* input on MCP23S17 GPA input interrupt register */
 		    pfp->inpr = GPIOA;		/* INTCAPA fails on bouncing switches */
-		    if (iC_debug & 0200) fprintf(iC_outFP, "PiFaceCAD %hu found\n", pfa);
+		    if (iC_debug & 0200) fprintf(iC_outFP, "%s: PiFaceCAD %hu found\n", iC_progname, pfa);
 		}
 		pfp->spiFN = spidFN[pfce];		/* SPI file number for this active unit */
 		pfp++;				/* next iC_pfL[] element */
@@ -778,10 +683,10 @@ main(
 	    gpioMask = 0x02000f80LL;		/* gpio 7-11,25 */
 	    assert((gpiosp->valid & gpioMask) == gpioMask);	/* assume these are valid for all RPi's */
 	    if (iC_debug & 0200) fprintf(iC_outFP,
-		"gpio     = 7, 8, 9, 10, 11, 25\n"
+		"%s: gpio     = 7, 8, 9, 10, 11, 25\n"
 		"used     = 0x%016llx\n"
 		"gpioMask = 0x%016llx\n",
-		gpiosp->u.used, gpioMask);
+		iC_progname, gpiosp->u.used, gpioMask);
 	    if ((gpioMask & gpiosp->u.used)) {
 		gpioMask &= gpiosp->u.used;
 		fprintf(iC_errFP, "ERROR: %s: The following GPIO's required by PiFace have been used in another app\n",
@@ -846,7 +751,7 @@ main(
 	     *******************************************************************/
 	    value = gpio_line_get_values (&pins, maskBit25);
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
-	    if (iC_debug & 0200) fprintf(iC_outFP, "Initial read 25 = %d\n", value);
+	    if (iC_debug & 0200) fprintf(iC_outFP, "%s: Initial read 25 = %d\n", iC_progname, value);
 #if RASPBERRYPI < 5010	/* sysfs */
 	    /********************************************************************
 	     *  To allow several PiFace units and possibly a PiFaceCAD to run
@@ -1000,8 +905,8 @@ main(
 			pfa = 0xffff;			/* no pfa assigned */
 		    }
 		    if (n <= 1) *tail = '\0';
-		    if (iC_debug & 0200) fprintf(iC_outFP, "%sX%d-%sX%d:%hu%s\n",
-			iqc, ieStart, iqe, ieEnd, pfa, iids);
+		    if (iC_debug & 0200) fprintf(iC_outFP, "%s: %sX%d-%sX%d:%hu%s\n",
+			iC_progname, iqc, ieStart, iqe, ieEnd, pfa, iids);
 		    directFlag |= PF;
 		}
 		if (*tail == '-') {
@@ -1119,8 +1024,8 @@ main(
 	  skipInvFlag:;
 	}
       UnlockGpios:
-	if (iC_debug & 0200) fprintf(iC_outFP, "used     = 0x%016llx\n"
-					       "oops     = 0x%016llx\n", gpiosp->u.used, gpiosp->u.oops);
+	if (iC_debug & 0200) fprintf(iC_outFP, "%s: used     = 0x%016llx\n"
+					       "oops     = 0x%016llx\n", iC_progname, gpiosp->u.used, gpiosp->u.oops);
 	if (writeUnlockCloseGpios() < 0) {
 	    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
 		iC_progname);
@@ -1139,6 +1044,7 @@ main(
 	fprintf(iC_errFP, "ERROR: %s: no IEC arguments? there must be at least 1 PiFace or GPIO argument\n", iC_progname);
 	iC_quit(-4);					/* call termQuit() to terminate I/O */
     }
+
     /********************************************************************
      *  Generate IEC names for all arguments which have a PiFace and a
      *	non-zero bmask. PiFace arguments with zero bmask are not registered.
@@ -1186,12 +1092,90 @@ main(
 	fprintf(iC_errFP, "WARNING: %s: not enough IEC arguments (%d) for the %d PiFaces found - ignore extra PiFaces\n",
 	    iC_progname, unit, iC_npf);		/* takes account of dummies */
     }
-    if (iC_debug & 0200) fprintf(iC_outFP, "### unit = %d iC_npf = %d\n", unit, iC_npf);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: ### unit = %d iC_npf = %d\n", iC_progname, unit, iC_npf);
     unit = iC_npf;					/* deal only with real PiFaces */
     if (unit == 0) {
 	fprintf(iC_errFP, "ERROR: %s: no PiFaces to run\n", iC_progname);
 	iC_quit(-2);
     }
+#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
+
+    chipFN = open(GPIOCHIP, O_RDONLY);		/* Open GPIO chip */
+    if (chipFN < 0) {
+	perror ("Failed to open GPIO chip device");
+        return 1;
+    }
+    pins.fd = chipFN;
+    if ((iC_maxFN = chipFN)) {
+	iC_maxFN = chipFN;
+    }
+    idx = 0;				/* index into linereq offsets array */
+    maskBit = 1LL;			/* bit in 64 bit masks displaced by idx */
+    /********************************************************************
+     *  Provide separate attributes for read with and without fallin interrupt
+     *  for read inverted pin GPIO 25 and read inverted pin GPIO 23
+     *******************************************************************/
+
+    r25_attr.id =	GPIO_V2_LINE_ATTR_ID_FLAGS;
+    r25_attr.flags =    GPIO_V2_LINE_FLAG_INPUT         |
+			GPIO_V2_LINE_FLAG_ACTIVE_LOW    |
+			GPIO_V2_LINE_FLAG_EDGE_RISING   |
+			GPIO_V2_LINE_FLAG_BIAS_PULL_UP;
+
+    r23_attr.id =	GPIO_V2_LINE_ATTR_ID_FLAGS;
+    r23_attr.flags =    GPIO_V2_LINE_FLAG_INPUT         |
+			GPIO_V2_LINE_FLAG_ACTIVE_LOW    |
+			GPIO_V2_LINE_FLAG_BIAS_PULL_UP;
+
+    /********************************************************************
+     *  gpio_v2 attribute config for read inverted pins
+     *******************************************************************/
+    r25_cfg_attr.attr = r25_attr;
+    r23_cfg_attr.attr = r23_attr;
+    /********************************************************************
+     *  gpio 25 configure with direction in and interrupts on rising edge
+     *******************************************************************/
+    gpio = 25;
+    maskBit25 = maskBit;
+    pins.linereq->offsets[idx] = gpio;
+    r25_cfg_attr.mask |= maskBit;		/* inverted input with rising interrupt */
+    if (iC_debug & 0200) fprintf(iC_outFP,
+	"%s: configure gpio 25 offsets[%d] maskBit = 0x%llx inverted input with rising interrupt\n",
+	iC_progname, idx, maskBit);
+    idx++;
+    maskBit <<= 1;
+    /********************************************************************
+     *  gpio 23 configure with direction in and no interrupts
+     *******************************************************************/
+    gpio = 23;
+    maskBit23 = maskBit;
+    pins.linereq->offsets[idx] = gpio;
+    r23_cfg_attr.mask |= maskBit;		/* inverted input with no interrupt */
+    if (iC_debug & 0200) fprintf(iC_outFP,
+	"%s: configure gpio 23 offsets[%d] maskBit = 0x%llx inverted input with no interrupt\n",
+	iC_progname, idx, maskBit);
+    idx++;
+    maskBit <<= 1;
+    /********************************************************************
+     *  gpio_v2 line lines (pins) configuration
+     *******************************************************************/
+    int i = 0;
+    pins.linecfg->attrs[i++] = r25_cfg_attr;	/* assign read gpio 25 attr to linecfg array */
+    pins.linecfg->attrs[i++] = r23_cfg_attr;	/* assign read gpio23 attr to linecfg array */
+    pins.linecfg->num_attrs = i;		/* for write and read pin and debounce attributes */
+    pins.linereq->num_lines = idx;
+    /********************************************************************
+     *  Set line (pin) configuration
+     *  Generate anonymous file descriptor
+     *******************************************************************/
+    if (gpio_line_cfg_ioctl (&pins) == -1) {
+	return 1;
+    }
+    if (pins.linereq->fd > iC_maxFN) {
+	iC_maxFN = pins.linereq->fd;
+    }
+#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+
     /********************************************************************
      *  End of PiFace detection
      *******************************************************************/
@@ -1209,8 +1193,8 @@ main(
 		inputA = 0x00;		/* PiFace has no input on Port A */
 		inputB = pfp->Ibmask;	/* PiFace input on port B, may be 0 if all output */
 	    }
-	    if (iC_debug & 0200) fprintf(iC_outFP, "###	PiFace%s un = %d pfa = %hu	%s	%s	%s\n",
-		piFext, pfp - iC_pfL, pfp->pfa, pfp->Qname, pfp->Iname, pfp->QPname);
+	    if (iC_debug & 0200) fprintf(iC_outFP, "%s: ###	PiFace%s un = %d pfa = %hu	%s	%s	%s\n",
+		iC_progname, piFext, pfp - iC_pfL, pfp->pfa, pfp->Qname, pfp->Iname, pfp->QPname);
 	    /********************************************************************
 	     *  Final setup with correct IOCON_ODR for all PiFace Units with I/O.
 	     *  Active driver output if only one PiFace else open drain
@@ -1238,7 +1222,7 @@ main(
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_micro) iC_microReset(0);		/* start timing */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-    if (iC_debug & 0200) fprintf(iC_outFP, "host = %s, port = %s, name = %s\n", iC_hostNM, iC_portNM, iC_iccNM);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: host = %s, port = %s, name = %s\n", iC_progname, iC_hostNM, iC_portNM, iC_iccNM);
     if (iC_debug & 0400) iC_quit(0);
     signal(SIGINT, iC_quit);			/* catch ctrlC and Break */
 #ifdef	SIGTTIN
@@ -1311,9 +1295,9 @@ main(
     /********************************************************************
      *  Send registration string made up of all active I/O names
      *******************************************************************/
-    if (iC_debug & 0200)  fprintf(iC_outFP, "regBufLen = %d\n", regBufLen);
+    if (iC_debug & 0200)  fprintf(iC_outFP, "%s: regBufLen = %d\n", iC_progname, regBufLen);
     snprintf(cp, regBufLen, ",Z");		/* Z terminator */
-    if (iC_debug & 0200)  fprintf(iC_outFP, "register:%s\n", regBuf);
+    if (iC_debug & 0200)  fprintf(iC_outFP, "%s: register:%s\n", iC_progname, regBuf);
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_micro) iC_microPrint("send registration", 0);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -1327,7 +1311,7 @@ main(
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_micro) iC_microPrint("ack received", 0);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-	if (iC_debug & 0200) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
+	if (iC_debug & 0200) fprintf(iC_outFP, "%s: reply:%s\n", iC_progname, rpyBuf);
 	len = snprintf(buffer, BS, "iCbox -dz%s -n %s-DI", (iC_debug & DQ) ? "q" : "", iC_iccNM);
 	b = 4;				/* initial number of tokens in buffer */
 	op = buffer + len;			/* optional host and port appended in iC_fork_and_exec() */
@@ -1346,8 +1330,8 @@ main(
 		    if (channel > topChannel) {
 			topChannel = channel;
 		    }
-		    if (iC_debug & 0200) fprintf(iC_outFP, "PiFace %d %s  on channel %hu\n",
-			pfp->pfa, np, channel);
+		    if (iC_debug & 0200) fprintf(iC_outFP, "%s: PiFace %d %s  on channel %hu\n",
+			iC_progname, pfp->pfa, np, channel);
 		    pfq->channel = channel;	/* link send channel to PiFace (ignore receive channel) */
 		    sel = (pfp - iC_pfL) | (iq & 0x02) << 2;	/* iC_pfL index un identifies PiFace GPIOB+ */
 		    storeUnit(channel, sel);		/* link PiFace unit number to send channel */
@@ -1376,8 +1360,8 @@ main(
 		if (channel > topChannel) {
 		    topChannel = channel;
 		}
-		if (iC_debug & 0200) fprintf(iC_outFP, "PiFaceCAD %d %s on channel %hu\n",
-		    pfp->pfa, pfCADname, channel);
+		if (iC_debug & 0200) fprintf(iC_outFP, "%s: PiFaceCAD %d %s on channel %hu\n",
+		    iC_progname, pfp->pfa, pfCADname, channel);
 		sel = pfp - iC_pfL;		/* iC_pfL index sel identifies PiFace */
 		storeUnit(channel, sel);	/* link PiFace unit number to send channel */
 		pfCADchannel = channel;
@@ -1391,7 +1375,7 @@ main(
 	if (iC_opt_B && b > 4) {
 	    iC_fork_and_exec(iC_string2argv(buffer, b));	/* fork iCbox -d */
 	}
-	if (iC_debug & 0200) fprintf(iC_outFP, "reply: top channel = %hu\n", topChannel);
+	if (iC_debug & 0200) fprintf(iC_outFP, "%s: reply: top channel = %hu\n", iC_progname, topChannel);
     } else {
 	iC_quit(QUIT_SERVER);			/* quit normally with 0 length message */
     }
@@ -1402,8 +1386,8 @@ main(
      *******************************************************************/
     if (iC_debug & 0300) {
 	if (iC_npf) {
-	    fprintf(iC_outFP, "Allocation for %d PiFace unit%s, global instance = \"%s\"\n",
-		unit, unit == 1 ? "" : "s", iC_iidNM);
+	    fprintf(iC_outFP, "%s: Allocation for %d PiFace unit%s, global instance = \"%s\"\n",
+		iC_progname, unit, unit == 1 ? "" : "s", iC_iidNM);
 	    fprintf(iC_outFP, "	IEC-out	IEC-in	mask-i	IEC+out	mask+o	ch-out	ch-in	ch+out	pfa unit\n\n");
 	    for (pfp = iC_pfL; pfp < &iC_pfL[unit]; pfp++) {
 		if (pfp->Qname != NULL) {
@@ -1454,7 +1438,7 @@ main(
 #else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     assert(pins.linereq->fd > 0);
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
-    if (iC_debug & 0200) fprintf(iC_outFP, "### Initialise %d unit(s)\n", iC_npf);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: ### Initialise %d unit(s)\n", iC_progname, iC_npf);
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_micro) iC_microPrint("SPI initialise", 0);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -1508,12 +1492,12 @@ main(
 #if RASPBERRYPI < 5010	/* sysfs */
     FD_ZERO(&ixfds);				/* should be done centrally if more than 1 connect */
     FD_SET(gpio25FN, &ixfds);			/* watch GPIO25 for out-of-band input - do after iC_connect_to_server() */
-    if (iC_debug & 0200) fprintf(iC_outFP, "iC_sockFN = %d gpio25FN = %d spidFN[0] = %d spidFN[1] = %d\n",
-	iC_sockFN, gpio25FN, spidFN[0], spidFN[1]);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: iC_sockFN = %d gpio25FN = %d spidFN[0] = %d spidFN[1] = %d\n",
+	iC_progname, iC_sockFN, gpio25FN, spidFN[0], spidFN[1]);
 #else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     FD_SET(pins.linereq->fd, &infds);		/* watch GPIO 25 for interrupts with v2 ioctl ABI */
-    if (iC_debug & 0200) fprintf(iC_outFP, "iC_sockFN = %d pins.linereq->fd = %d spidFN[0] = %d spidFN[1] = %d\n",
-	iC_sockFN, pins.linereq->fd, spidFN[0], spidFN[1]);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: iC_sockFN = %d pins.linereq->fd = %d spidFN[0] = %d spidFN[1] = %d\n",
+	iC_progname, iC_sockFN, pins.linereq->fd, spidFN[0], spidFN[1]);
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     if ((iC_debug & DZ) == 0) FD_SET(0, &infds);	/* watch stdin for inputs unless - FD_CLR on EOF */
     /********************************************************************
@@ -1678,11 +1662,11 @@ main(
 		    iC_quit(SIGUSR1);		/* error quit */
 		}
 		m /= sizeof lineevent[0];		/* number of lineevent buffers read */
-		if (iC_debug & 0200) fprintf(iC_outFP, "ioctl m = %d GPIO 25 interrupts:", m);
+		if (iC_debug & 0200) fprintf(iC_outFP, "%s: ioctl m = %d GPIO 25 interrupts:", iC_progname, m);
 		for (n = 0; n < m; n++) {
 		    gpio = lineevent[n].offset;	/* GPIO number from offset */
 		    assert(gpio < GPIO_LIMIT && lineevent[n].id == GPIO_V2_LINE_EVENT_RISING_EDGE);
-		if (iC_debug & 0200) fprintf(iC_outFP, " [%d] gpio= %d:", n, gpio);
+		    if (iC_debug & 0200) fprintf(iC_outFP, " [%d] gpio= %d:", n, gpio);
 		}
 		if (iC_debug & 0200) fprintf(iC_outFP, "\n");
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
@@ -1778,15 +1762,15 @@ main(
 #ifdef	TRACE
 		} else if (c == 'i') {
 		    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {	/* report MCP23S17 IOCON, GPINTEN */
-			fprintf(iC_outFP, "%s: un = %d pfa = %d IOCON = 0x%02x GPINTEN = 0x%02x\n",
-			    pfp->Iname, pfp - iC_pfL, pfp->pfa,
+			fprintf(iC_outFP, "%s: %s: un = %d pfa = %d IOCON = 0x%02x GPINTEN = 0x%02x\n",
+			    iC_progname, pfp->Iname, pfp - iC_pfL, pfp->pfa,
 			    readByte(pfp->spiFN, pfp->pfa, IOCON),
 			    readByte(pfp->spiFN, pfp->pfa, pfp->intf == INTFB ? GPINTENB : GPINTENA));
 		    }
 		} else if (c == 'I') {
 		    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {	/* restore MCP23S17 IOCON, GPINTEN */
-			fprintf(iC_outFP, "%s: un = %d pfa = %d restore IOCON <== 0x%02x GPINTEN <== 0x%02x\n",
-			    pfp->Iname, pfp - iC_pfL, pfp->pfa,
+			fprintf(iC_outFP, "%s: %s: un = %d pfa = %d restore IOCON <== 0x%02x GPINTEN <== 0x%02x\n",
+			    iC_progname, pfp->Iname, pfp - iC_pfL, pfp->pfa,
 			    IOCON_SEQOP | IOCON_HAEN | ((iC_npf == 1) ? 0 : IOCON_ODR), 0xff);
 			writeByte(pfp->spiFN, pfp->pfa, IOCON, IOCON_SEQOP | IOCON_HAEN | ((iC_npf == 1) ? 0 : IOCON_ODR));
 			writeByte(pfp->spiFN, pfp->pfa, pfp->intf == INTFB ? GPINTENB : GPINTENA, 0xff);
@@ -1820,9 +1804,9 @@ storeUnit(unsigned short channel, int sel)
 	assert(Units);
 	memset(&Units[ioUnits], '\0', IOUNITS * sizeof(int));
 	ioUnits += IOUNITS;			/* increase the size of the array */
-	if (iC_debug & 0200) fprintf(iC_outFP, "storeUnit: Units[%d] increase\n", ioUnits);
+	if (iC_debug & 0200) fprintf(iC_outFP, "%s: storeUnit: Units[%d] increase\n", iC_progname, ioUnits);
     }
-    if (iC_debug & 0200) fprintf(iC_outFP, "storeUnit: Units[%d] <= %d\n", channel, sel);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: storeUnit: Units[%d] <= %d\n", iC_progname, channel, sel);
     Units[channel] = sel;			/* store PiFace unit number gpioIO * */
 } /* storeUnit */
 
@@ -1880,7 +1864,7 @@ gpio_line_cfg_ioctl (gpio_v2_t * gpio)
 	perror ("ioctl-GPIO_V2_GET_LINE_IOCTL");
 	return -1;
     }
-    if (iC_debug & 0200) fprintf(iC_outFP, "++++ gpio->fd = %d\n", gpio->fd);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: gpio->fd = %d\n", iC_progname, gpio->fd);
     /********************************************************************
      * set the line config for the retured linereq file descriptor
      *******************************************************************/
@@ -1889,7 +1873,7 @@ gpio_line_cfg_ioctl (gpio_v2_t * gpio)
 	perror ("ioctl-GPIO_V2_LINE_SET_CONFIG_IOCTL");
 	return -1;
     }
-    if (iC_debug & 0200) fprintf(iC_outFP, "++++ gpio->linereq->fd = %d\n", gpio->linereq->fd);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: gpio->linereq->fd = %d\n", iC_progname, gpio->linereq->fd);
     return 0;
 } /* gpio_line_cfg_ioctl */
 
@@ -1933,7 +1917,7 @@ gpio_line_get_values (gpio_v2_t * gpio, __u64 mask)
 static int
 termQuit(int sig)
 {
-    if (iC_debug & 0200) fprintf(iC_outFP, "=== Unexport GPIOs and close PiFaces =======\n");
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: === Unexport GPIOs and close PiFaces =======\n", iC_progname);
     piFaceIO *	pfp;
     int		pfce;
     ProcValidUsed *	gpiosp;
@@ -1942,7 +1926,7 @@ termQuit(int sig)
      *  PiFaces
      *******************************************************************/
     if (iC_npf) {
-	if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### Shutdown active PiFace units\n");
+	if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "%s: ### Shutdown active PiFace units\n", iC_progname);
 #if RASPBERRYPI < 5010	/* sysfs */
 	/********************************************************************
 	 *  Turn off the pullup resistor on gpio25/INTB
@@ -1988,7 +1972,7 @@ termQuit(int sig)
 	 *******************************************************************/
 	if (gpio25FN > 0) {
 	    close(gpio25FN);			/* close connection to /sys/class/gpio/gpio25/value */
-	    if (iC_debug & 0200) fprintf(iC_outFP, "### Unexport GPIO 25\n");
+	    if (iC_debug & 0200) fprintf(iC_outFP, "%s: ### Unexport GPIO 25\n", iC_progname);
 	    if (sig != SIGUSR2 && gpio_unexport(25) != 0) {
 		sig = SIGUSR1;			/* unable to unexport gpio 25 */
 	    }
@@ -2007,15 +1991,15 @@ termQuit(int sig)
 	    iC_progname);
 	return (SIGUSR1);		/* error quit */
     }
-    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### %s: openLock, used = 0x%016llx, ownUsed = 0x%016llx\n", iC_progname, gpiosp->u.used, ownUsed);
+    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "%s: ### openLock, used = 0x%016llx, ownUsed = 0x%016llx\n", iC_progname, gpiosp->u.used, ownUsed);
     gpiosp->u.used &= ~ownUsed;		/* clear all bits for GPIOs and A/D channels used in this app */
-    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### %s: writeUnlockCloseGpios, used = 0x%016llx\n", iC_progname, gpiosp->u.used);
+    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "%s: ### writeUnlockCloseGpios, used = 0x%016llx\n", iC_progname, gpiosp->u.used);
     if (writeUnlockCloseGpios() < 0) {	/* unlink (remove) ~/.iC/gpios.used if gpios->u.used and oops is 0 */
 	fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
 	    iC_progname);
 	return (SIGUSR1);		/* error quit */
     }
-    if (iC_debug & 0200) fprintf(iC_outFP, "=== End Unexport GPIOs and close PiFaces ===\n");
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: === End Unexport GPIOs and close PiFaces ===\n", iC_progname);
     return (sig);			/* finally quit */
 } /* termQuit */
 #endif	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */

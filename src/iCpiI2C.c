@@ -76,6 +76,7 @@
 #include	"comp.h"		/* defines TSIZE 256 */
 #include	"icc.h"			/* declares iC_emalloc() in misc.c */
 #include	"rpi_rev.h"		/* Determine Raspberry Pi Board Rev */
+#include	"i2cbusses.h"
 #include	"mcp23017.h"
 #if RASPBERRYPI < 5010	/* sysfs */
 #include	"rpi_gpio.h"
@@ -306,7 +307,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2023-2025 John E. Wulff     <immediateC@gmail.com>\n"
-"Version       $Id: iCpiI2C.c 1.12 $\n"
+"Version       $Id: iCpiI2C.c 1.13 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -349,12 +350,6 @@ static Buf	cmdBuf = { .n="cmdBuf" };	/* Buffer in which iCbox command string is 
 #define		CONCDEV	0x27
 #if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
 
-typedef struct {
-    struct gpio_v2_line_config *	linecfg;
-    struct gpio_v2_line_request *	linereq;
-    struct gpio_v2_line_values *	linevals;
-    int					fd;
-} gpio_v2_t;
 /********************************************************************
  * gpio_v2 line config, line request and line values,
  *******************************************************************/
@@ -777,6 +772,7 @@ main( int argc, char ** argv)
 	 *  GPIO 27 is used during I2C and MCP23017  setup, but is left unchanged
 	 * if no MCP23017s are found, which is an error and the program terminates.
 	 *******************************************************************/
+	generate_i2c_busses();			/* dynamically generate i2cdev[10] */
 	mcpCnt = 0;
 	for (ch = 0; ch < 10; ch++) {		/* scan /dev/i2c-0, i2c-11 - i2c-18, i2c-1 */
 	    if (ch == 9 && mcpCnt) {
@@ -788,7 +784,7 @@ main( int argc, char ** argv)
 		}
 		continue;
 	    }
-	    if (iC_debug & 0200) fprintf(iC_outFP, "### Present i2cChannel %s\n", getI2cDevice(ch));
+	    if (iC_debug & 0200) fprintf(iC_outFP, "### Present i2cChannel %d: %s\n", ch, getI2cDevice(ch));
 	    i2cFdCnt++;				/* flags that at least one I2C channel is valid */
 	    m = 0;
 	    for (ns = 0; ns < 8; ns++) {
@@ -820,6 +816,7 @@ main( int argc, char ** argv)
 		if (mcpL[ch][CONCDEV-0x20] == NULL) {
 		    concCh = ch;		/* MCP is available at a concentrator location */
 		    concFd = i2cFdA[ch];
+		    printf("iCpiI2C: concCh = %d concFd = %d\n", concCh, concFd);
 		    if (setupMCP23017(concFd, concentrate, CONCDEV, IOCON_MIRROR, 0xff, 0xff, 0x00, 0x00) < 0) {
 			fprintf(iC_errFP, "ERROR: %s: no concentrator MCP23017 found at channel %s dev 0x%02x although previously detected\n",
 			    iC_progname, getI2cDevice(ch), CONCDEV);
@@ -1569,7 +1566,7 @@ main( int argc, char ** argv)
 		    iC_quit(SIGUSR1);		/* error quit */
 		}
 		m /= sizeof lineevent[0];		/* number of lineevent buffers read */
-		if (iC_debug & 0200) fprintf(iC_outFP, "ioctl m = %d GPIO 27 interrupts:", m);
+		if (iC_debug & 0200) fprintf(iC_outFP, "%s: ioctl GPIO %d interrupts:", iC_progname, m);
 		for (n = 0; n < m; n++) {
 		    gpio = lineevent[n].offset;	/* GPIO number from offset */
 		    assert(gpio < GPIO_LIMIT && lineevent[n].id == GPIO_V2_LINE_EVENT_RISING_EDGE);

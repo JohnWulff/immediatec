@@ -50,11 +50,6 @@
 #error - must be compiled with RASPBERRYPI and TCP defined and not _WINDOWS
 #else	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */
 
-#if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
-#include	<linux/gpio.h>
-#include	<sys/ioctl.h>
-#include	<stdlib.h>
-#endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 #include	<signal.h>
 #include	<ctype.h>
 #include	<assert.h>
@@ -164,7 +159,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2025 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiGPIO.c 1.4 $\n"
+"Version	$Id: iCpiGPIO.c 1.5 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -176,7 +171,9 @@ int		iC_micro = 0;
 unsigned short	iC_osc_lim = 1;
 
 static fd_set		infds;		/* initialised file descriptor set for normal iC_wait_for_next_event() */
+#if RASPBERRYPI < 5010	/* sysfs */
 static fd_set		ixfds;		/* initialised extra descriptor set for normal iC_wait_for_next_event() */
+#endif	/* RASPBERRYPI < 5010 - sysfs */
 
 static unsigned short	topChannel = 0;
 static char	buffer[BS];
@@ -197,7 +194,6 @@ FILE *		iC_outFP;		/* listing file pointer */
 FILE *		iC_errFP;		/* error file pointer */
 #if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
 
-#define GPIOCHIP "/dev/gpiochip0"	/* gpiochipX (0-4) depending on Pi model */
 int		chipFN;
 /********************************************************************
  * data struct of values needed for reading gpio pins
@@ -254,12 +250,6 @@ int		chipFN;
  * @mask: a bitmap identifying the lines to get or set, with each bit number
  * corresponding to the index into &struct gpio_v2_line_request.offsets
  *******************************************************************/
-typedef struct {
-    struct gpio_v2_line_config *	linecfg;
-    struct gpio_v2_line_request *	linereq;
-    struct gpio_v2_line_values *	linevals;
-    int					fd;
-} gpio_v2_t;
 /********************************************************************
  * gpio_v2 line config, line request and line values,
  *******************************************************************/
@@ -364,10 +354,6 @@ struct gpio_v2_line_config_attribute	rb_cfg_attr = {
 #define LINEEVENT_BUFFERS	 4	/* kernel buffers 16 line events */
 #define GPIO_LIMIT		 64	/* GPIO numbers are limited 0 - 63 */
 struct gpio_v2_line_event	lineevent[LINEEVENT_BUFFERS];
-typedef struct gpio_T {
-    gpioIO *		gep;
-    unsigned short	val;		/* stores either val or bit */
-} gpio_T;
 static gpio_T			gpioArray[GPIO_LIMIT];
 static gpio_T			gepArray[LINEEVENT_BUFFERS];
 static int	gpio_line_cfg_ioctl (gpio_v2_t * gpio);
@@ -656,9 +642,9 @@ main(
 	    goto FreeNow;
 	}
 	if (iC_debug & 0200) fprintf(iC_outFP,
-	    "Raspberry Pi Board revision = %d (0 = A,A+; 1 = B; 2 = B+,2B)\n"
+	    "%s: Raspberry Pi Board revision = %d (0 = A,A+; 1 = B; 2 = B+,2B)\n"
 	    "valid    = 0x%016llx\n",
-	    gpiosp->proc, gpiosp->valid);
+	    iC_progname, gpiosp->proc, gpiosp->valid);
 	/********************************************************************
 	 *  Analyze IEC arguments X0 X1 IX2 QX3 etc or groups X4-X7
 	 *
@@ -776,8 +762,8 @@ main(
 		    directFlag = 1;
 		    if (*dum == '\0') {
 			gpioSav[bit] = gpio;	/*  Save list of GPIO numbers for later building */
-			if (iC_debug & 0200) fprintf(iC_outFP, "%sX%d.%hu	gpio = %hu\n",
-			    iqc, ieStart, bit, gpio);
+			if (iC_debug & 0200) fprintf(iC_outFP, "%s: %sX%d.%hu	gpio = %hu\n",
+			    iC_progname, iqc, ieStart, bit, gpio);
 		    }
 		}
 		if (n == 2 && *tail == ',') {
@@ -838,10 +824,10 @@ main(
 			assert(gpio <= 55);
 			gpioMask = 1LL << gpio;		/* gpio is 0 - 55 max */
 			if (iC_debug & 0200) fprintf(iC_outFP,
-			    "gpio     = %hu\n"
+			    "%s: gpio     = %hu\n"
 			    "used     = 0x%016llx\n"
 			    "gpioMask = 0x%016llx\n",
-			    gpio, gpiosp->u.used, gpioMask);
+			    iC_progname, gpio, gpiosp->u.used, gpioMask);
 			if ((u = gep->gpioNr[bit]) != 0xffff &&
 			    ((mask & gep->Ginv) != (mask & invFlag) ||
 			    (u != gpio))) {		/* ignore 2nd identical definition */
@@ -871,7 +857,8 @@ main(
 			     *******************************************************************/
 			    if (gpio == gpioTherm) {
 				strncpy(buffer, "sudo modprobe -r w1-therm w1-gpio", BS);	/* remove kernel modules */
-				if (iC_debug & 0200) fprintf(iC_outFP, "%s\n", buffer);
+				if (iC_debug & 0200) fprintf(iC_outFP, "%s: buffer = %s\n",
+				    iC_progname, buffer);
 				if ((b = system(buffer)) != 0) {
 				    perror("sudo modprobe");
 				    fprintf(iC_errFP, "WARNING: %s: system(\"%s\") could not be executed $? = %d - ignore\n",
@@ -888,8 +875,9 @@ main(
 	  skipInvFlag:;
 	}
 	/* UnlockGpios */
-	if (iC_debug & 0200) fprintf(iC_outFP, "used     = 0x%016llx\n"
-					       "oops     = 0x%016llx\n", gpiosp->u.used, gpiosp->u.oops);
+	if (iC_debug & 0200) fprintf(iC_outFP, "%s: used     = 0x%016llx\n"
+					       "oops     = 0x%016llx\n",
+					       iC_progname, gpiosp->u.used, gpiosp->u.oops);
 	if (writeUnlockCloseGpios() < 0) {
 	    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n", iC_progname);
 	    errorFlag++;
@@ -1025,8 +1013,8 @@ main(
 		    if (gep->gpioFN[bit] > iC_maxFN) {
 			iC_maxFN = gep->gpioFN[bit];
 		    }
-		    if (iC_debug & 0200) fprintf(iC_outFP, "configure %c%s.%hu,%hu\n",
-			gep->Ginv  ? '~' : ' ', gep->Gname, bit, gpio);
+		    if (iC_debug & 0200) fprintf(iC_outFP, "%s: configure %c%s.%hu,%hu\n",
+			iC_progname, gep->Ginv  ? '~' : ' ', gep->Gname, bit, gpio);
 #else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 		    /********************************************************************
 		     *  Configure gpio line request and line configurations
@@ -1058,8 +1046,8 @@ main(
 			    rb_cfg_attr.mask |= maskBit;	/* both with debounce */
 			}
 		    }
-		    if (iC_debug & 0200) fprintf(iC_outFP, "configure %c%s.%hu,%hu, offsets[%d] maskBit = 0x%llx\n",
-			gep->Ginv & iC_bitMask[bit] ? '~' : ' ', gep->Gname, bit, gpio, idx, maskBit);
+		    if (iC_debug & 0200) fprintf(iC_outFP, "%s: configure %c%s.%hu,%hu, offsets[%d] maskBit = 0x%llx\n",
+			iC_progname, gep->Ginv & iC_bitMask[bit] ? '~' : ' ', gep->Gname, bit, gpio, idx, maskBit);
 		    idx++;
 		    maskBit <<= 1;
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
@@ -1093,6 +1081,7 @@ main(
 	iC_maxFN = pins.linereq->fd;
     }
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
+
     /********************************************************************
      *  Generate a meaningful name for network registration
      *******************************************************************/
@@ -1105,7 +1094,8 @@ main(
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_micro) iC_microReset(0);		/* start timing */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-    if (iC_debug & 0200) fprintf(iC_outFP, "host = %s, port = %s, name = %s\n", iC_hostNM, iC_portNM, iC_iccNM);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: host = %s, port = %s, name = %s\n",
+	iC_progname, iC_hostNM, iC_portNM, iC_iccNM);
     if (iC_debug & 0400) iC_quit(0);
     signal(SIGINT, iC_quit);			/* catch ctrlC and Break */
 #ifdef	SIGTTIN
@@ -1163,9 +1153,9 @@ main(
     /********************************************************************
      *  Send registration string made up of all active I/O names
      *******************************************************************/
-    if (iC_debug & 0200)  fprintf(iC_outFP, "regBufLen = %d\n", regBufLen);
+    if (iC_debug & 0200)  fprintf(iC_outFP, "%s: regBufLen = %d\n", iC_progname, regBufLen);
     snprintf(cp, regBufLen, ",Z");		/* Z terminator */
-    if (iC_debug & 0200)  fprintf(iC_outFP, "register:%s\n", regBuf);
+    if (iC_debug & 0200)  fprintf(iC_outFP, "%s: register:%s\n", iC_progname, regBuf);
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_micro) iC_microPrint("send registration", 0);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -1178,7 +1168,7 @@ main(
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_micro) iC_microPrint("ack received", 0);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-	if (iC_debug & 0200) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
+	if (iC_debug & 0200) fprintf(iC_outFP, "%s: reply:%s\n", iC_progname, rpyBuf);
 	if (iC_opt_B) {				/* prepare to execute iCbox -d */
 	    len = snprintf(buffer, BS, "iCbox -dz%s -n %s-DI", (iC_debug & DQ) ? "q" : "", iC_iccNM);
 	    b = 4;				/* initial number of tokens in buffer */
@@ -1199,7 +1189,7 @@ main(
 		    topChannel = channel;
 		}
 		if (iC_debug & 0200) {
-		    fprintf(iC_outFP, "GPIO");
+		    fprintf(iC_outFP, "%s: GPIO", iC_progname);
 		    for (bit = 0; bit <= 7; bit++) {
 			if ((gpio = gep->gpioNr[bit]) != 0xffff) {
 			    fprintf(iC_outFP, ",%hu", gpio);
@@ -1233,7 +1223,8 @@ main(
 	if (iC_opt_B && b > 4) {
 	    iC_fork_and_exec(iC_string2argv(buffer, b));	/* fork iCbox -d */
 	}
-	if (iC_debug & 0200) fprintf(iC_outFP, "reply: top channel = %hu\n", topChannel);
+	if (iC_debug & 0200) fprintf(iC_outFP, "%s: reply: top channel = %hu\n",
+	    iC_progname, topChannel);
     } else {
 	iC_quit(QUIT_SERVER);			/* quit normally with 0 length message */
     }
@@ -1244,8 +1235,8 @@ main(
 	if (gpioCnt) {
 	    char *	iidPtr;
 	    char *	iidSep;
-	    fprintf(iC_outFP, "Allocation for %d GPIO group%s, global instance = \"%s\"\n",
-		gpioCnt, gpioCnt == 1 ? "" : "s", iC_iidNM);
+	    fprintf(iC_outFP, "%s: Allocation for %d GPIO group%s, global instance = \"%s\"\n",
+		iC_progname, gpioCnt, gpioCnt == 1 ? "" : "s", iC_iidNM);
 	    fprintf(iC_outFP, "	IEC bit	inst	gpio	iC channel\n\n");
 	    for (iq = 0; iq < 2; iq++) {
 		for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
@@ -1284,8 +1275,8 @@ main(
 	    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
 #if RASPBERRYPI < 5010	/* sysfs */
 		if ((n = gpio_read(gep->gpioFN[bit])) != -1) {
-		    if (iC_debug & 0200) fprintf(iC_outFP, "Initial value: %c%s.%hu,%hu = %d\n",
-			gep->Ginv  ? '~' : ' ', gep->Gname, bit, gpio, n);
+		    if (iC_debug & 0200) fprintf(iC_outFP, "%s: Initial value: %c%s.%hu,%hu = %d\n",
+			iC_progname, gep->Ginv  ? '~' : ' ', gep->Gname, bit, gpio, n);
 		    if (n) val |= iC_bitMask[bit];
 		} else {
 		    fprintf(iC_errFP, "WARNING: %s: GPIO %hu returns invalid value -1 (not 0 or 1 !!)\n",
@@ -1294,8 +1285,8 @@ main(
 #else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 		__u64 inMask = 1LL << gep->gpioFN[bit];	/* shift with idx in gep->gpioFN[bit] */
 		n = gpio_line_get_values (&pins, inMask);
-		if (iC_debug & 0200) fprintf(iC_outFP, "Initial value: %c%s.%hu,%hu = %d\n",
-		    gep->Ginv  ? '~' : ' ', gep->Gname, bit, gpio, n);
+		if (iC_debug & 0200) fprintf(iC_outFP, "%s: Initial value: %c%s.%hu,%hu = %d\n",
+		    iC_progname, gep->Ginv  ? '~' : ' ', gep->Gname, bit, gpio, n);
 		if (n) val |= iC_bitMask[bit];
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	    }
@@ -1363,7 +1354,7 @@ main(
     FD_SET(pins.linereq->fd, &infds);				/* watch all GPIO's for interrupts */
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
     if ((iC_debug & DZ) == 0) FD_SET(0, &infds);	/* watch stdin for inputs unless - FD_CLR on EOF */
-    if (iC_debug & 0200) fprintf(iC_outFP, "iC_sockFN = %d\n", iC_sockFN);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: iC_sockFN = %d\n", iC_progname, iC_sockFN);
     /********************************************************************
      *  External input (TCP/IP via socket, GPIO and STDIN)
      *  Wait for input in a select statement most of the time
@@ -1476,7 +1467,7 @@ main(
 #else	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
 	    m /= sizeof lineevent[0];		/* number of lineevent buffers read */
 	    if (iC_debug & 0200) {
-		fprintf(iC_outFP, "ioctl GPIO %d interrupts:", m);
+		fprintf(iC_outFP, "%s: ioctl GPIO %d interrupts:", iC_progname, m);
 		for (n = 0; n < m; n++) {
 		    gpio = lineevent[n].offset;	/* GPIO number from offset */
 		    assert(gpio < GPIO_LIMIT && gpioArray[gpio].gep);
@@ -1582,9 +1573,11 @@ storeUnit(unsigned short channel, gpioIO * gep)
 	assert(Units);
 	memset(&Units[ioUnits], '\0', IOUNITS * sizeof(gpioIO *));
 	ioUnits += IOUNITS;			/* increase the size of the array */
-	if (iC_debug & 0200) fprintf(iC_outFP, "storeUnit: Units[%d] increase\n", ioUnits);
+	if (iC_debug & 0200) fprintf(iC_outFP, "%s: storeUnit: Units[%d] increase\n",
+	    iC_progname, ioUnits);
     }
-    if (iC_debug & 0200) fprintf(iC_outFP, "storeUnit: Units[%d] <= %s\n", channel, gep->Gname);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: storeUnit: Units[%d] <= %s\n",
+	iC_progname, channel, gep->Gname);
     Units[channel] = gep;			/* store gpioIO * */
 } /* storeUnit */
 
@@ -1634,8 +1627,8 @@ writeGPIO(gpioIO * gep, unsigned short channel, int val)
     }
 #if RASPBERRYPI >= 5010	/* GPIO V2 ABI for icoctl */
     if (outMask) {
-	if (iC_debug & 0200) fprintf(iC_outFP, "writeGPIO: output %s outBit = %llu outMask = %llu\n",
-	    gep->Gname, outBit, outMask);
+	if (iC_debug & 0200) fprintf(iC_outFP, "%s: writeGPIO: output %s outBit = %llu outMask = %llu\n",
+	    iC_progname, gep->Gname, outBit, outMask);
 	if (gpio_line_set_values (&pins, outBit, outMask) == -1) {
 	    fprintf(iC_errFP, "ERROR: %s: writeGPIO: could not output %s outBit = %llu outMask = %llu\n",
 		iC_progname, gep->Gname, outBit, outMask);
@@ -1668,7 +1661,7 @@ gpio_line_cfg_ioctl (gpio_v2_t * gpio)
 	perror ("ioctl-GPIO_V2_GET_LINE_IOCTL");
 	return -1;
     }
-    if (iC_debug & 0200) fprintf(iC_outFP, "++++ gpio->fd = %d\n", gpio->fd);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: gpio->fd = %d\n", iC_progname, gpio->fd);
     /********************************************************************
      * set the line config for the retured linereq file descriptor
      *******************************************************************/
@@ -1677,7 +1670,7 @@ gpio_line_cfg_ioctl (gpio_v2_t * gpio)
 	perror ("ioctl-GPIO_V2_LINE_SET_CONFIG_IOCTL");
 	return -1;
     }
-    if (iC_debug & 0200) fprintf(iC_outFP, "++++ gpio->linereq->fd = %d\n", gpio->linereq->fd);
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: gpio->linereq->fd = %d\n", iC_progname, gpio->linereq->fd);
     return 0;
 } /* gpio_line_cfg_ioctl */
 
@@ -1788,11 +1781,11 @@ termQuit(int sig)
     gpioIO *		gep;
     ProcValidUsed *	gpiosp;
 #if RASPBERRYPI < 5010	/* sysfs */
-    if (iC_debug & 0200) fprintf(iC_outFP, "=== Unexport GPIOs =======\n");
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: === Unexport GPIOs =======\n", iC_progname);
     int			iq;
     unsigned short	bit;
     unsigned short	gpio;
-    int		fn;
+    int			fn;
     /********************************************************************
      *  Unexport and close all gpio files for all GPIO arguments
      *******************************************************************/
@@ -1819,7 +1812,7 @@ termQuit(int sig)
 		    /********************************************************************
 		     *  free up the sysfs for gpio N unless used by another program (SIGUSR2)
 		     *******************************************************************/
-		    if (iC_debug & 0200) fprintf(iC_outFP, "### Unexport GPIO %hu\n", gpio);
+		    if (iC_debug & 0200) fprintf(iC_outFP, "%s: ### Unexport GPIO %hu\n", iC_progname, gpio);
 		    if (sig != SIGUSR2 && gpio_unexport(gpio) != 0) {
 			sig = SIGUSR1;		/* unable to unexport gpio_N */
 		    }
@@ -1838,7 +1831,7 @@ termQuit(int sig)
      *  Close gpio file descriptor associated with anonymous llinereq->fd
      *  and "/dev/gpiochipX"
      *******************************************************************/
-    if (iC_debug & 0200) fprintf(iC_outFP, "=== Close chip and GPIOs =======\n");
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: === Close chip and GPIOs =======\n", iC_progname);
     gpio_line_close_fd (&pins);
     gpio_dev_close (chipFN);
 #endif	/* RASPBERRYPI >= 5010 - GPIO V2 ABI for icoctl */
@@ -1851,15 +1844,15 @@ termQuit(int sig)
 	    iC_progname);
 	return (SIGUSR1);		/* error quit */
     }
-    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### %s: openLock, used = 0x%016llx, ownUsed = 0x%016llx\n", iC_progname, gpiosp->u.used, ownUsed);
+    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "%s: ### openLock, used = 0x%016llx, ownUsed = 0x%016llx\n", iC_progname, gpiosp->u.used, ownUsed);
     gpiosp->u.used &= ~ownUsed;		/* clear all bits for GPIOs and A/D channels used in this app */
-    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### %s: writeUnlockCloseGpios, used = 0x%016llx\n", iC_progname, gpiosp->u.used);
+    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "%s: ### writeUnlockCloseGpios, used = 0x%016llx\n", iC_progname, gpiosp->u.used);
     if (writeUnlockCloseGpios() < 0) {	/* unlink (remove) ~/.iC/gpios.used if gpios->u.used and oops is 0 */
 	fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
 	    iC_progname);
 	return (SIGUSR1);		/* error quit */
     }
-    if (iC_debug & 0200) fprintf(iC_outFP, "=== End GPIOs ===\n");
+    if (iC_debug & 0200) fprintf(iC_outFP, "%s: === End GPIOs ===\n", iC_progname);
     return (sig);			/* finally quit */
 } /* termQuit */
 #endif	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */

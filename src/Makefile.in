@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.89 $
+# @(#)$Id: Makefile.in 1.90 $
 
 #######################################################################
 #
@@ -222,8 +222,8 @@ iCpiGPIO:	$(srcdir)/Makefile iCpiGPIO.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(GOBJ
 
 #### iCpiI2C real I2C digital I/O for Raspberry Pi ###################
 
-iCpiI2C:	$(srcdir)/Makefile iCpiI2C.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(OOBJ)
-	$(CC) $(LDFLAGS) -o iCpiI2C iCpiI2C.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(OOBJ) $(EL)
+iCpiI2C:	$(srcdir)/Makefile iCpiI2C.$(O) misc.$(O) icend.$(O) tcpc.$(O) i2cbusses.$(O) $(OOBJ)
+	$(CC) $(LDFLAGS) -o iCpiI2C iCpiI2C.$(O) misc.$(O) icend.$(O) tcpc.$(O) i2cbusses.$(O) $(OOBJ) $(EL)
 
 #### iCgpioPUD adjust pull-up/down for GPIO's on Raspberry Pi #########
 ####  install with set user ID ########################################
@@ -572,6 +572,8 @@ iCpiFace.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h $(srcdir)/rpi_rev.h $(srcdir)/rp
 iCpiGPIO.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h $(srcdir)/rpi_rev.h $(srcdir)/rpi_gpio.h $(srcdir)/bcm2835.h
 
 iCpiI2C.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h $(srcdir)/rpi_rev.h $(srcdir)/rpi_gpio.h $(srcdir)/mcp23017.h $(srcdir)/bcm2835.h
+
+i2cbusses.$(O):	$(srcdir)/icc.h $(srcdir)/i2cbusses.h
 
 iCgpioPUD.$(O):	$(srcdir)/bcm2835.h
 
