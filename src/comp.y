@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.138 $";
+"@(#)$Id: comp.y 1.139 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -3200,8 +3200,8 @@ fPlist	: formalParameter		{
 	 * since formal parameters are declared before anything else
 	 * in the function block definition and since they are in their
 	 * own namespace, with the function name prefix @ they cannot
-	 * be anything but UNDEF, except NUMBER or IO variables, which
-	 * will cause a hard error.
+	 * be anything but UNDEF, except NUMBER, IO variables or iC
+	 * or C keywords, which will cause a hard error.
 	 ***********************************************************/
 
 formalParameter
@@ -5143,8 +5143,12 @@ yylex(void)
 			}
 		    } else {
 			cp = iCtext;		/* use the bare function variable */
+			if (iFunSyText && (symp = lookup(cp)) != 0 && symp->type == KEYW) {
+//			    ierror("is typ == KEYW:", iCtext);
+			    return LEXERR;
+			}
 		    }
-		    strncpy(iFunSymExt, cp, iFunEnd - iFunSymExt);
+		    strncpy(iFunSymExt, cp, iFunEnd - iFunSymExt);	/* precede by iFunSymExt */
 		    if ((symp = lookup(iFunBuffer)) == 0 && iFunSyText) {
 			symp = install(iFunBuffer, typ, ftyp); /* parameter or declaration */
 		    }

@@ -160,7 +160,7 @@ Usage:
 
 Copyright (C) 2023-2024  John E. Wulff        <immediateC@gmail.com>
 							  '@'
-$Id: iCmqtt 1.7 $
+$Id: iCmqtt 1.8 $
 .
 
 ########################################################################
@@ -244,8 +244,7 @@ if (defined $opt_i and $opt_i ne '') {
     $opt_i = '';
 }
 if (not $opt_a and (not defined $opt_F or not defined $opt_I or not defined $opt_Q)) {
-    print STDERR "*** ERROR $named: -F <floor>, -I <x> and -Q <y> must be defined\n";
-    write STDERR; exit 1;
+    exit 0;	# ignore lack of paramaters. Used to test correct installation
 }
 
 ########################################################################
@@ -292,16 +291,23 @@ my $Qpref  = '';
 my $Icnt   = 65535;			# large
 my $Qcnt;
 my $n;
+my $lineCounter = 0;
 
 for ($n = 0; $n <= $Icnt; $n++) {
     open IN, $argv[0] or die "Cannot open input file $argv[0]: $!";
     while (<IN>) {
+    $lineCounter++;
 	if ($state eq "B" and m/^\s*Switch\s+\w+\s+"(.*)"(\s+<.*>)?\s+\((.*)\)/) {
-	    ($group) = split /,/, $3;
-	    $icVar = "$group $1";
-	    $icVar =~ s/\W/ /g;
-	    $icVar =~ s/\s+/_/g;
-	    $state = "S";		# Switch state
+	    my $group_str = $1;
+	    ($group_str && $group_str !~ /^\s*$/) || die "*** ERROR iCmqtt: missing topic between \"\" in line\n   $_(line $lineCounter) in .items file.  Required for variable postfix!\n";
+	    $group_str = $3;
+	    ($group_str && $group_str !~ /^\s*$/) || die "*** ERROR iCmqtt: missing group between () in line\n   $_(line $lineCounter) in .items file.  Required for variable prefix!  Will default to \"Group\".\n";
+
+	    ($group) = split /,/, $group_str;
+		$icVar = "$group $1";
+		$icVar =~ s/\W/ /g;
+		$icVar =~ s/\s+/_/g;
+		$state = "S";		# Switch state
 	} elsif ($state eq "S") {
 	    if (m/^\s*{\s*mqtt\s*=\s*"\s*$/) {
 		$onCnt = $offCnt = $stateCnt = 0;
@@ -384,7 +390,7 @@ for ($n = 0; $n <= $Icnt; $n++) {
 	    $Qcnt++;
 	}
 	if ($Icnt == 0 or $Icnt != $Qcnt) {
-	    print STDERR "*** ERROR $named: no topics found\n",
+	    print STDERR "*** ERROR $named: no topics and/or groups found\n",
 	                 "                  or number of subscribe topics ($Icnt)\n",
 			 "                  does not match publish topics ($Qcnt)\n";
 	    $errorFlag++;
@@ -801,7 +807,7 @@ iCmsgM->event_loop($mqtt);
 sub mqttReceived
 {
     my ($topic, $message) = @_;
-    print "M: $named:	< $topic $message\n" if $opt_t;
+    print "M: $named:	< received $topic:$message\n" if $opt_t;
     if (exists $TopicChannels{"$topic:$message"}) {
 	my ($channel, $mask) = @{ $TopicChannels{"$topic:$message"} };
 	die "\$channel or \$mask not > 0\n" unless $channel or $mask;
@@ -1022,7 +1028,7 @@ sub rcvd_msg_from_server {
 				my $ChannelTopicP = \@{ $ChannelTopics{$channel}[$bitIndex[$mask]] };
 				for (my $i = 0; $i < scalar(@$ChannelTopicP); $i++) {
 				    my $topic = $ChannelTopicP->[$i];
-				    print "M: $named:	> $topic $state\n" if $opt_t;
+				    print "M: $named:	> publish $topic:$state\n" if $opt_t;
 				    $mqtt->publish($topic, $state);
 				}
 			    }

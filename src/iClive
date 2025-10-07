@@ -370,7 +370,7 @@ Usage:
 
 Copyright (C) 2000-2023  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.105 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.106 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1561,15 +1561,18 @@ sub tagComments {
 	} elsif ($state eq "CS") { 	# string constant in C code
 	    if ($atom eq '"') {
 		$sqbStart = $current if $sqbStart;	# end of string in square brackets - tag gold again
+    print("\$state = $state ==> 'C'\n");
 		$state = "C";
 	    }
 	} elsif ($state eq "CH") {	# character constant in C code
 	    if ($atom eq "'") {
+    print("\$state = $state ==> 'C'\n");
 		$state = "C";
 	    }
 	} elsif ($state eq "Cc") {	# C style comment in C code
 	    if ($atom eq "*/") {
 		$text->tagAdd('cTag', $cStart, $currEnd);
+    print("\$state = $state ==> 'C'\n");
 		$state = "C";		# end of C style comment in C code found
 	    } elsif ($atom eq "/*") {
 		warn "$fileName$readOnly:$current1: /* found in comment\n";
@@ -1579,6 +1582,7 @@ sub tagComments {
 	} elsif ($state eq "Cp") {	# C++ style comment in C code
 	    if ($atom eq "\n") {
 		$text->tagAdd('cTag', $pStart, $currEnd);
+    print("\$state = $state ==> 'C'\n");
 		$state = "C";		# end of C++ style comment in C code found
 	    }
 	} elsif ($state eq "C") {	# C code after if else switch or in literal block
@@ -1665,6 +1669,7 @@ sub tagComments {
 		    } elsif ($kw & 0x0002) {		# C variables outside of comments or strings
 			$text->tagAdd('bd', $current, $currEnd);	# C keyword in C code bold
 		    } elsif (!($kw & 0x0708)) {		# ignore ALIASES & preprocessor keywords not after $pp
+    print("\$state = $state \$kw = $kw line = $current\n");
 			warn "$fileName$readOnly:$current1: iC keyword '$atom' found in C code\n";
 			$text->tagAdd('er', $current, $currEnd);	# iC keyword in C code error
 			$err++;
@@ -1840,6 +1845,7 @@ sub tagComments {
 			$text->tagAdd('bd', $current, $currEnd);	# iC keyword in iC code bold
 		    }
 		    if ($kw & 0x0004) {	# "if", "else" or "switch"
+    print("1848 \$condFlag = $condFlag ==> 1 \$kw = $kw line = $current\n");
 			$condFlag = 1;	# enter $state = "C" at next open brace "{"
 		    } elsif ($kw & 0x0008) {
 			markStepNames($atom);		# iC alias and constant keywords
@@ -1898,6 +1904,7 @@ sub tagComments {
 			$text->tagAdd('er', $current, $currEnd);
 			$err++;
 		    }
+    print("1906 \$state = $state ==> 'C' line = $current\n");
 		    $state = "C";		# ******* C CODE          ************************
 		    $CbraceCount = 1;
 		    $CStart = "$current linestart";
@@ -1954,7 +1961,9 @@ sub tagComments {
 	} elsif ($atom =~ m/^(\s*\d*\s*)%\{\s*$/) {
 	    $l = length $1; $l = 0 unless $l;
 	    $el = $l + 2;
-    StartC: $state = "C";		# "%{" start of C literal block found (may be in function block definition)
+    StartC: print("1963 \$state = $state ==> 'C' \$atom = $atom\n");
+	    $state = "C";		# "%{" start of C literal block found (may be in function block definition)
+##    StartC: $state = "C";		# "%{" start of C literal block found (may be in function block definition)
 	    if ($braceCount != 0) {
 		warn "$fileName$readOnly:$current1: { single braces do not match in iC code ($braceCount)\n";
 		$braceCount = 0;
@@ -1973,6 +1982,7 @@ sub tagComments {
 	    if ($condFlag) {
 		$condFlag = $l = 0;	# start of C code after if else or switch
 		$el = 1;
+    print("1984 \$state = $state ==> 'C' \$atom = $atom line = $current\n");
 		goto StartC;
 	    }
 	    if ($prevAtom ne "---" or $space ne "") {

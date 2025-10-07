@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.90 $
+# @(#)$Id: Makefile.in 1.91 $
 
 #######################################################################
 #
@@ -408,6 +408,7 @@ strict:
 install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCmqtt.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiGPIO.1.gz $(srcdir)/iCpiI2C.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
 	@${INSTALL} -d ${bindir} ${libdir} ${includedir} ${mandir}/man1 ${mandir}/man3
 	@${INSTALL_PROGRAM} $(srcdir)/iCmsg.pm  `$(srcdir)/perlinstall`/iCmsg.pm
+	@${INSTALL_PROGRAM} $(srcdir)/iCmsgM.pm  `$(srcdir)/perlinstall`/iCmsgM.pm
 	@$(srcdir)/perlinstall -t $(srcdir) $(libdir)
 	@${INSTALL_PROGRAM} $(srcdir)/immcc      ${bindir}/${binprefix}immcc
 	@${INSTALL_PROGRAM} $(srcdir)/pplstfix   ${bindir}/${binprefix}pplstfix
@@ -420,6 +421,7 @@ install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir
 	@if [ -f $(srcdir)/goserver ]; then ${INSTALL_PROGRAM} $(srcdir)/goserver ${bindir}/${binprefix}iCserver; else ${INSTALL_PROGRAM} $(srcdir)/iCserver ${bindir}/${binprefix}iCserver; fi
 	@if [ -f $(srcdir)/immag ]; then ${INSTALL_PROGRAM} $(srcdir)/immag ${bindir}/${binprefix}immac; else ${INSTALL_PROGRAM} $(srcdir)/immac ${bindir}/${binprefix}immac; fi
 	@${INSTALL_PROGRAM} $(srcdir)/iCmqtt     ${bindir}/${binprefix}iCmqtt
+	@if ! iCmqtt 2> /dev/null; then echo 'MQTT Perl Module must be installed with "cpan Net::MQTT::Simple"'; fi
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
 	@${INSTALL_PROGRAM} $(srcdir)/iCpiFace          ${bindir}/${binprefix}iCpiFace
 	@${INSTALL_PROGRAM} $(srcdir)/iCpiGPIO          ${bindir}/${binprefix}iCpiGPIO
@@ -464,6 +466,7 @@ endif
 uninstall:
 	@$(srcdir)/perlinstall -r $(srcdir)
 	@sudo rm -f `$(srcdir)/perlinstall`/iCmsg.pm
+	@sudo rm -f `$(srcdir)/perlinstall`/iCmsgM.pm
 	@sudo rm -f ${bindir}/${binprefix}immcc
 	@sudo rm -f ${bindir}/${binprefix}pplstfix
 	@sudo rm -f ${bindir}/${binprefix}immac
