@@ -160,7 +160,7 @@ Usage:
 
 Copyright (C) 2023-2024  John E. Wulff        <immediateC@gmail.com>
 							  '@'
-$Id: iCmqtt 1.8 $
+$Id: iCmqtt 1.9 $
 .
 
 ########################################################################
@@ -297,14 +297,14 @@ for ($n = 0; $n <= $Icnt; $n++) {
     open IN, $argv[0] or die "Cannot open input file $argv[0]: $!";
     while (<IN>) {
     $lineCounter++;
-	if ($state eq "B" and m/^\s*Switch\s+\w+\s+"(.*)"(\s+<.*>)?\s+\((.*)\)/) {
-	    my $group_str = $1;
-	    ($group_str && $group_str !~ /^\s*$/) || die "*** ERROR iCmqtt: missing topic between \"\" in line\n   $_(line $lineCounter) in .items file.  Required for variable postfix!\n";
-	    $group_str = $3;
-	    ($group_str && $group_str !~ /^\s*$/) || die "*** ERROR iCmqtt: missing group between () in line\n   $_(line $lineCounter) in .items file.  Required for variable prefix!  Will default to \"Group\".\n";
+	if ($state eq "B" and m/^\s*Switch\s+(\w+)\s+"(.*)"(\s+<.*>)?\s+\((.*)\)/) {
+	    my $group_str1 = $1;
+	    ($group_str1 && $group_str1 !~ /^\s*$/) || die "*** ERROR iCmqtt: missing topic between \"\" in line\n   $_(line $lineCounter) in .items file.  Required for variable postfix!\n";
+	    my $group_str4= $4;
+	    ($group_str4 && $group_str4 !~ /^\s*$/) || die "*** ERROR iCmqtt: missing group between () in line\n   $_(line $lineCounter) in .items file.  Required for variable prefix!  Will default to \"Group\".\n";
 
-	    ($group) = split /,/, $group_str;
-		$icVar = "$group $1";
+	    ($group) = split /,/, $group_str4;
+		$icVar = "$group $group_str1";
 		$icVar =~ s/\W/ /g;
 		$icVar =~ s/\s+/_/g;
 		$state = "S";		# Switch state
